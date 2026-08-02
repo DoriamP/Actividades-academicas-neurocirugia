@@ -207,8 +207,18 @@
     // ── Botón de Google ──────────────────────────────────────────────────
     function cargarGoogle() {
         if (!CLIENT_ID) {
+            // Antes esto ocultaba el botón sin más, y quien no supiera del
+            // acceso por código pensaba que la plataforma estaba rota.
             var w = document.getElementById('authGoogleWrap');
-            if (w) w.style.display = 'none';
+            if (w) {
+                w.innerHTML =
+                  '<p style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;' +
+                     'letter-spacing:.05em;margin:0 0 8px;">Acceso con cuenta de Google</p>' +
+                  '<p style="font-size:11.5px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;' +
+                     'border-radius:10px;padding:9px 11px;margin:0;line-height:1.45;">' +
+                     'No disponible: falta <strong>GOOGLE_CLIENT_ID</strong> en config.js. ' +
+                     'Avise a la coordinación. Mientras tanto puede entrar con su código.</p>';
+            }
             return;
         }
         function init() {
