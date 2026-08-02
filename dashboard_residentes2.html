@@ -780,14 +780,16 @@ function activarDashboard() {
         const contAnio = document.getElementById('contenedorFiltroAnio');
         if (contAnio) contAnio.classList.add('hidden');
 
-        // Filtro de clases programadas: pre-seleccionar el año del residente
-        const anioResidente = RESIDENTE_ANIO[_auth.residente];
-        if (anioResidente) {
-            const filtroAnioEl = document.getElementById('filtroClaseAnio');
-            if (filtroAnioEl) {
-                filtroAnioEl.value = anioResidente;
-                filtroAnioEl.disabled = true;
-            }
+        // Clases programadas: el residente ve TODAS, de los cinco años.
+        // Antes se le fijaba su año y se bloqueaba el selector, así que no
+        // podía consultar lo que se imparte en los otros años. El plan docente
+        // no es información reservada —lo interesante es justo poder mirar
+        // hacia adelante y hacia atrás—, así que el selector queda abierto y
+        // arranca en «Todos los años».
+        const filtroAnioEl = document.getElementById('filtroClaseAnio');
+        if (filtroAnioEl) {
+            filtroAnioEl.value = '';        // todos los años
+            filtroAnioEl.disabled = false;  // y puede filtrar como quiera
         }
     }
 
