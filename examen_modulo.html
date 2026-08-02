@@ -328,12 +328,49 @@
     // ── Envío ─────────────────────────────────────────────────────────────
     // La nota va primero: si algo falla al subir las fotos, la nota ya está
     // guardada y las páginas pueden volver a añadirse después.
-    function post(params) {
-        return fetch(URL_SCRIPT, {
-            method: 'POST',
+    // Apps Script responde a un POST con una redirección a otro dominio, y esa
+    // redirección no siempre trae las cabeceras que el navegador exige para
+    // dejar leer la respuesta. Cuando pasa, el envío SÍ llega al servidor pero
+    // fetch lanza un error, y el formulario mostraba «Error al conectar» aunque
+    // la nota se hubiera guardado. Los otros formularios ya tenían este
+    // respaldo; este se quedó sin él.
+    async function post(params) {
+        const opciones = {
+            method:  'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-            body: params.toString()
-        }).then(r => r.json());
+            body:    params.toString(),
+            redirect:'follow'
+        };
+        try {
+            const r = await fetch(URL_SCRIPT, opciones);
+            return await r.json();
+        } catch (e) {
+            try {
+                // Reenvío en modo no-cors: completa la petición aunque no
+                // permita leer nada. saveExamen identifica el examen por
+                // residente + módulo, así que repetirlo actualiza, no duplica.
+                await fetch(URL_SCRIPT, Object.assign({}, opciones, { mode: 'no-cors' }));
+                return { status: 'sin_respuesta' };
+            } catch (e2) {
+                return { status: 'error', message: 'No se pudo conectar con el servidor.' };
+            }
+        }
+    }
+
+    // Cuando no se pudo leer la respuesta, se comprueba leyendo: getEvaluations
+    // es una petición GET y esas sí se leen sin problema. Así el formulario
+    // dice la verdad en vez de suponerla.
+    async function verificarExamen(residente, modulo, nota) {
+        try {
+            const r = await fetch(`${URL_SCRIPT}?action=getEvaluations`, { mode: 'cors' });
+            const datos = await r.json();
+            if (!Array.isArray(datos)) return null;
+            return datos.find(x =>
+                (x.tipo_evaluacion || '').trim() === 'Examen' &&
+                (x.nombreResidente || '').trim() === residente &&
+                (x.tema || '').toUpperCase().indexOf('MÓDULO ' + modulo) !== -1 &&
+                Math.abs(parseFloat(x.total) - nota) < 0.5) || null;
+        } catch (e) { return null; }
     }
 
     $('examenForm').addEventListener('submit', async function (e) {
@@ -361,7 +398,7 @@
         }
 
         try {
-            const res = await post(new URLSearchParams({
+            let res = await post(new URLSearchParams({
                 action: 'saveExamen',
                 nombreResidente: datos.residente,
                 anoResidencia:   datos.anio,
@@ -371,7 +408,19 @@
                 comentarios:     $('comentarios').value || 'Ninguno'
             }));
 
-            if (!res || res.status !== 'success') {
+            let avisoSinRespuesta = '';
+            if (res && res.status === 'sin_respuesta') {
+                // El envío salió pero no se pudo leer la respuesta. Se comprueba
+                // leyendo la hoja antes de decirle nada al usuario.
+                btn.textContent = 'Comprobando…';
+                const guardado = await verificarExamen(datos.residente, datos.modulo, datos.nota);
+                if (!guardado) {
+                    alert('⚠️ No se pudo confirmar si la nota se guardó. Revise el dashboard ' +
+                          'antes de volver a intentarlo.');
+                    restaurar(); return;
+                }
+                res = { status: 'success', actualizado: false };
+            } else if (!res || res.status !== 'success') {
                 alert('⚠️ ' + ((res && res.message) || 'No se pudo guardar la nota del examen.'));
                 restaurar(); return;
             }
@@ -393,10 +442,24 @@
                             orden:           i + 1,
                             foto:            _fotos[i].dataUrl
                         }));
-                        if (rf && rf.status === 'success') subidas++; else fallidas++;
+                        // 'sin_respuesta' significa que salió pero no se pudo leer:
+                        // se cuenta como subida y se confirma al final leyendo la lista.
+                        if (rf && (rf.status === 'success' || rf.status === 'sin_respuesta')) subidas++;
+                        else fallidas++;
                     } catch (err) { fallidas++; }
                 }
                 $('progresoBarra').style.width = '100%';
+                $('progresoTexto').textContent = 'Comprobando…';
+                try {
+                    const rl = await fetch(`${URL_SCRIPT}?action=getExamenFotos` +
+                        `&nombreResidente=${encodeURIComponent(datos.residente)}` +
+                        `&modulo=${encodeURIComponent(datos.modulo)}`, { mode: 'cors' });
+                    const lista = await rl.json();
+                    if (Array.isArray(lista)) {
+                        subidas  = lista.length;
+                        fallidas = Math.max(0, _fotos.length - lista.length);
+                    }
+                } catch (err) { /* si no se puede comprobar, valen los contadores */ }
                 $('progresoTexto').textContent = 'Listo';
             }
 
