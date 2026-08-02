@@ -1,0 +1,26 @@
+# ─── Exportaciones y respaldos de la hoja de cálculo ───────────────────────
+# Contienen nombres de residentes y sus notas: nunca deben publicarse.
+*.xlsx
+*.xls
+*.csv
+Evaluaciones*
+Respaldo*
+
+# ─── Copias locales del Apps Script con secretos ya rellenados ─────────────
+# Al configurar el script se pegan temporalmente correos y códigos dentro de
+# las funciones. Si guardas una copia así, que no acabe en el repositorio.
+*.local.gs
+*.secretos.*
+
+# ─── Sistema y editores ───────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
+
+# ─── NOTA sobre config.js ─────────────────────────────────────────────────
+# config.js SÍ se publica. Con GitHub Pages las páginas se sirven desde este
+# mismo repositorio, así que sin él la plataforma no funciona. Desde el P1 la
+# URL del Apps Script ya no es un secreto: sin sesión válida no devuelve nada.
