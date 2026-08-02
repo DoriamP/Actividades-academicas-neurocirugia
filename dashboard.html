@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Rendimiento Histórico - Neurocirugía</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configuración con la URL del Apps Script. NO se versiona: ver config.ejemplo.js -->
+    <script src="config.js"></script>
+    <!-- Autenticación: pantalla de acceso y token en todas las llamadas -->
+    <script src="auth.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Identity Services -->
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
+
+    <!-- El acceso lo gestiona auth.js, con su propia pantalla de login. -->
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- CONTENIDO (oculto hasta autenticarse)                          -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div id="appShell" class="flex flex-col flex-grow">
+
+    <header class="bg-indigo-950 text-white shadow-md border-b border-indigo-900 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-indigo-900 p-2 rounded-lg border border-indigo-700 text-indigo-300">
+                    <i data-lucide="layout-dashboard" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl md:text-2xl font-bold tracking-tight">Dashboard de Calificaciones</h1>
+                    <p class="text-xs text-indigo-300 font-medium">Análisis de Rendimiento de Residentes</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap justify-center">
+                <div class="flex items-center gap-2 bg-indigo-900/60 px-3 py-2 rounded-lg border border-indigo-700 text-xs text-indigo-200">
+                    <i data-lucide="user" class="w-4 h-4"></i>
+                    <span id="docenteNombre">—</span>
+                </div>
+                <button onclick="cerrarSesionDocente()"
+                    class="flex items-center gap-2 bg-rose-700 hover:bg-rose-600 transition px-3 py-2 rounded-lg border border-rose-500 text-xs text-white font-medium">
+                    <i data-lucide="log-out" class="w-4 h-4"></i> Salir
+                </button>
+                <button id="btnRespaldar" onclick="abrirModalRespaldo()"
+                    class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 transition px-4 py-2 rounded-lg border border-emerald-500 text-xs text-white font-medium">
+                    <i data-lucide="database-backup" class="w-4 h-4"></i> Respaldar base de datos
+                </button>
+                <a href="index.html" class="flex items-center gap-2 bg-indigo-900 hover:bg-indigo-800 transition px-4 py-2 rounded-lg border border-indigo-700 text-xs text-white font-medium">
+                    <i data-lucide="arrow-left" class="w-4 h-4"></i> Volver al Menú Principal
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-8 space-y-8">
+
+        <!-- Estado de carga -->
+        <div id="loadingState" class="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm">
+            <div class="animate-spin inline-block w-8 h-8 border-[4px] border-current border-t-transparent text-indigo-600 rounded-full" role="status"></div>
+            <p class="mt-4 text-slate-600 font-medium">Sincronizando con la base de datos de Google Sheets...</p>
+        </div>
+
+        <!-- Contenido principal (oculto hasta cargar datos) -->
+        <div id="dashboardContent" class="hidden space-y-8">
+
+            <!-- ── SECCIÓN 1: KPIs GLOBALES ──────────────────────────────────── -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+                    <div class="p-3 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-xl">
+                        <i data-lucide="clipboard-list" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <span class="block text-xs text-slate-500 font-bold uppercase tracking-wider">Evaluaciones</span>
+                        <span id="statTotalEvaluaciones" class="text-2xl font-black text-slate-900">0</span>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+                    <div class="p-3 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-xl">
+                        <i data-lucide="line-chart" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <span class="block text-xs text-slate-500 font-bold uppercase tracking-wider">Promedio Global</span>
+                        <span id="statPromedioGlobal" class="text-2xl font-black text-slate-900">0%</span>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+                    <div class="p-3 bg-teal-50 border border-teal-100 text-teal-600 rounded-xl">
+                        <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <span class="block text-xs text-slate-500 font-bold uppercase tracking-wider">Tasa Aprobación</span>
+                        <span id="statTasaAprobacion" class="text-2xl font-black text-slate-900">0%</span>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+                    <div class="p-3 bg-amber-50 border border-amber-100 text-amber-600 rounded-xl">
+                        <i data-lucide="users" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <span class="block text-xs text-slate-500 font-bold uppercase tracking-wider">Evaluadores Activos</span>
+                        <span id="statTotalEvaluadores" class="text-2xl font-black text-slate-900">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── SECCIÓN 2: FILTROS Y TABLA HISTORIAL ──────────────────────── -->
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
+                    <i data-lucide="sliders-horizontal" class="w-5 h-5 text-slate-500"></i>
+                    <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Filtros de Segmentación</h2>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="filterResidente" class="block text-xs font-semibold text-slate-600 mb-1">Filtrar por Residente</label>
+                        <select id="filterResidente" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <option value="ALL">Todos los residentes</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="filterEvaluador" class="block text-xs font-semibold text-slate-600 mb-1">Filtrar por Especialista Evaluador</label>
+                        <select id="filterEvaluador" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <option value="ALL">Todos los especialistas</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="filterComponente" class="block text-xs font-semibold text-slate-600 mb-1">Filtrar por Componente</label>
+                        <select id="filterComponente" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <option value="ALL">Todos los componentes</option>
+                            <option value="Clases Programadas">Clases Programadas</option>
+                            <option value="Clases de Investigación">Clases de Investigación</option>
+                            <option value="Casos Clínicos y Artículos">Casos Clínicos y Artículos</option>
+                            <option value="Sesiones Diarias">Sesiones Clínicas Diarias</option>
+                            <option value="Práctica Quirúrgica">Práctica Quirúrgica</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="bg-slate-900 text-white p-4 flex justify-between items-center">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="clock" class="w-5 h-5 text-slate-400"></i>
+                        <h3 class="font-bold text-sm md:text-base">Historial Completo de Evaluaciones</h3>
+                    </div>
+                    <span id="recordsCount" class="text-xs bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-full font-medium">Mostrando 0 registros</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-500">
+                                <th class="p-4">Fecha</th>
+                                <th class="p-4">Residente</th>
+                                <th class="p-4">Componente / Detalle</th>
+                                <th class="p-4">Evaluador</th>
+                                <th class="p-4 text-center">Rendimiento</th>
+                                <th class="p-4 text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="timelineTableBody" class="divide-y divide-slate-200 text-sm"></tbody>
+                    </table>
+                </div>
+                <div id="emptyState" class="hidden p-12 text-center text-slate-500">
+                    <i data-lucide="folder-open" class="w-12 h-12 mx-auto text-slate-300 mb-3"></i>
+                    <p class="font-medium text-sm">No se encontraron evaluaciones con los filtros seleccionados.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ── MODAL: RESPALDAR BASE DE DATOS ──────────────────────────────── -->
+    <div id="modalRespaldo" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div class="bg-emerald-700 text-white px-6 py-5 flex items-center gap-3">
+                <i data-lucide="database-backup" class="w-6 h-6"></i>
+                <div>
+                    <h3 class="font-bold text-base leading-tight">Respaldar base de datos</h3>
+                    <p class="text-emerald-200 text-xs mt-0.5">Se enviará toda la hoja "Evaluaciones" en formato Excel</p>
+                </div>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label for="emailRespaldo" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Correo electrónico de destino</label>
+                    <input type="email" id="emailRespaldo" placeholder="ejemplo@correo.com"
+                        class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none">
+                </div>
+                <div id="respaldoMsg" class="hidden text-sm rounded-xl px-4 py-3"></div>
+                <div class="flex gap-3 pt-1">
+                    <button onclick="cerrarModalRespaldo()"
+                        class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-sm transition">
+                        Cancelar
+                    </button>
+                    <button id="btnEnviarRespaldo" onclick="enviarRespaldo()"
+                        class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2">
+                        <i data-lucide="send" class="w-4 h-4"></i> Enviar respaldo
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-slate-900 text-slate-400 text-center py-6 border-t border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 text-xs">
+            <p class="font-semibold text-slate-300">Plataforma de Evaluación de Residentes de Neurocirugía</p>
+            <p class="mt-1">Módulo Dashboard de Gestión Académica en tiempo real.</p>
+        </div>
+    </footer>
+
+    </div><!-- /appShell -->
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════════
+        // CONFIGURACIÓN
+        // ═══════════════════════════════════════════════════════════════════
+        // ── Configuración externa (config.js, fuera del repositorio) ──────────
+        // La URL del Apps Script ya no vive en este archivo: se lee de config.js
+        // para que rotar el despliegue sea editar una sola línea, y para que la
+        // llave de la base de datos no acabe nunca en el repositorio.
+        if (!window.CONFIG || !window.CONFIG.URL_SCRIPT ||
+            window.CONFIG.URL_SCRIPT.indexOf('PEGAR_AQUI') !== -1) {
+            document.addEventListener('DOMContentLoaded', function () {
+                var _av = document.createElement('div');
+                _av.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#b91c1c;' +
+                    'color:#fff;padding:10px 14px;font:600 13px system-ui,sans-serif;text-align:center;';
+                _av.textContent = '⚠ Falta config.js o no tiene una URL_SCRIPT válida. ' +
+                    'Copie config.ejemplo.js como config.js y ponga la URL del despliegue del Apps Script.';
+                document.body.appendChild(_av);
+            });
+        }
+        const URL_SCRIPT_GOOGLE = (window.CONFIG && window.CONFIG.URL_SCRIPT) || '';
+
+        // Mapa Componente → archivo del formulario de evaluación
+        const FORM_POR_COMPONENTE = {
+            "Clases Programadas":        "clases_programadas.html",
+            "Clases de Investigación":   "clases_investigacion.html",
+            "Casos Clínicos y Artículos":"casos_clinicos_y_articulos.html",
+            "Sesiones Diarias":          "sesiones_diarias.html",
+            "Práctica Quirúrgica":       "practica_quirurgica.html"
+        };
+
+        let dbMasterData    = [];
+        let dbFilteredData  = [];   // registros actualmente visibles (para editar/eliminar)
+        let NEW_BACKEND     = false; // ¿está publicada la versión nueva del Apps Script?
+        const AVISO_BACKEND = 'Esta función requiere la versión NUEVA del Apps Script, que todavía no está publicada.\n\nEn el editor de Apps Script:\nImplementar → Administrar implementaciones → (lápiz) → Versión: "Nueva versión" → Implementar.\n\nLuego recarga esta página.';
+
+        // ═══════════════════════════════════════════════════════════════════
+        // SESIÓN — la gestiona auth.js contra el servidor
+        // ═══════════════════════════════════════════════════════════════════
+        // La lista de correos y la de administradores ya no viven aquí: el rol
+        // lo asigna el servidor al iniciar sesión, y es él quien lo hace valer.
+        // Comprobarlo solo en el navegador nunca protegió nada.
+        let _authDocente = null;
+        (function () {
+            const s = (window.AUTH && AUTH.sesion) ? AUTH.sesion() : null;
+            if (s) _authDocente = { email: s.email, nombre: s.nombre, rol: s.rol,
+                                    esAdmin: s.rol === 'coordinacion' };
+            document.addEventListener('DOMContentLoaded', () => {
+                const nm = document.getElementById('docenteNombre');
+                if (nm && _authDocente) nm.textContent = _authDocente.nombre;
+            });
+        })();
+
+        function cerrarSesionDocente() {
+            if (window.AUTH && AUTH.salir) { AUTH.salir(); return; }
+            location.reload();
+        }
+
+        // ¿El docente actual puede modificar o eliminar esta evaluación?
+        // Es solo para no ofrecer botones que el servidor va a rechazar: la
+        // decisión de verdad la toma el Apps Script en cada petición.
+        function puedeEditarRow(row) {
+            if (!_authDocente) return false;
+            if (_authDocente.esAdmin) return true;
+            return getNombreEvaluador(row) === _authDocente.nombre;
+        }
+
+        // ─── Arranque del dashboard (SOLO tras autenticarse) ────────────────
+        let _dashIniciado = false;
+        function arrancarDashboard() {
+            if (_dashIniciado) return;
+            _dashIniciado = true;
+            lucide.createIcons();
+            fetchDataFromSheets();
+            document.getElementById('filterResidente').addEventListener('change', applyFiltersAndRender);
+            document.getElementById('filterEvaluador').addEventListener('change', applyFiltersAndRender);
+            document.getElementById('filterComponente').addEventListener('change', applyFiltersAndRender);
+        }
+
+        // El dashboard arranca en cuanto hay sesión válida; si no la hay,
+        // auth.js ya habrá tapado la página con su pantalla de acceso.
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            if (_authDocente) {
+                const nm = document.getElementById('docenteNombre');
+                if (nm) nm.textContent = _authDocente.nombre +
+                        (_authDocente.esAdmin ? '' : ' · solo sus evaluaciones');
+                arrancarDashboard();
+            }
+        });
+
+        // ─── 1. Fetch de Google Sheets ──────────────────────────────────────
+        function fetchDataFromSheets() {
+            fetch(`${URL_SCRIPT_GOOGLE}?action=getEvaluations`)
+                .then(r => r.json())
+                .then(data => {
+                    dbMasterData = data;
+                    // Detectar si el backend nuevo está publicado: solo la versión
+                    // nueva de getEvaluations incluye el campo "_row".
+                    NEW_BACKEND = Array.isArray(data) && data.some(r => r && r._row !== undefined);
+                    document.getElementById('loadingState').classList.add('hidden');
+                    document.getElementById('dashboardContent').classList.remove('hidden');
+                    populateFilterOptions();
+                    applyFiltersAndRender();
+                    lucide.createIcons();
+                })
+                .catch(err => {
+                    console.error(err);
+                    document.getElementById('loadingState').innerHTML = `
+                        <div class="text-red-500">
+                            <i data-lucide="alert-triangle" class="w-12 h-12 mx-auto mb-2"></i>
+                            <p class="font-bold text-lg">Error de sincronización</p>
+                            <p class="text-xs text-slate-500 mt-2 max-w-md mx-auto">Verifica que tu Google Apps Script tenga la función <code class="bg-red-50 px-1 rounded">doGet(e)</code> publicada correctamente.</p>
+                        </div>`;
+                    lucide.createIcons();
+                });
+        }
+
+        // ─── 2. Poblar selectores de filtro ────────────────────────────────
+        function populateFilterOptions() {
+            const residentes = new Set();
+            const evaluadores = new Set();
+            dbMasterData.forEach(row => {
+                const r = getNombreResidente(row);
+                const e = getNombreEvaluador(row);
+                if (r) residentes.add(r);
+                if (e) evaluadores.add(e);
+            });
+
+            const populate = (selId, set) => {
+                const sel = document.getElementById(selId);
+                // Limpiar opciones previas (excepto la primera "Todos…")
+                while (sel.options.length > 1) sel.remove(1);
+                Array.from(set).sort().forEach(v => {
+                    const o = document.createElement('option');
+                    o.value = v; o.textContent = v;
+                    sel.appendChild(o);
+                });
+            };
+            populate('filterResidente', residentes);
+            populate('filterEvaluador', evaluadores);
+        }
+
+        // ─── Helpers de normalización de campos ────────────────────────────
+        function getNombreResidente(row) {
+            return (row.nombreResidente || row.residentName || row.residente || "").toString().trim();
+        }
+        function getNombreEvaluador(row) {
+            return (row.especialista || row.evaluatorName || row.evaluador || "").toString().trim();
+        }
+        function getPorcentaje(row) {
+            let v = parseFloat((row.porcentaje || "0").toString().replace('%','').trim()) || 0;
+            if (v > 0 && v <= 1) v = v * 100;
+            return Math.round(v);
+        }
+        function getComponente(row) {
+            return (row.tipo_evaluacion || "").toString().trim();
+        }
+
+        // ─── 3. Filtrado y render de KPIs + tabla historial ─────────────────
+        function applyFiltersAndRender() {
+            const fR = document.getElementById('filterResidente').value;
+            const fE = document.getElementById('filterEvaluador').value;
+            const fC = document.getElementById('filterComponente').value;
+
+            const filtrados = dbMasterData.filter(row => {
+                const matchR = fR === 'ALL' || getNombreResidente(row) === fR;
+                const matchE = fE === 'ALL' || getNombreEvaluador(row) === fE;
+                const matchC = fC === 'ALL' || getComponente(row) === fC;
+                return matchR && matchE && matchC;
+            });
+
+            // Ordenar de la evaluación MÁS RECIENTE a la más antigua.
+            // Criterio: fecha (dd/MM/yyyy) desc; empate → número de fila desc
+            // (las filas más nuevas se agregan al final de la hoja).
+            function _fechaOrden(row) {
+                const f = (row.fecha || '').toString().trim();
+                let m = f.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+                if (m) return new Date(+m[3], +m[2] - 1, +m[1]).getTime();
+                m = f.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+                if (m) return new Date(+m[1], +m[2] - 1, +m[3]).getTime();
+                return 0;
+            }
+            filtrados.sort((a, b) => {
+                const df = _fechaOrden(b) - _fechaOrden(a);
+                if (df !== 0) return df;
+                return (Number(b._row) || 0) - (Number(a._row) || 0);
+            });
+
+            dbFilteredData = filtrados;
+            renderKPIs(filtrados);
+            renderTable(filtrados);
+        }
+
+        function renderKPIs(data) {
+            const total = data.length;
+            document.getElementById('statTotalEvaluaciones').textContent = total;
+            if (total === 0) {
+                document.getElementById('statPromedioGlobal').textContent = "—";
+                document.getElementById('statTasaAprobacion').textContent = "—";
+                document.getElementById('statTotalEvaluadores').textContent = 0;
+                return;
+            }
+            let suma = 0, aprobados = 0;
+            const evals = new Set();
+            data.forEach(row => {
+                const p = getPorcentaje(row);
+                suma += p;
+                if (p >= 70) aprobados++;
+                const e = getNombreEvaluador(row);
+                if (e) evals.add(e);
+            });
+            document.getElementById('statPromedioGlobal').textContent = `${Math.round(suma / total)}%`;
+            document.getElementById('statTasaAprobacion').textContent = `${Math.round((aprobados / total) * 100)}%`;
+            document.getElementById('statTotalEvaluadores').textContent = evals.size;
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('timelineTableBody');
+            const empty = document.getElementById('emptyState');
+            document.getElementById('recordsCount').textContent = `Mostrando ${data.length} registros`;
+            tbody.innerHTML = '';
+            if (data.length === 0) { empty.classList.remove('hidden'); return; }
+            empty.classList.add('hidden');
+
+            data.forEach((row, idx) => {
+                const fecha = row.fecha || "--/--/----";
+                const residente = getNombreResidente(row) || "No especificado";
+                const evaluador = getNombreEvaluador(row) || "No especificado";
+                const componente = getComponente(row) || "General";
+                const detalle = row.tema || row.surgeryType || "";
+                const pct = getPorcentaje(row);
+
+                const badgeColor = pct >= 70 ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200';
+                const compBadge = componente === 'Práctica Quirúrgica'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : componente === 'Sesiones Diarias'
+                    ? 'bg-sky-50 text-sky-800 border-sky-200'
+                    : 'bg-blue-50 text-blue-800 border-blue-200';
+
+                const permitido  = puedeEditarRow(row);
+                const motivoEdit = !FORM_POR_COMPONENTE[componente] ? 'Componente no editable'
+                                 : !row._row                        ? 'Registro sin identificador'
+                                 : !permitido                       ? 'Solo puede modificar sus propias evaluaciones'
+                                 : '';
+                const editable   = !motivoEdit;
+                const motivoElim = !row._row   ? 'Registro sin identificador'
+                                 : !permitido  ? 'Solo puede eliminar sus propias evaluaciones'
+                                 : '';
+                const eliminable = !motivoElim;
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50/80 transition";
+                tr.innerHTML = `
+                    <td class="p-4 whitespace-nowrap font-medium text-slate-600">${fecha}</td>
+                    <td class="p-4 font-bold text-slate-900">${residente}</td>
+                    <td class="p-4">
+                        <span class="inline-block text-xs px-2.5 py-0.5 rounded-full border ${compBadge} font-semibold mb-1">${componente}</span>
+                        ${detalle ? `<span class="block text-xs text-slate-500 font-medium italic truncate max-w-xs" title="${detalle}">"${detalle}"</span>` : ''}
+                    </td>
+                    <td class="p-4 text-slate-700 font-medium">${evaluador}</td>
+                    <td class="p-4 text-center whitespace-nowrap">
+                        <div class="inline-flex items-center justify-center px-3 py-2 rounded-xl border ${badgeColor} shadow-sm min-w-[70px]">
+                            <span class="text-sm font-black leading-none">${pct}%</span>
+                        </div>
+                    </td>
+                    <td class="p-4 text-center whitespace-nowrap">
+                        <div class="inline-flex items-center gap-1.5">
+                            <button data-idx="${idx}" class="btn-editar ${editable ? '' : 'opacity-30 cursor-not-allowed'}"
+                                ${editable ? 'title="Editar evaluación"' : `disabled title="${motivoEdit}"`}>
+                                <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition">
+                                    <i data-lucide="pencil" class="w-4 h-4"></i>
+                                </span>
+                            </button>
+                            <button data-idx="${idx}" class="btn-eliminar ${eliminable ? '' : 'opacity-30 cursor-not-allowed'}"
+                                ${eliminable ? 'title="Eliminar evaluación"' : `disabled title="${motivoElim}"`}>
+                                <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </span>
+                            </button>
+                        </div>
+                    </td>`;
+                tbody.appendChild(tr);
+            });
+
+            // Asignar eventos a los botones
+            tbody.querySelectorAll('.btn-editar').forEach(b => {
+                if (!b.disabled) b.addEventListener('click', () => editarEvaluacion(parseInt(b.dataset.idx, 10)));
+            });
+            tbody.querySelectorAll('.btn-eliminar').forEach(b => {
+                if (!b.disabled) b.addEventListener('click', () => eliminarEvaluacion(parseInt(b.dataset.idx, 10)));
+            });
+
+            lucide.createIcons();
+        }
+
+        // ─── 4. EDITAR — abre el formulario correspondiente prellenado ──────
+        const LIMITE_EDICIONES_DIA = 2;
+        // La palabra de seguridad NO se guarda en el código. Se le pide al
+        // usuario y la valida el SERVIDOR contra las Propiedades del Script.
+        // Antes estaba escrita aquí, así que cualquiera podía leerla abriendo
+        // el archivo o las herramientas de desarrollo del navegador.
+
+        function editarEvaluacion(idx) {
+            const row = dbFilteredData[idx];
+            if (!row) return;
+            if (!puedeEditarRow(row)) { alert('Solo puede modificar las evaluaciones realizadas por usted. Únicamente el Dr. Luis Zapata y el Dr. Doriam Perera pueden modificar cualquier evaluación.'); return; }
+            if (!NEW_BACKEND) { alert(AVISO_BACKEND); return; }
+            const componente = getComponente(row);
+            const archivo = FORM_POR_COMPONENTE[componente];
+            if (!archivo) {
+                alert('Este componente no tiene un formulario de edición asociado.');
+                return;
+            }
+
+            // Verificar el límite diario de ediciones antes de abrir el formulario
+            fetch(`${URL_SCRIPT_GOOGLE}?action=getEditCount`)
+                .then(r => r.json())
+                .then(res => {
+                    const count = (res && typeof res.count === 'number') ? res.count : 0;
+                    let clave = '';
+                    if (count >= LIMITE_EDICIONES_DIA) {
+                        const intento = prompt(
+                            `Se ha alcanzado el límite de ${LIMITE_EDICIONES_DIA} ediciones por día ` +
+                            `(${count} hoy).\n\nIngresa la palabra de seguridad para continuar editando:`);
+                        if (intento === null) return; // cancelado
+                        clave = intento.trim();
+                        if (!clave) {
+                            alert('Debe escribir la palabra de seguridad. Edición cancelada.');
+                            return;
+                        }
+                        // Si es incorrecta, el servidor rechazará el guardado
+                        // con el mensaje correspondiente.
+                    }
+                    abrirFormularioEdicion(row, archivo, clave);
+                })
+                .catch(() => {
+                    // Si no se puede verificar el conteo, abrir igualmente (la validación
+                    // del servidor sigue activa al guardar)
+                    abrirFormularioEdicion(row, archivo, '');
+                });
+        }
+
+        function abrirFormularioEdicion(row, archivo, clave) {
+            const datos = {
+                modo:        'editar',
+                fila:        row._row,
+                fecha:       row.fecha || '',
+                anio:        row.anoResidencia || '',
+                residente:   getNombreResidente(row),
+                evaluador:   getNombreEvaluador(row),
+                tema:        row.tema || row.surgeryType || '',
+                s1:          row.score1 != null ? row.score1 : '',
+                s2:          row.score2 != null ? row.score2 : '',
+                s3:          row.score3 != null ? row.score3 : '',
+                comentarios: row.comentarios || ''
+            };
+            if (clave) datos.clave = clave;
+            const params = new URLSearchParams(datos);
+            window.location.href = `${archivo}?${params.toString()}`;
+        }
+
+        // ─── 5. ELIMINAR ────────────────────────────────────────────────────
+        function eliminarEvaluacion(idx) {
+            const row = dbFilteredData[idx];
+            if (!row || !row._row) {
+                alert('No se pudo identificar el registro a eliminar.');
+                return;
+            }
+            if (!puedeEditarRow(row)) { alert('Solo puede eliminar las evaluaciones realizadas por usted. Únicamente el Dr. Luis Zapata y el Dr. Doriam Perera pueden eliminar cualquier evaluación.'); return; }
+            if (!NEW_BACKEND) { alert(AVISO_BACKEND); return; }
+            const residente = getNombreResidente(row) || 'este registro';
+            const componente = getComponente(row);
+            if (!confirm(`¿Eliminar definitivamente la evaluación de "${residente}" (${componente}, ${row.fecha})?\n\nEsta acción no se puede deshacer.`)) {
+                return;
+            }
+
+            document.getElementById('loadingState').classList.remove('hidden');
+            document.getElementById('loadingState').querySelector('p').textContent = 'Eliminando evaluación...';
+            document.getElementById('dashboardContent').classList.add('hidden');
+
+            fetch(`${URL_SCRIPT_GOOGLE}?action=deleteEvaluation&fila=${encodeURIComponent(row._row)}`)
+                .then(r => r.json())
+                .then(resp => {
+                    if (resp.status === 'success') {
+                        // Recargar para reflejar el cambio con datos frescos
+                        location.reload();
+                    } else {
+                        alert('Error al eliminar: ' + (resp.message || 'desconocido'));
+                        location.reload();
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('Error de conexión al eliminar. Intenta nuevamente.');
+                    location.reload();
+                });
+        }
+
+        // ─── 6. RESPALDAR BASE DE DATOS ─────────────────────────────────────
+        function abrirModalRespaldo() {
+            if (!NEW_BACKEND) { alert(AVISO_BACKEND); return; }
+            document.getElementById('modalRespaldo').classList.remove('hidden');
+            const msg = document.getElementById('respaldoMsg');
+            msg.classList.add('hidden');
+            msg.textContent = '';
+            document.getElementById('emailRespaldo').focus();
+            lucide.createIcons();
+        }
+
+        function cerrarModalRespaldo() {
+            document.getElementById('modalRespaldo').classList.add('hidden');
+        }
+
+        function enviarRespaldo() {
+            const email = document.getElementById('emailRespaldo').value.trim();
+            const msg = document.getElementById('respaldoMsg');
+            const btn = document.getElementById('btnEnviarRespaldo');
+
+            if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                msg.className = 'text-sm rounded-xl px-4 py-3 bg-red-50 text-red-700 border border-red-200';
+                msg.textContent = 'Por favor ingresa un correo electrónico válido.';
+                msg.classList.remove('hidden');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="animate-spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full"></span> Enviando…';
+            msg.className = 'text-sm rounded-xl px-4 py-3 bg-amber-50 text-amber-700 border border-amber-200';
+            msg.textContent = 'Generando el archivo Excel y enviando el correo… esto puede tardar unos segundos.';
+            msg.classList.remove('hidden');
+
+            fetch(`${URL_SCRIPT_GOOGLE}?action=backupExcel&email=${encodeURIComponent(email)}`)
+                .then(r => r.json())
+                .then(resp => {
+                    if (resp.status === 'success') {
+                        msg.className = 'text-sm rounded-xl px-4 py-3 bg-emerald-50 text-emerald-700 border border-emerald-200';
+                        msg.textContent = '✓ ' + resp.message;
+                    } else {
+                        msg.className = 'text-sm rounded-xl px-4 py-3 bg-red-50 text-red-700 border border-red-200';
+                        msg.textContent = 'Error: ' + (resp.message || 'No se pudo enviar el respaldo.');
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    msg.className = 'text-sm rounded-xl px-4 py-3 bg-red-50 text-red-700 border border-red-200';
+                    msg.textContent = 'Error de conexión. Verifica tu internet e intenta nuevamente.';
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i data-lucide="send" class="w-4 h-4"></i> Enviar respaldo';
+                    lucide.createIcons();
+                });
+        }
+    </script>
+</body>
+</html>

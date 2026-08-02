@@ -1,0 +1,2050 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard del Residente — Neurocirugía</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configuración con la URL del Apps Script. NO se versiona: ver config.ejemplo.js -->
+    <script src="config.js"></script>
+    <!-- Autenticación: pantalla de acceso y token en todas las llamadas -->
+    <script src="auth.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body class="bg-slate-100 min-h-screen py-6 px-3">
+
+<div class="max-w-4xl mx-auto space-y-5">
+
+    <!-- CABECERA -->
+    <div class="bg-gradient-to-r from-indigo-900 to-blue-900 text-white rounded-2xl px-6 py-6 shadow-lg">
+        <h1 class="text-2xl font-black leading-tight">Dashboard del Residente</h1>
+        <p class="text-indigo-200 text-sm mt-1">Seguimiento académico — Neurocirugía</p>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!-- SECCIÓN: CLASES PROGRAMADAS                               -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <div class="bg-white rounded-2xl shadow border border-slate-200 overflow-hidden">
+        <div class="bg-gradient-to-r from-indigo-800 to-indigo-600 px-5 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-2 text-white">
+                <svg class="w-5 h-5 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <h2 class="font-bold text-sm">Clases Programadas</h2>
+            </div>
+            <span class="text-xs text-indigo-200 font-medium hidden sm:block">Plan Docente 2026</span>
+        </div>
+
+        <!-- Filtros -->
+        <div class="px-5 py-3 border-b border-slate-100 flex flex-wrap gap-4 items-end">
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Año de Residencia</label>
+                <select id="filtroClaseAnio" onchange="renderClases()"
+                    class="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none">
+                    <option value="">Todos los años</option>
+                    <option value="I">I Año</option>
+                    <option value="II">II Año</option>
+                    <option value="III">III Año</option>
+                    <option value="IV">IV Año</option>
+                    <option value="V">V Año</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Mes</label>
+                <select id="filtroClaseMes" onchange="renderClases()"
+                    class="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none">
+                    <option value="">Todos los meses</option>
+                    <option value="4">Mayo</option>
+                    <option value="5">Junio</option>
+                    <option value="6">Julio</option>
+                    <option value="7">Agosto</option>
+                    <option value="8">Septiembre</option>
+                    <option value="9">Octubre</option>
+                    <option value="10">Noviembre</option>
+                    <option value="11">Diciembre</option>
+                    <option value="0">Enero</option>
+                    <option value="1">Febrero</option>
+                    <option value="2">Marzo</option>
+                    <option value="3">Abril</option>
+                </select>
+            </div>
+            <div id="claseContador" class="ml-auto text-xs text-slate-400 font-medium self-center"></div>
+        </div>
+
+        <!-- Carrusel -->
+        <div class="relative py-4" style="padding-left:40px;padding-right:40px;">
+            <button onclick="scrollClaseCarousel(-1)"
+                class="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full shadow-md border border-slate-200 w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 transition text-lg font-bold">‹</button>
+            <div id="claseCarousel"
+                class="flex gap-3 overflow-x-auto scroll-smooth"
+                style="scrollbar-width:none;-ms-overflow-style:none;scroll-snap-type:x mandatory;">
+            </div>
+            <button onclick="scrollClaseCarousel(1)"
+                class="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full shadow-md border border-slate-200 w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 transition text-lg font-bold">›</button>
+        </div>
+        <p id="claseVacio" class="hidden text-slate-400 text-sm text-center py-6">No hay clases para los filtros seleccionados.</p>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!-- SECCIÓN: FECHAS IMPORTANTES                               -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <div class="bg-white rounded-2xl shadow border border-slate-200 overflow-hidden">
+        <div class="bg-gradient-to-r from-amber-700 to-orange-600 px-5 py-4 flex items-center justify-between text-white">
+            <div class="flex items-center gap-2">
+                <svg width="20" height="18" viewBox="0 0 20 18" class="flex-shrink-0">
+                    <polygon points="10,1 19,17 1,17" fill="#fef08a" stroke="#fbbf24" stroke-width="1.5"/>
+                    <text x="10" y="14" text-anchor="middle" font-size="9" font-weight="900" fill="#92400e">!</text>
+                </svg>
+                <h2 class="font-bold text-sm">Fechas Importantes</h2>
+            </div>
+            <span class="text-xs text-amber-200 font-medium hidden sm:block">Exámenes y presentaciones de avances</span>
+        </div>
+
+        <!-- Lista vertical scrollable -->
+        <div id="listFechasImportantes" class="divide-y divide-slate-100" style="max-height:340px;overflow-y:auto;">
+        </div>
+        <p id="fechasVacio" class="hidden text-slate-400 text-sm text-center py-6">No hay fechas importantes registradas.</p>
+    </div>
+
+    <!-- TABS -->
+    <div class="flex gap-2 bg-white rounded-2xl p-1.5 shadow border border-slate-200">
+        <button id="tabNotas" onclick="cambiarTab('notas')"
+            class="flex-1 py-2.5 px-4 rounded-xl text-sm font-bold transition tab-activo">
+            📊 Notas Acumuladas
+        </button>
+        <button id="tabPendientes" onclick="cambiarTab('pendientes')"
+            class="flex-1 py-2.5 px-4 rounded-xl text-sm font-bold transition tab-inactivo">
+            📋 Actividades Pendientes
+        </button>
+    </div>
+
+    <!-- TAB 1: NOTAS ACUMULADAS -->
+    <div id="panelNotas" class="space-y-5">
+
+        <!-- Filtros notas -->
+        <div class="bg-white rounded-2xl shadow border border-slate-200 p-5">
+            <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Seleccionar residente y módulo</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label for="selResidente" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Residente</label>
+                    <select id="selResidente" class="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none">
+                        <option value="">— Seleccione —</option>
+                        <optgroup label="I Año"><option>María Teresa Quintana Duarte</option><option>Kevin Yassir Bobb García</option></optgroup>
+                        <optgroup label="II Año"><option>Axly Ivania Olivas Jiménez</option><option>Fernando Antonio De Jesús Cuadra Jiménez</option></optgroup>
+                        <optgroup label="III Año"><option>Vivian Iveth Díaz</option><option>José Luis Cerrato Lemus</option></optgroup>
+                        <optgroup label="IV Año"><option>Angel Benigno Rayo Bravo</option><option>Lagree Guzman Reynoso</option><option>Liuska Ninoska Blandón Cortés</option></optgroup>
+                        <optgroup label="V Año"><option>Martha Elena Abarca Morales</option><option>Jissella Joammet Membreño Vivas</option></optgroup>
+                    </select>
+                </div>
+                <div>
+                    <label for="selModulo" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Módulo</label>
+                    <select id="selModulo" class="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none">
+                        <option value="">— Todos —</option>
+                        <option value="I">Módulo I</option><option value="II">Módulo II</option><option value="III">Módulo III</option>
+                        <option value="IV">Módulo IV</option><option value="Cierre">Cierre / Evaluación final</option>
+                    </select>
+                </div>
+            </div>
+            <button id="btnCargar" onclick="cargarNotas()"
+                class="mt-4 w-full sm:w-auto px-6 py-2.5 bg-indigo-700 hover:bg-indigo-800 active:scale-[0.98] text-white font-bold rounded-xl shadow text-sm transition">
+                Ver Notas
+            </button>
+        </div>
+
+        <div id="msgNotasEstado" class="hidden bg-white rounded-2xl shadow border border-slate-200 p-8 text-center">
+            <p id="msgNotasTexto" class="text-slate-500 text-sm"></p>
+        </div>
+
+        <div id="secNotas" class="hidden space-y-5">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="kpiCards"></div>
+
+            <div class="bg-white rounded-2xl shadow border border-slate-200 overflow-hidden">
+                <div class="bg-slate-50 px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+                    <h2 class="font-bold text-slate-800 text-sm">Notas por Componente</h2>
+                    <span class="text-xs text-slate-400">Distribución ponderada</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-slate-50 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                <th class="px-4 py-3">Componente</th>
+                                <th class="px-4 py-3 text-center">Módulo(s)</th>
+                                <th class="px-4 py-3 text-center">Eval.</th>
+                                <th class="px-4 py-3 text-center">Promedio</th>
+                                <th class="px-4 py-3 text-center">Peso</th>
+                                <th class="px-4 py-3 text-center">Pond.</th>
+                                <th class="px-4 py-3 min-w-[90px]">Progreso</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaBody" class="divide-y divide-slate-100"></tbody>
+                        <tfoot id="tablaFoot" class="bg-slate-50 font-bold text-slate-800"></tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div class="bg-white rounded-2xl shadow border border-slate-200 p-5">
+                    <h3 class="font-bold text-slate-800 text-sm mb-4">Promedio por Componente</h3>
+                    <canvas id="chartBarras" height="240"></canvas>
+                </div>
+                <div class="bg-white rounded-2xl shadow border border-slate-200 p-5">
+                    <h3 class="font-bold text-slate-800 text-sm mb-4">Perfil del Residente</h3>
+                    <canvas id="chartRadar" height="240"></canvas>
+                </div>
+            </div>
+
+            <!-- SECCIÓN: DESGLOSE EVALUACIÓN DIARIA CONSOLIDADA ANÓNIMA CON COMENTARIOS -->
+            <div class="bg-white rounded-2xl shadow border border-slate-200 overflow-hidden">
+                <div class="bg-gradient-to-r from-slate-900 to-indigo-950 px-5 py-4 flex items-center justify-between">
+                    <div class="flex items-center gap-2 text-white">
+                        <svg class="w-5 h-5 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                        <h3 class="font-bold text-sm">Análisis de Desempeño Diario Consolidado</h3>
+                    </div>
+                    <span class="text-xs text-indigo-200 bg-indigo-900/50 px-2.5 py-1 rounded-full border border-indigo-800 font-bold tracking-wide">Métricas Anónimas</span>
+                </div>
+                <div class="p-5 space-y-3" id="contenedorConsolidadoDiario"></div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow border border-slate-200 p-5">
+                <h3 class="font-bold text-slate-800 text-sm mb-4">Nota Estimada por Módulo</h3>
+                <div id="barrasModulo" class="space-y-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: ACTIVIDADES PENDIENTES -->
+    <div id="panelPendientes" class="hidden space-y-5">
+        <div class="bg-white rounded-2xl shadow border border-slate-200 p-5">
+            <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Filtrar actividades pendientes</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label for="selModoVista" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Vista</label>
+                    <select id="selModoVista" onchange="actualizarFiltrosPendientes()"
+                        class="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-rose-500 outline-none appearance-none">
+                        <option value="residente">Por residente individual</option>
+                        <option value="anio">Por año de residencia</option>
+                    </select>
+                </div>
+                <div id="contenedorFiltroResidente">
+                    <label for="selPendResidente" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Residente</label>
+                    <select id="selPendResidente" class="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-rose-500 outline-none appearance-none">
+                        <option value="">— Seleccione —</option>
+                        <optgroup label="I Año"><option>María Teresa Quintana Duarte</option><option>Kevin Yassir Bobb García</option></optgroup>
+                        <optgroup label="II Año"><option>Axly Ivania Olivas Jiménez</option><option>Fernando Antonio De Jesús Cuadra Jiménez</option></optgroup>
+                        <optgroup label="III Año"><option>Vivian Iveth Díaz</option><option>José Luis Cerrato Lemus</option></optgroup>
+                        <optgroup label="IV Año"><option>Angel Benigno Rayo Bravo</option><option>Lagree Guzman Reynoso</option><option>Liuska Ninoska Blandón Cortés</option></optgroup>
+                        <optgroup label="V Año"><option>Martha Elena Abarca Morales</option><option>Jissella Joammet Membreño Vivas</option></optgroup>
+                    </select>
+                </div>
+                <div id="contenedorFiltroAnio" class="hidden">
+                    <label for="selPendAnio" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Año de Residencia</label>
+                    <select id="selPendAnio" class="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-rose-500 outline-none appearance-none">
+                        <option value="I">I Año</option><option value="II">II Año</option><option value="III">III Año</option>
+                        <option value="IV">IV Año</option><option value="V">V Año</option>
+                    </select>
+                </div>
+            </div>
+            <button onclick="cargarPendientes()"
+                class="mt-4 w-full sm:w-auto px-6 py-2.5 bg-rose-700 hover:bg-rose-800 active:scale-[0.98] text-white font-bold rounded-xl shadow text-sm transition">
+                Ver Actividades Pendientes
+            </button>
+        </div>
+        <div id="msgPendEstado" class="hidden bg-white rounded-2xl shadow border border-slate-200 p-8 text-center">
+            <p id="msgPendTexto" class="text-slate-500 text-sm"></p>
+        </div>
+        <div id="secPendientes" class="hidden space-y-5"></div>
+    </div>
+
+    <!-- NOTAS DE ROTACIONES EXTERNAS (colapsable · todos los registros) -->
+    <section class="bg-white rounded-2xl shadow border border-slate-200 overflow-hidden">
+        <button onclick="toggleRotExtDash1()"
+            class="w-full text-left bg-gradient-to-r from-orange-800 to-amber-700 px-5 py-4 text-white flex items-center justify-between focus:outline-none">
+            <div class="flex items-center gap-3">
+                <svg class="w-5 h-5 text-amber-200 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                <div>
+                    <h3 class="font-bold text-sm">Notas de Rotaciones Externas</h3>
+                    <p class="text-xs text-amber-100 mt-0.5">Todos los registros de los residentes · notas y evaluación escrita</p>
+                </div>
+            </div>
+            <svg id="rotExtD1Chevron" class="w-5 h-5 text-amber-200 transition-transform duration-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+        </button>
+        <div id="rotExtD1Panel" class="hidden">
+            <div class="px-5 py-4 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-3 items-end">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Médico residente</label>
+                    <select id="rotExtD1Filtro" onchange="renderRotExtDash1()"
+                        class="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none appearance-none">
+                        <option value="">Todos los residentes</option>
+                    </select>
+                </div>
+                <button onclick="_rotExtD1Datos=null; cargarRotExtDash1();"
+                    class="px-3 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-600 text-xs font-bold rounded-lg transition self-end">🔄 Actualizar</button>
+                <div id="rotExtD1Contador" class="ml-auto self-center text-xs text-slate-400 font-medium"></div>
+            </div>
+            <div id="rotExtD1Lista" class="p-5"></div>
+        </div>
+    </section>
+
+</div>
+
+<!-- Lightbox para ampliar la foto -->
+<div id="rotExtD1Lightbox" onclick="this.style.display='none'"
+    style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.88);z-index:200;align-items:center;justify-content:center;padding:20px;cursor:zoom-out;">
+    <img id="rotExtD1LightImg" alt="Evaluación escrita" style="max-width:95%;max-height:92%;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
+</div>
+
+<style>
+.tab-activo   { background:#4338ca; color:#fff; }
+.tab-inactivo { background:transparent; color:#64748b; }
+.tab-inactivo:hover { background:#f1f5f9; color:#1e293b; }
+#claseCarousel::-webkit-scrollbar { display:none; }
+#listFechasImportantes::-webkit-scrollbar { width:5px; }
+#listFechasImportantes::-webkit-scrollbar-thumb { background:#e2e8f0; border-radius:99px; }
+.clase-card { scroll-snap-align:start; flex-shrink:0; width:210px; border-radius:14px; border-width:2px; border-style:solid; padding:14px; position:relative; transition:box-shadow .2s; }
+.clase-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.10); }
+.clase-card-hoy { box-shadow:0 0 0 3px #6366f1, 0 4px 18px rgba(99,102,241,.25); }
+.clase-card-pasada { opacity:.55; }
+</style>
+
+<script>
+// ── Configuración externa (config.js, fuera del repositorio) ──────────
+        // La URL del Apps Script ya no vive en este archivo: se lee de config.js
+        // para que rotar el despliegue sea editar una sola línea, y para que la
+        // llave de la base de datos no acabe nunca en el repositorio.
+        if (!window.CONFIG || !window.CONFIG.URL_SCRIPT ||
+            window.CONFIG.URL_SCRIPT.indexOf('PEGAR_AQUI') !== -1) {
+            document.addEventListener('DOMContentLoaded', function () {
+                var _av = document.createElement('div');
+                _av.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#b91c1c;' +
+                    'color:#fff;padding:10px 14px;font:600 13px system-ui,sans-serif;text-align:center;';
+                _av.textContent = '⚠ Falta config.js o no tiene una URL_SCRIPT válida. ' +
+                    'Copie config.ejemplo.js como config.js y ponga la URL del despliegue del Apps Script.';
+                document.body.appendChild(_av);
+            });
+        }
+        const URL_SCRIPT = (window.CONFIG && window.CONFIG.URL_SCRIPT) || '';
+
+// ── Caché de temas manuales (sincronizado con Google Sheets) ──
+let _temasCache = {};
+
+// Normaliza la fecha de un tema a "dd/MM/yyyy" (acepta texto dd/M/yyyy,
+// yyyy-MM-dd o fechas ISO que devuelve Sheets cuando la celda quedó como Fecha)
+function _normFechaTema(f) {
+    if (!f) return '';
+    f = String(f).trim();
+    let m = f.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) return ('0'+m[1]).slice(-2) + '/' + ('0'+m[2]).slice(-2) + '/' + m[3];
+    m = f.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m) return ('0'+m[3]).slice(-2) + '/' + ('0'+m[2]).slice(-2) + '/' + m[1];
+    if (f.indexOf('T') !== -1) {
+        const d = new Date(f);
+        if (!isNaN(d.getTime())) return ('0'+d.getDate()).slice(-2) + '/' + ('0'+(d.getMonth()+1)).slice(-2) + '/' + d.getFullYear();
+    }
+    return f;
+}
+
+async function fetchTemas() {
+    try {
+        const resp = await fetch(`${URL_SCRIPT}?action=getTemas`, { mode: 'cors' });
+        const data = await resp.json();
+        if (Array.isArray(data)) {
+            // Si hay filas duplicadas del mismo día/año se queda con la más
+            // reciente (ts, si el backend lo envía; si no, la última en la hoja).
+            const best = {};
+            data.forEach(t => {
+                if (!t.fecha || !t.anio || !t.tema) return;
+                const key = 'manual_tema_' + String(t.anio).trim() + '_' + _normFechaTema(t.fecha);
+                const ts  = +t.ts || 0;
+                if (!(key in best) || ts >= best[key].ts) best[key] = { tema: t.tema, ts: ts };
+            });
+            Object.keys(best).forEach(key => {
+                _temasCache[key] = best[key].tema;
+                try { localStorage.setItem(key, best[key].tema); } catch(e){}
+            });
+        }
+    } catch(e) { /* usa localStorage como fallback */ }
+}
+
+function getTemaGuardado(key) {
+    return _temasCache[key] || localStorage.getItem(key) || '';
+}
+
+// Override de plan docente compartido con index.html (localStorage mismo dominio)
+function getPlanEdit(anio, fecha) {
+    try { return JSON.parse(localStorage.getItem('plan_edit_'+anio+'_'+fecha)||'null'); }
+    catch(e) { return null; }
+}
+
+const RESIDENTE_ANIO = {
+    "María Teresa Quintana Duarte": "I",    "Kevin Yassir Bobb García": "I",
+    "Axly Ivania Olivas Jiménez": "II",     "Fernando Antonio De Jesús Cuadra Jiménez": "II",
+    "Vivian Iveth Díaz": "III",              "José Luis Cerrato Lemus": "III",
+    "Angel Benigno Rayo Bravo": "IV",        "Lagree Guzman Reynoso": "IV",
+    "Liuska Ninoska Blandón Cortés": "IV",
+    "Martha Elena Abarca Morales": "V",      "Jissella Joammet Membreño Vivas": "V"
+};
+
+const ANIO_RESIDENTES = {
+    "I":   ["María Teresa Quintana Duarte", "Kevin Yassir Bobb García"],
+    "II":  ["Axly Ivania Olivas Jiménez", "Fernando Antonio De Jesús Cuadra Jiménez"],
+    "III": ["Vivian Iveth Díaz", "José Luis Cerrato Lemus"],
+    "IV":  ["Angel Benigno Rayo Bravo", "Lagree Guzman Reynoso", "Liuska Ninoska Blandón Cortés"],
+    "V":   ["Martha Elena Abarca Morales", "Jissella Joammet Membreño Vivas"]
+};
+
+const MODULOS_FECHAS = [
+    { modulo: "I",   inicio: "2026-05-01", fin: "2026-06-30" },
+    { modulo: "II",  inicio: "2026-07-01", fin: "2026-08-31" },
+    { modulo: "III", inicio: "2026-09-01", fin: "2026-10-31" },
+    { modulo: "IV",  inicio: "2026-11-01", fin: "2026-12-31" },
+    { modulo: "V",   inicio: "2027-01-01", fin: "2027-02-28" },
+    { modulo: "VI",  inicio: "2027-03-01", fin: "2027-04-30" },
+];
+
+
+
+// ── Fotos del examen escrito ─────────────────────────────────────────────
+// Se piden solo al pulsar «Ver el examen escrito»: cargarlas todas de entrada
+// haría lenta la pantalla, y en la mayoría de consultas no se miran.
+const _fotosExamenCache = {};
+
+async function verFotosExamen(residente, modulo, contenedorId) {
+    const cont = document.getElementById(contenedorId);
+    if (!cont) return;
+    if (!cont.classList.contains('hidden')) { cont.classList.add('hidden'); return; }
+    cont.classList.remove('hidden');
+
+    const clave = residente + '||' + modulo;
+    if (_fotosExamenCache[clave]) { pintarFotosExamen(cont, _fotosExamenCache[clave]); return; }
+
+    cont.innerHTML = '<p class="col-span-full text-[11px] text-slate-400 italic">Cargando el examen…</p>';
+    try {
+        const url = `${URL_SCRIPT}?action=getExamenFotos&nombreResidente=${encodeURIComponent(residente)}&modulo=${encodeURIComponent(modulo)}`;
+        const r = await fetch(url, { mode: 'cors' });
+        const lista = await r.json();
+        _fotosExamenCache[clave] = Array.isArray(lista) ? lista : [];
+        pintarFotosExamen(cont, _fotosExamenCache[clave]);
+    } catch (e) {
+        cont.innerHTML = '<p class="col-span-full text-[11px] text-red-500 italic">No se pudieron cargar las fotos del examen.</p>';
+    }
+}
+
+function pintarFotosExamen(cont, lista) {
+    if (!lista.length) {
+        cont.innerHTML = '<p class="col-span-full text-[11px] text-slate-400 italic">No hay fotos del examen escrito para este módulo.</p>';
+        return;
+    }
+    cont.innerHTML = lista.map((f, i) => `
+        <button type="button" onclick="abrirFotoExamen('${_esc(f.id)}')"
+            class="relative rounded-lg border border-violet-200 bg-white aspect-[3/4] flex flex-col items-center justify-center hover:border-violet-400 hover:bg-violet-50 transition cursor-zoom-in">
+            <span class="text-lg">📄</span>
+            <span class="text-[10px] font-bold text-slate-500 mt-1">Pág. ${f.orden || i + 1}</span>
+        </button>`).join('');
+}
+
+async function abrirFotoExamen(id) {
+    let lb = document.getElementById('lightboxExamen');
+    if (!lb) {
+        lb = document.createElement('div');
+        lb.id = 'lightboxExamen';
+        lb.setAttribute('style', 'display:none;position:fixed;inset:0;background:rgba(15,23,42,.92);' +
+            'z-index:300;align-items:center;justify-content:center;padding:20px;cursor:zoom-out;');
+        lb.onclick = () => { lb.style.display = 'none'; };
+        lb.innerHTML = '<img id="lightboxExamenImg" alt="Página del examen" ' +
+            'style="max-width:96%;max-height:94%;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.5);">';
+        document.body.appendChild(lb);
+    }
+    const img = document.getElementById('lightboxExamenImg');
+    img.removeAttribute('src');
+    lb.style.display = 'flex';
+    try {
+        const r = await fetch(`${URL_SCRIPT}?action=getExamenFoto&id=${encodeURIComponent(id)}`, { mode: 'cors' });
+        const res = await r.json();
+        if (res && res.status === 'success') img.src = res.dataUrl;
+        else { lb.style.display = 'none'; alert('No se pudo abrir la foto: ' + ((res && res.message) || '')); }
+    } catch (e) {
+        lb.style.display = 'none';
+        alert('No se pudo abrir la foto.');
+    }
+}
+
+// ── Escapado de HTML ─────────────────────────────────────────────────────
+// Los comentarios y los temas los escriben personas y se guardan tal cual en
+// la hoja. Si se insertan sin escapar, un texto con etiquetas HTML se
+// ejecutaría al abrir el dashboard. _esc los convierte en texto inofensivo.
+function _esc(v) {
+    return String(v == null ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * BLOQUE CANÓNICO DE CÁLCULO DE NOTAS — v1.0
+ * ---------------------------------------------------------------------------
+ * ⚠️  ESTE BLOQUE ES IDÉNTICO EN LOS TRES ARCHIVOS:
+ *        index.html · dashboard_residentes.html · dashboard_residentes2.html
+ *     Si se modifica, hay que copiarlo TAL CUAL en los tres. Cualquier
+ *     diferencia hace que el resumen académico y los dashboards muestren
+ *     notas distintas para el mismo residente.
+ *
+ * Reglas de cálculo:
+ *   1. COMPONENTES TEÓRICOS — promedio en dos niveles: primero cada ACTIVIDAD
+ *      (tema; tema + fecha en los componentes diarios) promedia todas sus
+ *      evaluaciones, y luego el componente promedia sus actividades. Así una
+ *      clase evaluada por cinco docentes no pesa cinco veces más que otra.
+ *   2. PRÁCTICA QUIRÚRGICA — dentro de cada MÓDULO se promedian primero las
+ *      notas de CADA especialista evaluador y después se promedian entre sí
+ *      esos promedios. Así un especialista que evalúa una vez pesa igual que
+ *      otro que evalúa siete veces.
+ *   3. NOTA TEÓRICA — media ponderada de los componentes teóricos según PESOS.
+ *   4. NOTA PRÁCTICA — media ponderada de los componentes prácticos.
+ *   5. NOTA FINAL — (teórica + práctica) / 2.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+var NOTAS_CANON = (function () {
+    'use strict';
+
+    var VERSION = '1.0';
+
+    var PESOS = {
+        "Clases Programadas":          { peso: 30,  tipo: "Teórico" },
+        "Clases de Investigación":     { peso: 0,   tipo: "Informativo" },
+        "Casos Clínicos y Artículos":  { peso: 20,  tipo: "Teórico" },
+        "Sesiones Diarias":            { peso: 20,  tipo: "Teórico" },
+        "Examen":                      { peso: 30,  tipo: "Teórico" },
+        "Práctica Quirúrgica":         { peso: 100, tipo: "Práctico" }
+    };
+
+    // Componentes que se agrupan por TEMA (una misma clase puede evaluarse en
+    // varias fechas). El resto se agrupa por tema + fecha.
+    var COMPS_POR_TEMA = ["Clases Programadas", "Casos Clínicos y Artículos"];
+
+    function normTxt(s) {
+        return (s == null ? '' : s).toString()
+               .normalize('NFD').replace(/[̀-ͯ]/g, '')
+               .toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
+    // Nota en porcentaje 0-100. Acepta "76", "76%", "0.76" y, si falta, el total.
+    function pct(row) {
+        var v = parseFloat((row.porcentaje == null ? '' : row.porcentaje)
+                    .toString().replace('%', '').replace(',', '.').trim());
+        if (isNaN(v)) {
+            v = parseFloat((row.total == null ? '' : row.total).toString().replace(',', '.').trim());
+        }
+        if (isNaN(v)) return null;
+        if (v > 0 && v <= 1) v = v * 100;
+        return Math.min(Math.round(v), 100);
+    }
+
+    // Nombre canónico del componente a partir del texto de la hoja
+    function comp(tipo) {
+        var t = normTxt(tipo);
+        if (t.indexOf('investigaci') !== -1) return "Clases de Investigación";
+        if (t.indexOf('practica')    !== -1) return "Práctica Quirúrgica";
+        if (t.indexOf('quirurgic')   !== -1) return "Práctica Quirúrgica";
+        if (t.indexOf('caso')        !== -1) return "Casos Clínicos y Artículos";
+        if (t.indexOf('articulo')    !== -1) return "Casos Clínicos y Artículos";
+        if (t.indexOf('sesion')      !== -1) return "Sesiones Diarias";
+        if (t.indexOf('examen')      !== -1) return "Examen";
+        return "Clases Programadas";
+    }
+
+    function nombreEsp(row) {
+        var n = (row.especialista || row.evaluador || row.evaluatorName || '').toString().trim();
+        return n || '(sin especialista)';
+    }
+
+    /**
+     * Calcula las notas de UN residente.
+     * @param {Array}    filas    evaluaciones del residente (ya filtradas)
+     * @param {Function} fnModulo (fila) → módulo al que pertenece, o null
+     * @returns {Object} { tabla, componentes, teorica, practica, final,
+     *                     practicaPorModulo, conteo, totalEvaluaciones }
+     */
+    function calcular(filas, fnModulo) {
+        var porActividad = {};   // clave de actividad → {comp, sum, count, mods}
+        var practPorMod  = {};   // módulo → { especialista → {sum, count, nombre} }
+        var conteo = { teorico: 0, practico: 0, investigacion: 0, total: 0 };
+
+        (filas || []).forEach(function (r) {
+            var v = pct(r);
+            if (v === null) return;
+            var c   = comp(r.tipo_evaluacion);
+            var mod = (fnModulo ? fnModulo(r) : null) || 'Sin módulo';
+            conteo.total++;
+            if (c === "Práctica Quirúrgica")            conteo.practico++;
+            else if (c === "Clases de Investigación")   conteo.investigacion++;
+            else                                        conteo.teorico++;
+
+            if (c === "Práctica Quirúrgica") {
+                var e = normTxt(nombreEsp(r));
+                if (!practPorMod[mod]) practPorMod[mod] = { esp: {}, evals: 0 };
+                if (!practPorMod[mod].esp[e]) practPorMod[mod].esp[e] = { sum: 0, count: 0, nombre: nombreEsp(r) };
+                practPorMod[mod].esp[e].sum += v;
+                practPorMod[mod].esp[e].count++;
+                practPorMod[mod].evals++;
+                return;
+            }
+
+            var tema = normTxt(r.tema || r.surgeryType || '');
+            var fp   = ((r.fechaProg || '') + '').trim();
+            var k    = (COMPS_POR_TEMA.indexOf(c) !== -1)
+                     ? (c + '||' + tema + '||' + fp)
+                     : (c + '||' + (fp || r.fecha || '') + '||' + tema);
+            if (!porActividad[k]) porActividad[k] = { comp: c, sum: 0, count: 0, mods: {} };
+            porActividad[k].sum += v;
+            porActividad[k].count++;
+            porActividad[k].mods[mod] = true;
+        });
+
+        // Nivel 2 de los componentes teóricos: el componente promedia sus actividades
+        var porComp = {};
+        Object.keys(porActividad).forEach(function (k) {
+            var a = porActividad[k], c = a.comp;
+            if (!porComp[c]) porComp[c] = { sumProm: 0, acts: 0, evals: 0, mods: {} };
+            porComp[c].sumProm += a.sum / a.count;
+            porComp[c].acts++;
+            porComp[c].evals += a.count;
+            Object.keys(a.mods).forEach(function (m) { porComp[c].mods[m] = true; });
+        });
+
+        var componentes = {};
+        Object.keys(porComp).forEach(function (c) {
+            componentes[c] = {
+                promedio:     Math.round(porComp[c].sumProm / porComp[c].acts),
+                evaluaciones: porComp[c].evals,
+                modulos:      Object.keys(porComp[c].mods).sort().join(', ')
+            };
+        });
+
+        // Práctica quirúrgica: media de los promedios por especialista en cada
+        // módulo y, si la vista abarca varios módulos, media de los módulos.
+        var practicaPorModulo = [];
+        var mods = Object.keys(practPorMod);
+        if (mods.length) {
+            var sumaMods = 0, totalEvals = 0;
+            mods.forEach(function (m) {
+                var esps = Object.keys(practPorMod[m].esp).map(function (k) { return practPorMod[m].esp[k]; });
+                var promMod = esps.reduce(function (s, e) { return s + e.sum / e.count; }, 0) / esps.length;
+                sumaMods  += promMod;
+                totalEvals += practPorMod[m].evals;
+                practicaPorModulo.push({
+                    modulo:   m,
+                    promedio: Math.round(promMod),
+                    evals:    practPorMod[m].evals,
+                    especialistas: esps.map(function (e) {
+                        return { nombre: e.nombre, promedio: Math.round(e.sum / e.count), n: e.count };
+                    }).sort(function (a, b) { return a.nombre.localeCompare(b.nombre); })
+                });
+            });
+            practicaPorModulo.sort(function (a, b) { return String(a.modulo).localeCompare(String(b.modulo)); });
+            componentes["Práctica Quirúrgica"] = {
+                promedio:     Math.round(sumaMods / mods.length),
+                evaluaciones: totalEvals,
+                modulos:      practicaPorModulo.map(function (d) { return d.modulo + ' (' + d.promedio + '%)'; }).join(', ')
+            };
+        }
+
+        // Ponderación por componente
+        var tabla = [], sumPT = 0, sumWT = 0, sumPP = 0, sumWP = 0;
+        Object.keys(PESOS).forEach(function (c) {
+            var cfg = PESOS[c], d = componentes[c];
+            if (!d) return;
+            var pond = Math.round(d.promedio * cfg.peso / 100);
+            if      (cfg.tipo === "Teórico")  { sumWT += cfg.peso; sumPT += pond; }
+            else if (cfg.tipo === "Práctico") { sumWP += cfg.peso; sumPP += pond; }
+            tabla.push({ comp: c, tipo: cfg.tipo, peso: cfg.peso, promedio: d.promedio,
+                         count: d.evaluaciones, pond: pond, modulos: d.modulos });
+        });
+
+        var teorica  = sumWT > 0 ? Math.round(sumPT * 100 / sumWT) : null;
+        var practica = sumWP > 0 ? Math.round(sumPP * 100 / sumWP) : null;
+        var final    = (teorica !== null && practica !== null)
+                     ? Math.round((teorica + practica) / 2)
+                     : (teorica !== null ? teorica : practica);
+
+        return {
+            tabla: tabla, componentes: componentes,
+            teorica: teorica, practica: practica, final: final,
+            investigacion: componentes["Clases de Investigación"] ? componentes["Clases de Investigación"].promedio : null,
+            practicaPorModulo: practicaPorModulo,
+            conteo: conteo, totalEvaluaciones: conteo.total
+        };
+    }
+
+    return { VERSION: VERSION, PESOS: PESOS, pct: pct, comp: comp,
+             normTxt: normTxt, calcular: calcular };
+})();
+/* ══════════════ FIN DEL BLOQUE CANÓNICO DE CÁLCULO DE NOTAS ══════════════ */
+
+
+// PESOS se conserva por compatibilidad; la fuente de verdad es NOTAS_CANON.PESOS
+const PESOS = {
+    "Clases Programadas":          { peso: 30, tipo: "Teórico" },
+    "Clases de Investigación":     { peso: 0,  tipo: "Informativo" },
+    "Casos Clínicos y Artículos":  { peso: 20, tipo: "Teórico" },
+    "Sesiones Diarias":            { peso: 20, tipo: "Teórico" },
+    "Examen":                      { peso: 30, tipo: "Teórico" },
+    "Práctica Quirúrgica":         { peso: 100, tipo: "Práctico" },
+};
+
+const COLORES_COMP = {
+    "Clases Programadas":         "#6366f1",
+    "Clases de Investigación":    "#0d9488",
+    "Casos Clínicos y Artículos": "#8b5cf6",
+    "Sesiones Diarias":           "#0ea5e9",
+    "Examen":                     "#f59e0b",
+    "Práctica Quirúrgica":        "#10b981",
+};
+
+const CLASES = [
+    // ── I Año ──────────────────────────────────────────────
+    { f:"25/05/2026", tema:"Presentación de caso clínico",                                          anio:"I",   dr:"Dra. Quintana" },
+    { f:"01/06/2026", tema:"Instrumental quirúrgico en neurocirugía",                               anio:"I",   dr:"Dr. Bobb" },
+    { f:"08/06/2026", tema:"Revisión de un tema y artículos científicos",                           anio:"I",   dr:"Dra. Quintana" },
+    { f:"22/06/2026", tema:"Posiciones básicas operatorias en cirugía craneal y espinal",           anio:"I",   dr:"Dr. Bobb" },
+    { f:"06/07/2026", tema:"Principios de craneotomía: topografía craneocerebral",                  anio:"I",   dr:"Dra. Quintana" },
+    { f:"13/07/2026", tema:"Revisión de un tema y artículos científicos",                           anio:"I",   dr:"Dr. Bobb" },
+    { f:"03/08/2026", tema:"Manejo inicial de trauma craneoencefálico del adulto",                  anio:"I",   dr:"Dra. Quintana" },
+    { f:"10/08/2026", tema:"Investigación clínica: el proceso y bases de la investigación",         anio:"I",   dr:"Dra. Quintana" },
+    { f:"17/08/2026", tema:"Manejo inicial de trauma espinal",                                      anio:"I",   dr:"Dr. Bobb" },
+    { f:"24/08/2026", tema:"Presentación de caso clínico",                                          anio:"I",   dr:"Dra. Quintana" },
+    { f:"07/09/2026", tema:"Hidrocefalia",                                                          anio:"I",   dr:"Dr. Bobb" },
+    { f:"14/09/2026", tema:"Craneotomía frontotemporal pterional",                                  anio:"I",   dr:"Dra. Quintana" },
+    { f:"21/09/2026", tema:"Manejo en emergencias de TCE pediátrico",                               anio:"I",   dr:"Dr. Bobb" },
+    { f:"05/10/2026", tema:"Presentación de caso clínico",                                          anio:"I",   dr:"Dra. Quintana" },
+    { f:"26/10/2026", tema:"Investigación clínica: ética e investigación",                          anio:"I",   dr:"Dr. Bobb" },
+    { f:"02/11/2026", tema:"Nervios craneales I-II",                                                anio:"I",   dr:"Dr. Bobb" },
+    { f:"09/11/2026", tema:"Nervios craneales III-IV-VI",                                           anio:"I",   dr:"Dra. Quintana" },
+    { f:"16/11/2026", tema:"Nervios craneales V-VIII",                                              anio:"I",   dr:"Dr. Bobb" },
+    { f:"23/11/2026", tema:"Nervios craneales IX-XII",                                              anio:"I",   dr:"Dra. Quintana" },
+    { f:"01/12/2026", tema:"Revisión de un tema y artículos científicos",                           anio:"I",   dr:"" },
+    { f:"11/01/2027", tema:"Médula espinal (vías ascendentes)",                                     anio:"I",   dr:"Dr. Bobb" },
+    { f:"18/01/2027", tema:"Médula espinal (vías descendentes)",                                    anio:"I",   dr:"Dra. Quintana" },
+    { f:"25/01/2027", tema:"Presentación de caso clínico",                                          anio:"I",   dr:"Dr. Bobb" },
+    { f:"01/02/2027", tema:"Presentación de caso clínico",                                          anio:"I",   dr:"Dra. Quintana" },
+    { f:"08/02/2027", tema:"Irrigación del encéfalo y médula espinal",                              anio:"I",   dr:"Dr. Bobb" },
+    // ── II Año ─────────────────────────────────────────────
+    { f:"26/05/2026", tema:"Presentación de caso clínico",                                          anio:"II",  dr:"Dr. Cuadra" },
+    { f:"02/06/2026", tema:"Manejo en UCI del trauma craneoencefálico",                             anio:"II",  dr:"Dra. Olivas" },
+    { f:"09/06/2026", tema:"Manejo quirúrgico de TCE (parte 1)",                                    anio:"II",  dr:"Dr. Cuadra" },
+    { f:"16/06/2026", tema:"Investigación: clasificación de los tipos de estudio",                  anio:"II",  dr:"Dra. Olivas" },
+    { f:"23/06/2026", tema:"Manejo quirúrgico de TCE (parte 2)",                                    anio:"II",  dr:"Dra. Olivas" },
+    { f:"07/07/2026", tema:"Revisión de un tema y artículos científicos",                           anio:"II",  dr:"Dr. Cuadra" },
+    { f:"14/07/2026", tema:"Revisión de un tema y artículos científicos",                           anio:"II",  dr:"Dra. Olivas" },
+    { f:"21/07/2026", tema:"Manejo quirúrgico de TCE (parte 3)",                                    anio:"II",  dr:"Dr. Cuadra" },
+    { f:"28/07/2026", tema:"Investigación: ensayo clínico aleatorio",                               anio:"II",  dr:"Dr. Cuadra" },
+    { f:"04/08/2026", tema:"Craniectomía descompresiva",                                            anio:"II",  dr:"Dra. Olivas" },
+    { f:"01/09/2026", tema:"Trauma craneoencefálico leve",                                          anio:"II",  dr:"Dr. Cuadra" },
+    { f:"08/09/2026", tema:"Hematoma subdural crónico",                                             anio:"II",  dr:"Dra. Olivas" },
+    { f:"15/09/2026", tema:"Fístula de LCR postraumática",                                          anio:"II",  dr:"Dr. Cuadra" },
+    { f:"06/10/2026", tema:"Presentación de caso clínico",                                          anio:"II",  dr:"Dra. Olivas" },
+    { f:"13/10/2026", tema:"Presentación de caso clínico",                                          anio:"II",  dr:"Dr. Cuadra" },
+    { f:"20/10/2026", tema:"Evaluación y clasificación de inestabilidad espinal",                   anio:"II",  dr:"Dra. Olivas" },
+    { f:"03/11/2026", tema:"Lesiones craneocervicales",                                             anio:"II",  dr:"Dr. Cuadra" },
+    { f:"10/11/2026", tema:"Lesiones de C2",                                                        anio:"II",  dr:"Dra. Olivas" },
+    { f:"15/01/2027", tema:"Lesiones subaxiales cervicales",                                        anio:"II",  dr:"Dr. Cuadra" },
+    { f:"22/01/2027", tema:"Lesiones unión cervicotorácica",                                        anio:"II",  dr:"Dra. Olivas" },
+    { f:"29/01/2027", tema:"Manejo médico de lesión medular",                                       anio:"II",  dr:"Dr. Cuadra" },
+    { f:"12/02/2027", tema:"Lesiones toracolumbares",                                               anio:"II",  dr:"Dra. Olivas" },
+    { f:"19/02/2027", tema:"Revisión de un tema y artículos científicos",                           anio:"II",  dr:"Dr. Cuadra" },
+    { f:"26/02/2027", tema:"Revisión de un tema y artículos científicos",                           anio:"II",  dr:"Dra. Olivas" },
+    // ── III Año ────────────────────────────────────────────
+    { f:"27/05/2026", tema:"Presentación de caso clínico",                                          anio:"III", dr:"Dra. Díaz" },
+    { f:"03/06/2026", tema:"Hernia discal cervical",                                                anio:"III", dr:"Dr. Cerrato" },
+    { f:"10/06/2026", tema:"Hernia discal dorsal",                                                  anio:"III", dr:"Dra. Díaz" },
+    { f:"17/06/2026", tema:"Hernia discal lumbar",                                                  anio:"III", dr:"Dr. Cerrato" },
+    { f:"24/06/2026", tema:"Estenosis cervical, dorsal y lumbar",                                   anio:"III", dr:"Dra. Díaz" },
+    { f:"01/07/2026", tema:"Espondilolistesis degenerativa lumbar",                                 anio:"III", dr:"Dr. Cerrato" },
+    { f:"08/07/2026", tema:"Mielopatía cervical degenerativa",                                      anio:"III", dr:"Dra. Díaz" },
+    { f:"15/07/2026", tema:"Revisión de un tema y artículos científicos",                           anio:"III", dr:"Dr. Cerrato" },
+    { f:"22/07/2026", tema:"Instrumentación posterior torácica y lumbar",                           anio:"III", dr:"Dra. Díaz" },
+    { f:"05/08/2026", tema:"Revisión de un tema y artículos científicos",                           anio:"III", dr:"Dr. Cerrato" },
+    { f:"02/09/2026", tema:"Investigación: estudio de cohortes",                                    anio:"III", dr:"Dra. Díaz" },
+    { f:"09/09/2026", tema:"Instrumentación cervical anterior",                                     anio:"III", dr:"Dra. Díaz" },
+    { f:"16/09/2026", tema:"PLIF, TLIF y ALIF",                                                     anio:"III", dr:"Dr. Cerrato" },
+    { f:"23/09/2026", tema:"Presentación de caso clínico",                                          anio:"III", dr:"" },
+    { f:"07/10/2026", tema:"Presentación de caso clínico",                                          anio:"III", dr:"Dra. Díaz" },
+    { f:"14/10/2026", tema:"Clasificación de deformidad espinal",                                   anio:"III", dr:"Dr. Cerrato" },
+    { f:"21/10/2026", tema:"Evaluación de alineación espinal",                                      anio:"III", dr:"Dra. Díaz" },
+    { f:"28/10/2026", tema:"Evaluación y tratamiento de deformidad cervical",                       anio:"III", dr:"Dr. Cerrato" },
+    { f:"04/11/2026", tema:"Evaluación y tratamiento de la escoliosis del adulto",                  anio:"III", dr:"Dra. Díaz" },
+    { f:"13/01/2027", tema:"Tumores benignos del esqueleto axial",                                  anio:"III", dr:"Dra. Díaz" },
+    { f:"20/01/2027", tema:"Tumores malignos primarios del esqueleto axial",                        anio:"III", dr:"Dr. Cerrato" },
+    { f:"27/01/2027", tema:"Tumores benignos intradurales extramedulares",                          anio:"III", dr:"Dra. Díaz" },
+    { f:"03/02/2027", tema:"Metástasis espinal",                                                    anio:"III", dr:"Dr. Cerrato" },
+    { f:"10/02/2027", tema:"Tumores malignos primarios",                                            anio:"III", dr:"Dra. Díaz" },
+    { f:"17/02/2027", tema:"Revisión de un tema y artículos científicos",                           anio:"III", dr:"Dr. Cerrato" },
+    { f:"24/02/2027", tema:"Revisión de un tema y artículos científicos",                           anio:"III", dr:"Dra. Díaz" },
+    // ── IV Año ─────────────────────────────────────────────
+    { f:"28/05/2026", tema:"Presentación de caso clínico",                                          anio:"IV",  dr:"Dr. Rayo" },
+    { f:"04/06/2026", tema:"Gliomas de bajo grado",                                                 anio:"IV",  dr:"Dr. Reynoso" },
+    { f:"11/06/2026", tema:"Gliomas malignos",                                                      anio:"IV",  dr:"Dra. Blandón" },
+    { f:"18/06/2026", tema:"Revisión de un tema y artículos científicos",                           anio:"IV",  dr:"Dr. Rayo" },
+    { f:"25/06/2026", tema:"Meduloblastomas en niños y adultos",                                    anio:"IV",  dr:"Dr. Reynoso" },
+    { f:"02/07/2026", tema:"Ependimomas intracraneales en niños y adultos",                         anio:"IV",  dr:"Dra. Blandón" },
+    { f:"09/07/2026", tema:"Metástasis cerebral",                                                   anio:"IV",  dr:"Dr. Rayo" },
+    { f:"16/07/2026", tema:"Meningiomas (no base de cráneo)",                                       anio:"IV",  dr:"Dr. Reynoso" },
+    { f:"23/07/2026", tema:"Revisión de un tema y artículos científicos",                           anio:"IV",  dr:"Dra. Blandón" },
+    { f:"30/07/2026", tema:"Revisión de un tema y artículos científicos",                           anio:"IV",  dr:"Dr. Reynoso" },
+    { f:"20/08/2026", tema:"Investigación: estudios de casos control",                              anio:"IV",  dr:"Dr. Reynoso" },
+    { f:"27/08/2026", tema:"Investigación: estudios descriptivos",                                  anio:"IV",  dr:"Dra. Blandón" },
+    { f:"03/09/2026", tema:"Schwannomas vestibulares",                                              anio:"IV",  dr:"Dr. Rayo" },
+    { f:"10/09/2026", tema:"Meningioma de base de cráneo",                                          anio:"IV",  dr:"Dra. Blandón" },
+    { f:"17/09/2026", tema:"Tumores de hipófisis",                                                  anio:"IV",  dr:"Dr. Reynoso" },
+    { f:"24/09/2026", tema:"Presentación de caso clínico",                                          anio:"IV",  dr:"Dr. Rayo" },
+    { f:"01/10/2026", tema:"Presentación de caso clínico",                                          anio:"IV",  dr:"Dra. Blandón" },
+    { f:"08/10/2026", tema:"Presentación de caso clínico",                                          anio:"IV",  dr:"Dr. Reynoso" },
+    { f:"15/10/2026", tema:"Investigación: protocolo y objetivos del estudio",                      anio:"IV",  dr:"Dr. Rayo" },
+    { f:"22/10/2026", tema:"Cordomas y condrosarcomas",                                             anio:"IV",  dr:"Dr. Rayo" },
+    { f:"05/11/2026", tema:"Craneofaringiomas",                                                     anio:"IV",  dr:"Dra. Blandón" },
+    { f:"14/01/2027", tema:"Evaluación de pacientes para cirugía de epilepsia",                     anio:"IV",  dr:"Dra. Blandón" },
+    { f:"21/01/2027", tema:"Lobectomía temporal anteromedial",                                      anio:"IV",  dr:"Dr. Reynoso" },
+    { f:"28/01/2027", tema:"Resecciones extratemporales en cirugía de epilepsia",                   anio:"IV",  dr:"Dr. Rayo" },
+    { f:"04/02/2027", tema:"Estimulación eléctrica para epilepsia (DBS)",                           anio:"IV",  dr:"Dra. Blandón" },
+    { f:"11/02/2027", tema:"Revisión de un tema y artículos científicos",                           anio:"IV",  dr:"Dr. Reynoso" },
+    { f:"18/02/2027", tema:"Cirugía para enfermedad de Parkinson",                                  anio:"IV",  dr:"Dr. Rayo" },
+    { f:"25/02/2027", tema:"Revisión de un tema y artículos científicos",                           anio:"IV",  dr:"Dra. Blandón" },
+    { f:"04/03/2027", tema:"Revisión de un tema y artículos científicos",                           anio:"IV",  dr:"Dr. Rayo" },
+    // ── V Año ──────────────────────────────────────────────
+    { f:"29/05/2026", tema:"Presentación de caso clínico",                                                                                                                                                          anio:"V",   dr:"Dra. Membreño" },
+    { f:"05/06/2026", tema:"Malformaciones arteriovenosas: Principios, fisiología, anatomía, epidemiología, localización, criterios quirúrgicos/endovasculares, criterios para tratamiento",                        anio:"V",   dr:"Dra. Abarca" },
+    { f:"12/06/2026", tema:"Malformaciones arteriovenosas: manejo microquirúrgico",                                                                                                                                  anio:"V",   dr:"Dra. Abarca" },
+    { f:"19/06/2026", tema:"Malformaciones arteriovenosas: manejo endovascular",                                                                                                                                     anio:"V",   dr:"Dra. Abarca" },
+    { f:"26/06/2026", tema:"Investigación: variable de respuesta",                                                                                                                                                   anio:"V",   dr:"Dra. Abarca" },
+    { f:"03/07/2026", tema:"Aneurismas cerebrales: Generalidades, clasificación, criterios quirúrgicos, conservador, endovasculares, aneurismas tratados, cuando volver a tratarlos, complicaciones, aneurismas rotos, no rotos", anio:"V",   dr:"Dra. Membreño" },
+    { f:"10/07/2026", tema:"Aneurismas cerebrales: Manejo quirúrgico para ACI, AcomA, ACM",                                                                                                                         anio:"V",   dr:"Dra. Abarca" },
+    { f:"17/07/2026", tema:"Aneurismas cerebrales: Manejo endovascular para ACI, AcomA, ACM",                                                                                                                       anio:"V",   dr:"Dra. Membreño" },
+    { f:"24/07/2026", tema:"Revisión de un tema y artículos científicos",                                                                                                                                            anio:"V",   dr:"Dra. Abarca" },
+    { f:"31/07/2026", tema:"Investigación: población de estudio",                                                                                                                                                    anio:"V",   dr:"Dra. Membreño" },
+    { f:"07/08/2026", tema:"Revisión de un tema y artículos científicos",                                                                                                                                            anio:"V",   dr:"Dra. Membreño" },
+    { f:"04/09/2026", tema:"Endoscopia ventricular",                                                                                                                                                                 anio:"V",   dr:"Dra. Abarca" },
+    { f:"18/09/2026", tema:"Craneosinostosis no sindrómica",                                        anio:"V",   dr:"Dra. Membreño" },
+    { f:"25/09/2026", tema:"Presentación de caso clínico",                                          anio:"V",   dr:"Dra. Abarca" },
+    { f:"02/10/2026", tema:"Craneosinostosis sindrómica",                                           anio:"V",   dr:"Dra. Membreño" },
+    { f:"09/10/2026", tema:"Disrafismo espinal",                                                    anio:"V",   dr:"Dra. Abarca" },
+    { f:"16/10/2026", tema:"Revisión de un tema y artículos científicos",                           anio:"V",   dr:"Dra. Membreño" },
+    { f:"04/12/2026", tema:"Anatomía de base de cráneo anterior y media (Rhoton)",                  anio:"V",   dr:"Dra. Abarca" },
+    { f:"08/01/2027", tema:"Anatomía del ángulo pontocerebeloso (Rhoton)",                          anio:"V",   dr:"Dra. Membreño" },
+];
+
+// ══════════════════════════════════════════════════════════
+// FECHAS IMPORTANTES (exámenes y presentaciones de avances)
+// ══════════════════════════════════════════════════════════
+const FECHAS_IMPORTANTES = [
+    // I Año
+    { fecha:"2026-07-27", desc:"Examen Módulo I", anio:"I", tipo:"examen" },
+    { fecha:"2026-10-19", desc:"Examen Módulo II", anio:"I", tipo:"examen" },
+    { fecha:"2027-01-04", desc:"Examen de Módulo III — Dra. Quintana", anio:"I", tipo:"examen" },
+    { fecha:"2027-02-22", desc:"Examen Módulo IV", anio:"I", tipo:"examen" },
+    { fecha:"2027-03-15", desc:"Examen Final", anio:"I", tipo:"examen" },
+    { fecha:"2027-03-29", desc:"Presentación de avances de investigación y artículo científico — Dra. Quintana", anio:"I", tipo:"presentacion" },
+    { fecha:"2027-04-13", desc:"Presentación de avances de investigación y artículo científico — Dr. Bobb", anio:"I", tipo:"presentacion" },
+    // II Año
+    { fecha:"2026-08-17", desc:"Examen Módulo I", anio:"II", tipo:"examen" },
+    { fecha:"2026-11-17", desc:"Presentación de avances de tesis y artículo científico — Dr. Cuadra", anio:"II", tipo:"presentacion" },
+    { fecha:"2026-11-24", desc:"Presentación de avances de tesis y artículo científico — Dra. Olivas", anio:"II", tipo:"presentacion" },
+    { fecha:"2026-12-15", desc:"Examen Módulo II", anio:"II", tipo:"examen" },
+    { fecha:"2027-03-12", desc:"Examen Final", anio:"II", tipo:"examen" },
+    { fecha:"2027-03-23", desc:"Presentación de avances de tesis y artículo científico — Dr. Cuadra", anio:"II", tipo:"presentacion" },
+    { fecha:"2027-03-30", desc:"Presentación de avances de tesis y artículo científico — Dra. Olivas", anio:"II", tipo:"presentacion" },
+    // III Año
+    { fecha:"2026-08-19", desc:"Examen Módulo I", anio:"III", tipo:"examen" },
+    { fecha:"2026-11-11", desc:"Presentación de avances de tesis y artículo científico — Dr. Cerrato", anio:"III", tipo:"presentacion" },
+    { fecha:"2026-11-18", desc:"Presentación de avances de tesis y artículo científico — Dra. Díaz", anio:"III", tipo:"presentacion" },
+    { fecha:"2026-12-09", desc:"Examen Módulo II", anio:"III", tipo:"examen" },
+    { fecha:"2027-03-10", desc:"Examen Módulo III", anio:"III", tipo:"examen" },
+    { fecha:"2027-04-07", desc:"Presentación de avances de tesis y artículo científico — Dr. Cerrato", anio:"III", tipo:"presentacion" },
+    { fecha:"2027-04-14", desc:"Presentación de avances de tesis y artículo científico — Dra. Díaz", anio:"III", tipo:"presentacion" },
+    // IV Año
+    { fecha:"2026-08-13", desc:"Examen Módulo I", anio:"IV", tipo:"examen" },
+    { fecha:"2026-11-19", desc:"Presentación de avances de tesis y artículo científico — Dra. Blandón", anio:"IV", tipo:"presentacion" },
+    { fecha:"2026-11-26", desc:"Presentación de avances de tesis y artículo científico — Dr. Rayo", anio:"IV", tipo:"presentacion" },
+    { fecha:"2026-12-03", desc:"Presentación de avances de tesis y artículo científico — Dr. Reynoso", anio:"IV", tipo:"presentacion" },
+    { fecha:"2026-12-10", desc:"Examen Módulo II", anio:"IV", tipo:"examen" },
+    { fecha:"2027-03-18", desc:"Examen Módulo III", anio:"IV", tipo:"examen" },
+    { fecha:"2027-04-01", desc:"Presentación de avances de tesis y artículo científico — Dra. Blandón", anio:"IV", tipo:"presentacion" },
+    { fecha:"2027-04-08", desc:"Presentación de avances de tesis y artículo científico — Dr. Reynoso", anio:"IV", tipo:"presentacion" },
+    { fecha:"2027-04-15", desc:"Presentación de avances de tesis y artículo científico — Dr. Rayo", anio:"IV", tipo:"presentacion" },
+    // V Año
+    { fecha:"2026-08-27", desc:"Examen Módulo I", anio:"V", tipo:"examen" },
+    { fecha:"2026-10-23", desc:"Presentación de avances de tesis y artículo científico — Dra. Abarca", anio:"V", tipo:"presentacion" },
+    { fecha:"2026-10-30", desc:"Presentación de avances de tesis y artículo científico — Dra. Membreño", anio:"V", tipo:"presentacion" },
+    { fecha:"2026-11-13", desc:"Examen Módulo II", anio:"V", tipo:"examen" },
+    { fecha:"2027-02-05", desc:"Examen Módulo III", anio:"V", tipo:"examen" },
+    { fecha:"2027-02-19", desc:"Examen de Grado", anio:"V", tipo:"examen" },
+];
+
+const ANIO_COLORS = {
+    "I":   { border:"#818cf8", bg:"#eef2ff", badge:"background:#eef2ff;color:#3730a3;", text:"#3730a3" },
+    "II":  { border:"#a78bfa", bg:"#f5f3ff", badge:"background:#f5f3ff;color:#5b21b6;", text:"#5b21b6" },
+    "III": { border:"#60a5fa", bg:"#eff6ff", badge:"background:#eff6ff;color:#1d4ed8;", text:"#1d4ed8" },
+    "IV":  { border:"#34d399", bg:"#ecfdf5", badge:"background:#ecfdf5;color:#065f46;", text:"#065f46" },
+    "V":   { border:"#f87171", bg:"#fef2f2", badge:"background:#fef2f2;color:#991b1b;", text:"#991b1b" },
+};
+
+const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+const MESES_LARGO = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+function parseFecha(str) {
+    if (!str) return null;
+    str = String(str).trim();
+    if (str.includes('/')) { const [d,m,y]=str.split('/'); return new Date(+y,+m-1,+d); }
+    if (str.includes('-') && str.length === 10) { const [y,m,d]=str.split('-'); return new Date(+y,+m-1,+d); }
+    return new Date(str);
+}
+
+function hoyMedianoche() {
+    const h = new Date(); h.setHours(0,0,0,0); return h;
+}
+
+// ──────────────────────────────────────────────────────────
+// CLASES: helpers
+// ──────────────────────────────────────────────────────────
+function esEditable(tema) {
+    const t = tema.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    return t.includes('presentacion de caso') || (t.includes('revision') && t.includes('articulo'));
+}
+
+function guardarTemaManual(key, value, fecha, anio, tipo) {
+    const v = value.trim();
+    if (v) { localStorage.setItem(key, v); _temasCache[key] = v; }
+    else    { localStorage.removeItem(key); delete _temasCache[key]; }
+    const params = new URLSearchParams({ action:'saveTema', hoja:'Tema_de_residentes', fecha, anio, tipo, tema: v });
+    fetch(`${URL_SCRIPT}?${params.toString()}`, { mode:'no-cors' }).catch(() => {});
+}
+
+// Guarda desde el botón explícito con feedback visual
+// containerIdx: índice de la tarjeta para actualizar el DOM al estado "guardado"
+function guardarTemaDesdeBoton(inputId, key, fecha, anio, tipo, estadoId, containerIdx) {
+    const input    = document.getElementById(inputId);
+    const estadoEl = document.getElementById(estadoId);
+    if (!input) return;
+    const v = input.value.trim();
+
+    // Caché local inmediato
+    if (v) { localStorage.setItem(key, v); _temasCache[key] = v; }
+    else    { localStorage.removeItem(key); delete _temasCache[key]; }
+
+    if (estadoEl) { estadoEl.textContent = 'Guardando…'; estadoEl.style.color = '#6366f1'; }
+
+    // Envía a Google Sheets → hoja Evaluaciones, pestaña Tema_de_residentes
+    const params = new URLSearchParams({ action:'saveTema', hoja:'Tema_de_residentes', fecha, anio, tipo, tema: v });
+    fetch(`${URL_SCRIPT}?${params.toString()}`, { mode:'no-cors' })
+        .then(() => {
+            if (v && containerIdx !== undefined) {
+                // Cambiar al estado "guardado": ocultar input, mostrar texto en negrita + lápiz
+                const container = document.getElementById('tema-container-' + containerIdx);
+                if (container) {
+                    const bg     = container.dataset.bg     || '#f1f5f9';
+                    const text   = container.dataset.text   || '#334155';
+                    const border = container.dataset.border || '#e2e8f0';
+                    container.innerHTML = `
+                        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px;">
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-size:9px;color:${text};font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;">Tema guardado</div>
+                                <p style="font-size:11px;font-weight:800;color:${text};line-height:1.4;">${v.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>
+                            </div>
+                            <button onclick="editarTema(${containerIdx})" title="Editar tema"
+                                style="flex-shrink:0;background:${bg};border:1.5px solid ${border};border-radius:6px;padding:4px 8px;cursor:pointer;font-size:13px;line-height:1;margin-left:4px;">
+                                ✏️
+                            </button>
+                        </div>`;
+                }
+            } else if (estadoEl) {
+                estadoEl.textContent = '✓ Guardado';
+                estadoEl.style.color = '#10b981';
+                setTimeout(() => { estadoEl.textContent = ''; }, 3000);
+            }
+        })
+        .catch(() => {
+            if (estadoEl) { estadoEl.textContent = '⚠️ Error de red'; estadoEl.style.color = '#ef4444'; }
+        });
+}
+
+// Vuelve al modo edición desde el estado "guardado" (ícono lápiz)
+function editarTema(containerIdx) {
+    const container = document.getElementById('tema-container-' + containerIdx);
+    if (!container) return;
+    const key    = container.dataset.key;
+    const fecha  = container.dataset.fecha;
+    const anio   = container.dataset.anio;
+    const tipo   = container.dataset.tipo;
+    const bg     = container.dataset.bg     || '#f1f5f9';
+    const text   = container.dataset.text   || '#334155';
+    const border = container.dataset.border || '#e2e8f0';
+    const currentVal = (_temasCache[key] || localStorage.getItem(key) || '').replace(/"/g, '&quot;');
+
+    container.innerHTML = `
+        <div style="font-size:10px;color:#6366f1;font-weight:700;margin-bottom:4px;">✏️ Tema a desarrollar:</div>
+        <input type="text" id="inp-${containerIdx}" placeholder="Escribe el tema específico…" value="${currentVal}"
+            style="width:100%;font-size:11px;padding:5px 8px;border:1.5px solid #c7d2fe;border-radius:7px;outline:none;background:#fff;color:#334155;box-sizing:border-box;margin-bottom:5px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+            <button onclick="guardarTemaDesdeBoton('inp-${containerIdx}','${key}','${fecha}','${anio}','${tipo}','estado-${containerIdx}',${containerIdx})"
+                style="font-size:10px;font-weight:700;background:#4f46e5;color:#fff;border:none;border-radius:6px;padding:4px 11px;cursor:pointer;flex-shrink:0;letter-spacing:.02em;">
+                💾 Guardar
+            </button>
+            <span id="estado-${containerIdx}" style="font-size:10px;color:#64748b;font-weight:600;"></span>
+        </div>`;
+
+    const inp = document.getElementById('inp-' + containerIdx);
+    if (inp) { inp.focus(); inp.select(); }
+}
+
+function scrollClaseCarousel(dir) {
+    const c = document.getElementById('claseCarousel');
+    c.scrollBy({ left: dir * 230, behavior:'smooth' });
+}
+
+function renderClases() {
+    const filtroAnio = document.getElementById('filtroClaseAnio').value;
+    const filtroMes  = document.getElementById('filtroClaseMes').value;
+    const hoy = hoyMedianoche();
+
+    let lista = CLASES.filter(c => {
+        const f = parseFecha(c.f);
+        const okAnio = !filtroAnio || c.anio === filtroAnio;
+        const okMes  = filtroMes === '' || f.getMonth() === parseInt(filtroMes);
+        return okAnio && okMes;
+    }).sort((a,b) => parseFecha(a.f) - parseFecha(b.f));
+
+    const carousel = document.getElementById('claseCarousel');
+    const vacio    = document.getElementById('claseVacio');
+    const contador = document.getElementById('claseContador');
+
+    if (lista.length === 0) {
+        carousel.innerHTML = '';
+        vacio.classList.remove('hidden');
+        contador.textContent = '';
+        return;
+    }
+    vacio.classList.add('hidden');
+    contador.textContent = lista.length + ' clase' + (lista.length !== 1 ? 's' : '');
+
+    // Determinar índice de hoy o próxima futura
+    let inicialIdx = 0;
+    let nearFuture = -1;
+    for (let i = 0; i < lista.length; i++) {
+        const f = parseFecha(lista[i].f);
+        if (f.getTime() === hoy.getTime()) { inicialIdx = i; break; }
+        if (f > hoy && nearFuture === -1) nearFuture = i;
+    }
+    if (nearFuture !== -1 && parseFecha(lista[inicialIdx].f).getTime() !== hoy.getTime()) inicialIdx = nearFuture;
+
+    carousel.innerHTML = lista.map((c, i) => {
+        const f = parseFecha(c.f);
+        const esHoy   = f.getTime() === hoy.getTime();
+        const pasada  = f < hoy;
+        const editable = esEditable(c.tema);
+        const localKey = 'manual_tema_' + c.anio + '_' + c.f;
+        const guardado = getTemaGuardado(localKey);
+        const col = ANIO_COLORS[c.anio] || ANIO_COLORS['I'];
+
+        return `<div class="clase-card ${esHoy ? 'clase-card-hoy' : ''} ${pasada && !esHoy ? 'clase-card-pasada' : ''}"
+                     id="clase-card-${i}"
+                     style="border-color:${col.border};background:${esHoy ? '#fff' : col.bg};">
+            ${esHoy ? '<div style="position:absolute;top:8px;right:8px;background:#4f46e5;color:#fff;font-size:9px;font-weight:800;padding:2px 8px;border-radius:99px;letter-spacing:.05em;">HOY</div>' : ''}
+            ${pasada && !esHoy ? '<div style="position:absolute;top:8px;right:8px;background:#94a3b8;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;">Pasada</div>' : ''}
+            <div style="margin-bottom:5px;display:flex;align-items:baseline;gap:4px;">
+                <span style="font-size:24px;font-weight:900;color:#1e293b;line-height:1;">${f.getDate()}</span>
+                <span style="font-size:12px;font-weight:700;color:#64748b;">${MESES[f.getMonth()]} ${f.getFullYear()}</span>
+            </div>
+            <div style="font-size:10px;font-weight:800;color:${col.text};text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;${col.badge}padding:2px 7px;border-radius:6px;display:inline-block;">${c.anio} Año</div>
+            ${(() => { const ov=getPlanEdit(c.anio,c.f); const td=(ov&&ov.tema)?ov.tema:c.tema; const dd=(ov&&ov.dr!==undefined)?ov.dr:c.dr; const mod=ov?'<span style="font-size:8px;background:#fef3c7;color:#92400e;padding:1px 4px;border-radius:4px;font-weight:700;margin-left:3px;">editado</span>':''; return `<p style="font-size:12px;font-weight:600;color:#334155;line-height:1.4;margin-top:5px;margin-bottom:4px;">${td}${mod}</p>${dd?`<p style="font-size:10px;color:#6366f1;font-weight:600;margin-bottom:${editable?'6px':'0'};display:flex;align-items:center;gap:3px;"><span style="opacity:.7;">👨‍⚕️</span>${dd}</p>`:''}`; })()}
+            ${editable ? `<div id="tema-container-${i}"
+                data-key="${localKey}"
+                data-fecha="${c.f}"
+                data-anio="${c.anio}"
+                data-tipo="${c.tema.toLowerCase().includes('caso') ? 'caso' : 'revision'}"
+                data-bg="${col.bg}"
+                data-text="${col.text}"
+                data-border="${col.border}"
+                style="margin-top:6px;padding-top:6px;border-top:1px solid ${col.border};">
+                ${guardado
+                    ? `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px;">
+                           <div style="flex:1;min-width:0;">
+                               <div style="font-size:9px;color:${col.text};font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;">Tema guardado</div>
+                               <p style="font-size:11px;font-weight:800;color:${col.text};line-height:1.4;">${guardado.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>
+                           </div>
+                           <button onclick="editarTema(${i})" title="Editar tema"
+                               style="flex-shrink:0;background:${col.bg};border:1.5px solid ${col.border};border-radius:6px;padding:4px 8px;cursor:pointer;font-size:13px;line-height:1;margin-left:4px;">
+                               ✏️
+                           </button>
+                       </div>`
+                    : `<div style="font-size:10px;color:#6366f1;font-weight:700;margin-bottom:4px;">✏️ Tema a desarrollar:</div>
+                       <input type="text" id="inp-${i}" placeholder="Escribe el tema específico…" value=""
+                           style="width:100%;font-size:11px;padding:5px 8px;border:1.5px solid #c7d2fe;border-radius:7px;outline:none;background:#fff;color:#334155;box-sizing:border-box;margin-bottom:5px;">
+                       <div style="display:flex;align-items:center;gap:6px;">
+                           <button onclick="guardarTemaDesdeBoton('inp-${i}','${localKey}','${c.f}','${c.anio}','${c.tema.toLowerCase().includes('caso') ? 'caso' : 'revision'}','estado-${i}',${i})"
+                               style="font-size:10px;font-weight:700;background:#4f46e5;color:#fff;border:none;border-radius:6px;padding:4px 11px;cursor:pointer;flex-shrink:0;letter-spacing:.02em;">
+                               💾 Guardar
+                           </button>
+                           <span id="estado-${i}" style="font-size:10px;color:#64748b;font-weight:600;"></span>
+                       </div>`
+                }
+            </div>` : ''}
+        </div>`;
+    }).join('');
+
+    // Scroll a la clase de hoy / próxima
+    setTimeout(() => {
+        const card = document.getElementById('clase-card-' + inicialIdx);
+        if (card) card.scrollIntoView({ behavior:'smooth', block:'nearest', inline:'start' });
+    }, 80);
+}
+
+// ──────────────────────────────────────────────────────────
+// FECHAS IMPORTANTES
+// ──────────────────────────────────────────────────────────
+function svgTriangulo(color, borderColor) {
+    return `<svg width="22" height="20" viewBox="0 0 22 20" style="flex-shrink:0;">
+        <polygon points="11,1.5 20.5,18.5 1.5,18.5" fill="${color}" stroke="${borderColor}" stroke-width="1.5"/>
+        <text x="11" y="15.5" text-anchor="middle" font-size="9" font-weight="900" fill="white">!</text>
+    </svg>`;
+}
+
+function renderFechasImportantes() {
+    const hoy = hoyMedianoche();
+
+    const futuras = FECHAS_IMPORTANTES
+        .map(f => ({ ...f, dateObj: new Date(f.fecha + 'T00:00:00') }))
+        .sort((a,b) => a.dateObj - b.dateObj);
+
+    const lista = document.getElementById('listFechasImportantes');
+    const vacio  = document.getElementById('fechasVacio');
+
+    if (futuras.length === 0) {
+        lista.innerHTML = '';
+        vacio.classList.remove('hidden');
+        return;
+    }
+    vacio.classList.add('hidden');
+
+    lista.innerHTML = futuras.map(f => {
+        const diffMs   = f.dateObj - hoy;
+        const diffDias = Math.round(diffMs / 86400000);
+        const pasada   = diffDias < 0;
+
+        let warning = '<div style="width:22px;flex-shrink:0;"></div>';
+        if (!pasada) {
+            if (diffDias <= 7)  warning = svgTriangulo('#ef4444','#dc2626');
+            else if (diffDias <= 21) warning = svgTriangulo('#f59e0b','#d97706');
+        }
+
+        const col = ANIO_COLORS[f.anio] || ANIO_COLORS['I'];
+
+        let diasTexto, diasColor;
+        if (pasada) {
+            diasTexto  = 'Hace ' + Math.abs(diffDias) + ' días';
+            diasColor  = '#94a3b8';
+        } else if (diffDias === 0) {
+            diasTexto  = '¡Hoy!';
+            diasColor  = '#7c3aed';
+        } else if (diffDias === 1) {
+            diasTexto  = 'Mañana';
+            diasColor  = '#dc2626';
+        } else if (diffDias <= 7) {
+            diasTexto  = diffDias + ' días';
+            diasColor  = '#dc2626';
+        } else if (diffDias <= 21) {
+            diasTexto  = diffDias + ' días';
+            diasColor  = '#d97706';
+        } else {
+            diasTexto  = diffDias + ' días';
+            diasColor  = '#64748b';
+        }
+
+        const esTipoExamen = f.tipo === 'examen';
+        const tipoLabel    = esTipoExamen
+            ? '<span style="background:#fef3c7;color:#92400e;font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;margin-left:4px;">EXAMEN</span>'
+            : '<span style="background:#ede9fe;color:#5b21b6;font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;margin-left:4px;">PRESENTACIÓN</span>';
+
+        const fechaStr = f.dateObj.getDate() + ' ' + MESES[f.dateObj.getMonth()] + ' ' + f.dateObj.getFullYear();
+
+        return `<div style="padding:12px 20px;display:flex;align-items:center;gap:12px;${pasada?'opacity:.5;':''}">
+            ${warning}
+            <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:2px;">
+                    <span style="font-size:10px;font-weight:800;${col.badge}padding:2px 7px;border-radius:5px;">${f.anio} Año</span>
+                    ${tipoLabel}
+                    <span style="font-size:11px;color:#94a3b8;font-weight:500;margin-left:2px;">${fechaStr}</span>
+                </div>
+                <p style="font-size:13px;font-weight:600;color:#1e293b;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${f.desc}</p>
+            </div>
+            <div style="text-align:right;flex-shrink:0;">
+                <p style="font-size:13px;font-weight:800;color:${diasColor};white-space:nowrap;">${diasTexto}</p>
+                ${!pasada && diffDias > 0 ? '<p style="font-size:10px;color:#94a3b8;margin-top:1px;">restantes</p>' : ''}
+            </div>
+        </div>`;
+    }).join('');
+
+    // Scroll a la primera fecha futura
+    const items = lista.querySelectorAll('div[style]');
+    // Find first non-past item — approximate: scroll top to show upcoming
+    const hoyItems = Array.from(lista.children).filter((_,i) => {
+        const d = futuras[i];
+        return d && new Date(d.fecha + 'T00:00:00') >= hoy;
+    });
+    if (hoyItems.length > 0) {
+        setTimeout(() => hoyItems[0].scrollIntoView({ block:'start' }), 100);
+    }
+}
+
+// Scroll inicial a la primera fecha futura al cargar
+function scrollFechasAHoy() {
+    const hoy = hoyMedianoche();
+    const lista = document.getElementById('listFechasImportantes');
+    const children = Array.from(lista.children);
+    const idx = FECHAS_IMPORTANTES
+        .map(f => new Date(f.fecha + 'T00:00:00'))
+        .sort((a,b) => a-b)
+        .findIndex(d => d >= hoy);
+    if (idx > 0 && children[idx]) {
+        lista.scrollTop = children[idx].offsetTop - lista.offsetTop;
+    }
+}
+
+// ──────────────────────────────────────────────────────────
+// Resto de funciones originales
+// ──────────────────────────────────────────────────────────
+// ── Módulos según el PLAN DOCENTE COMPLETO 2026-2027 (por año de residencia) ──
+// Cada módulo va desde su PRIMERA actividad programada hasta su ÚLTIMA fecha del
+// plan (normalmente el día del examen del módulo), ambas incluidas.
+// Toda evaluación registrada DESPUÉS del cierre de un módulo pertenece ya al
+// módulo siguiente, aunque el siguiente todavía no haya iniciado sus clases.
+// Ej.: I año cierra el Módulo I el 27/07/2026 (examen) y el Módulo II arranca el
+// 03/08/2026; una práctica del 29/07/2026 cuenta para el Módulo II, no para el I.
+const MODULOS_PLAN_FIJO = {
+    'I':   [ {mod:'I',inicio:'2026-05-25',fin:'2026-07-27'}, {mod:'II',inicio:'2026-08-03',fin:'2026-10-19'}, {mod:'III',inicio:'2026-10-26',fin:'2027-01-04'}, {mod:'IV',inicio:'2027-01-11',fin:'2027-02-22'}, {mod:'Cierre',inicio:'2027-03-15',fin:'2027-04-13'} ],
+    'II':  [ {mod:'I',inicio:'2026-05-26',fin:'2026-08-17'}, {mod:'II',inicio:'2026-09-01',fin:'2026-12-15'}, {mod:'III',inicio:'2027-01-15',fin:'2027-03-12'}, {mod:'Cierre',inicio:'2027-03-23',fin:'2027-03-30'} ],
+    'III': [ {mod:'I',inicio:'2026-05-27',fin:'2026-08-19'}, {mod:'II',inicio:'2026-09-02',fin:'2026-12-09'}, {mod:'III',inicio:'2027-01-13',fin:'2027-03-10'}, {mod:'Cierre',inicio:'2027-04-07',fin:'2027-04-14'} ],
+    'IV':  [ {mod:'I',inicio:'2026-05-28',fin:'2026-08-27'}, {mod:'II',inicio:'2026-09-03',fin:'2026-12-10'}, {mod:'III',inicio:'2027-01-14',fin:'2027-03-18'}, {mod:'Cierre',inicio:'2027-04-01',fin:'2027-04-15'} ],
+    'V':   [ {mod:'I',inicio:'2026-05-29',fin:'2026-08-27'}, {mod:'II',inicio:'2026-09-04',fin:'2026-11-13'}, {mod:'III',inicio:'2026-12-04',fin:'2027-02-05'}, {mod:'Cierre',inicio:'2027-02-19',fin:'2027-04-30'} ],
+};
+let _modPlanCache = null;
+function _modulosPlan() {
+    if (_modPlanCache) return _modPlanCache;
+    let out = null;
+    // Si esta página tiene el Plan Docente Completo, los límites se derivan de él:
+    // inicio = primera fecha del módulo, fin = última fecha del módulo (examen).
+    if (typeof PLAN_DOCENTE_COMPLETO !== 'undefined' && Array.isArray(PLAN_DOCENTE_COMPLETO)) {
+        const acc = {};
+        PLAN_DOCENTE_COMPLETO.forEach(e => {
+            const d = parseFecha(e.f); if (!d) return;
+            acc[e.anio] = acc[e.anio] || {};
+            const cur = acc[e.anio][e.mod];
+            if (!cur) acc[e.anio][e.mod] = { inicio:d, fin:d };
+            else { if (d < cur.inicio) cur.inicio = d; if (d > cur.fin) cur.fin = d; }
+        });
+        if (Object.keys(acc).length) {
+            out = {};
+            Object.keys(acc).forEach(a => {
+                out[a] = Object.keys(acc[a])
+                    .map(m => ({ mod:m, inicio:acc[a][m].inicio, fin:acc[a][m].fin }))
+                    .sort((x,y) => x.inicio - y.inicio);
+            });
+        }
+    }
+    if (!out) {
+        out = {};
+        Object.keys(MODULOS_PLAN_FIJO).forEach(a => {
+            out[a] = MODULOS_PLAN_FIJO[a].map(m => ({
+                mod: m.mod, inicio: parseFecha(m.inicio), fin: parseFecha(m.fin || m.inicio)
+            }));
+        });
+    }
+    // Normalización: ningún módulo puede solaparse con el siguiente y el último
+    // se deja abierto para que las evaluaciones tardías no queden sin módulo.
+    Object.keys(out).forEach(a => {
+        const L = out[a];
+        for (let i = 0; i < L.length; i++) {
+            if (!L[i].fin || L[i].fin < L[i].inicio) L[i].fin = L[i].inicio;
+            if (i + 1 < L.length && L[i].fin >= L[i + 1].inicio) {
+                L[i].fin = new Date(L[i + 1].inicio.getTime() - 86400000);
+            }
+        }
+        if (L.length) L[L.length - 1].fin = new Date(2099, 11, 31);
+    });
+    _modPlanCache = out;
+    return out;
+}
+function _modulosDeAnio(anio) {
+    const p = _modulosPlan()[anio];
+    return p ? p.map(m => m.mod) : MODULOS_FECHAS.map(m => m.modulo);
+}
+// Devuelve {inicio, fin} del módulo indicado para un año de residencia
+function getRangoModulo(anioRes, mod) {
+    const lista = _modulosPlan()[anioRes];
+    if (!lista) return null;
+    for (const m of lista) if (m.mod === mod) return { inicio: m.inicio, fin: m.fin };
+    return null;
+}
+
+function getModulo(fechaStr, anioRes) {
+    const d = parseFecha(fechaStr);
+    if (!d) return null;
+    const lista = anioRes ? _modulosPlan()[anioRes] : null;
+    if (lista && lista.length) {
+        // Una evaluación pertenece al PRIMER módulo cuyo cierre (día del examen)
+        // sea igual o posterior a su fecha. Así, todo lo registrado después del
+        // examen de un módulo cae automáticamente en el módulo siguiente.
+        for (const m of lista) { if (d <= m.fin) return m.mod; }
+        return lista[lista.length - 1].mod;
+    }
+
+    // Respaldo (sin año conocido): rangos generales de calendario
+    for (const m of MODULOS_FECHAS) {
+        if (d >= new Date(m.inicio) && d <= new Date(m.fin)) return m.modulo;
+    }
+    return null;
+}
+
+function getPct(row) {
+    let v = parseFloat((row.porcentaje||"0").toString().replace('%','').trim())||0;
+    if (v>0&&v<=1) v=v*100;
+    return Math.min(Math.round(v),100);
+}
+
+function colorBarra(pct) {
+    if (pct>=80) return "bg-emerald-500";
+    if (pct>=70) return "bg-blue-500";
+    if (pct>=60) return "bg-amber-400";
+    return "bg-red-400";
+}
+
+function badgeColor(pct) {
+    if (pct>=80) return "bg-emerald-100 text-emerald-800";
+    if (pct>=70) return "bg-blue-100 text-blue-800";
+    if (pct>=60) return "bg-amber-100 text-amber-800";
+    return "bg-red-100 text-red-700";
+}
+
+function getTipoClase(tema) {
+    const t = tema.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    if (t.includes('presentacion de caso') || t.includes('presentación de caso')) return 'Casos Clínicos y Artículos';
+    if (t.includes('revision') && t.includes('articulo')) return 'Casos Clínicos y Artículos';
+    return 'Clases Programadas';
+}
+
+const STOPWORDS = new Set(['de','la','el','en','y','a','un','una','los','las','del','al','por','con','para','que','se','su','lo','es','no','o','e','i','parte','sus','una','este']);
+function tokenizar(s) {
+    return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[()]/g,' ').split(/\W+/).filter(w=>w.length>2&&!STOPWORDS.has(w));
+}
+function hayCoincidencia(planTema, evalTema) {
+    if (!evalTema) return false;
+    const t1 = new Set(tokenizar(planTema));
+    return tokenizar(evalTema).some(w => t1.has(w));
+}
+
+let _datosCache = null;
+
+async function fetchEvaluaciones() {
+    if (_datosCache) return _datosCache;
+    const resp = await fetch(`${URL_SCRIPT}?action=getEvaluations`, { mode: 'cors' });
+    _datosCache = await resp.json();
+    return _datosCache;
+}
+
+function cambiarTab(tab) {
+    const esNotas = tab === 'notas';
+    document.getElementById('panelNotas').classList.toggle('hidden', !esNotas);
+    document.getElementById('panelPendientes').classList.toggle('hidden', esNotas);
+    document.getElementById('tabNotas').className = 'flex-1 py-2.5 px-4 rounded-xl text-sm font-bold transition ' + (esNotas ? 'tab-activo' : 'tab-inactivo');
+    document.getElementById('tabPendientes').className = 'flex-1 py-2.5 px-4 rounded-xl text-sm font-bold transition ' + (!esNotas ? 'tab-activo' : 'tab-inactivo');
+}
+
+function actualizarFiltrosPendientes() {
+    const modo = document.getElementById('selModoVista').value;
+    document.getElementById('contenedorFiltroResidente').classList.toggle('hidden', modo !== 'residente');
+    document.getElementById('contenedorFiltroAnio').classList.toggle('hidden', modo !== 'anio');
+}
+
+let chartBarrasInst = null, chartRadarInst = null;
+
+async function cargarNotas() {
+    const residente = document.getElementById('selResidente').value.trim();
+    const moduloFiltro = document.getElementById('selModulo').value.trim();
+    if (!residente) { mostrarMsgNotas("Por favor selecciona un residente."); return; }
+    mostrarMsgNotas("Cargando datos…");
+    document.getElementById('secNotas').classList.add('hidden');
+
+    let datos;
+    try { datos = await fetchEvaluaciones(); }
+    catch(e) { mostrarMsgNotas("⚠️ No se pudo conectar con Google Sheets."); return; }
+
+    if (!Array.isArray(datos)||datos.length===0) { mostrarMsgNotas("No hay evaluaciones registradas."); return; }
+
+    const filas = datos.filter(r=>(r.nombreResidente||r.residentName||r.residente||"").trim()===residente);
+    if (!filas.length) { mostrarMsgNotas(`Sin evaluaciones para ${residente}.`); return; }
+
+    const filasConMod = filas.map(r=>({...r, _modulo:getModulo(r.fecha, RESIDENTE_ANIO[residente])||"Sin módulo", _pct:getPct(r), _comp:(r.tipo_evaluacion||"").trim()}));
+    const filasFiltr = moduloFiltro ? filasConMod.filter(r=>r._modulo===moduloFiltro) : filasConMod;
+    if (!filasFiltr.length) { mostrarMsgNotas("No hay evaluaciones en el módulo seleccionado."); return; }
+
+    document.getElementById('msgNotasEstado').classList.add('hidden');
+    renderNotas(residente, filasFiltr);
+}
+
+function mostrarMsgNotas(txt) {
+    document.getElementById('msgNotasTexto').textContent = txt;
+    document.getElementById('msgNotasEstado').classList.remove('hidden');
+    document.getElementById('secNotas').classList.add('hidden');
+}
+
+function renderNotas(residente, filas) {
+    // ── CÁLCULO DE NOTAS ────────────────────────────────────────────────
+    // Toda la lógica vive en NOTAS_CANON (bloque canónico, arriba en este
+    // mismo archivo), idéntico en index.html y en los dos dashboards, para
+    // que el Resumen Académico y estas notas acumuladas nunca discrepen.
+    const _COMP_PRACT = "Práctica Quirúrgica";
+    const _espKey = r => NOTAS_CANON.normTxt(r.especialista || r.evaluador || r.evaluatorName || "(sin especialista)");
+    const _RES = NOTAS_CANON.calcular(filas, r => r._modulo);
+
+    const compData = {};
+    Object.keys(_RES.componentes).forEach(c => {
+        compData[c] = { promedio: _RES.componentes[c].promedio,
+                        count:    _RES.componentes[c].evaluaciones,
+                        modulos:  _RES.componentes[c].modulos };
+    });
+    const PRACT_DETALLE = _RES.practicaPorModulo;
+    const filasTbl = _RES.tabla;
+    const notaT = _RES.teorica;
+    const notaP = _RES.practica;
+    const notaF = _RES.final !== null ? _RES.final : 0;
+
+    document.getElementById('kpiCards').innerHTML=[
+        {label:"Evaluaciones",val:filas.length,color:"bg-indigo-50 text-indigo-700"},
+        {label:"Nota Teórica",val:notaT!==null?notaT+"%":"—",color:"bg-blue-50 text-blue-700"},
+        {label:"Nota Práctica",val:notaP!==null?notaP+"%":"—",color:"bg-emerald-50 text-emerald-700"},
+        {label:"Nota Final Est.",val:notaF+"%",color:notaF>=70?"bg-green-50 text-green-700":"bg-red-50 text-red-700"},
+    ].map(c=>`<div class="${c.color} rounded-2xl p-4 text-center border border-slate-200"><p class="text-2xl font-black">${c.val}</p><p class="text-xs font-bold mt-1 opacity-70 uppercase tracking-wide">${c.label}</p></div>`).join('');
+
+    document.getElementById('tablaBody').innerHTML=filasTbl.map(f=>`
+        <tr class="hover:bg-slate-50">
+            <td class="px-4 py-3"><span class="font-semibold text-slate-800">${_esc(f.comp)}</span>
+                <span class="ml-2 text-xs px-2 py-0.5 rounded-full ${f.tipo==='Teórico'?'bg-blue-100 text-blue-700':'bg-emerald-100 text-emerald-700'}">${f.tipo}</span></td>
+            <td class="px-4 py-3 text-center text-xs text-slate-500">${f.modulos}</td>
+            <td class="px-4 py-3 text-center font-medium text-slate-600">${f.count}</td>
+            <td class="px-4 py-3 text-center font-bold text-slate-800">${f.promedio}%</td>
+            <td class="px-4 py-3 text-center text-slate-500 text-xs">${f.peso}%</td>
+            <td class="px-4 py-3 text-center"><span class="inline-block px-2 py-1 rounded-lg text-xs font-bold ${badgeColor(f.pond)}">${f.pond}%</span></td>
+            <td class="px-4 py-3"><div class="w-full bg-slate-200 rounded-full h-2"><div class="h-2 rounded-full ${colorBarra(f.promedio)}" style="width:${f.promedio}%"></div></div></td>
+        </tr>`).join('');
+
+    document.getElementById('tablaFoot').innerHTML=`
+        <tr class="border-t-2 border-slate-300">
+            <td colspan="5" class="px-4 py-3 text-right text-slate-600">Nota Teórica (pond.)</td>
+            <td class="px-4 py-3 text-center"><span class="inline-block px-2 py-1 rounded-lg text-xs font-bold ${notaT!==null?badgeColor(notaT):'bg-slate-100 text-slate-400'}">${notaT!==null?notaT+'%':'—'}</span></td><td></td></tr>
+        <tr><td colspan="5" class="px-4 py-3 text-right text-slate-600">Nota Práctica (pond.)</td>
+            <td class="px-4 py-3 text-center"><span class="inline-block px-2 py-1 rounded-lg text-xs font-bold ${notaP!==null?badgeColor(notaP):'bg-slate-100 text-slate-400'}">${notaP!==null?notaP+'%':'—'}</span></td><td></td></tr>
+        <tr class="bg-indigo-50"><td colspan="5" class="px-4 py-3 text-right font-bold text-indigo-900">NOTA FINAL ESTIMADA</td>
+            <td class="px-4 py-3 text-center"><span class="inline-block px-3 py-1 rounded-lg font-black text-sm ${badgeColor(notaF)}">${notaF}%</span></td>
+            <td class="px-4 py-3"><span class="text-xs font-bold ${notaF>=70?'text-emerald-600':'text-red-600'}">${notaF>=70?'✓ APROBADO':'✗ REPROBADO'}</span></td></tr>`;
+
+    if(chartBarrasInst){chartBarrasInst.destroy();chartBarrasInst=null;}
+    if(chartRadarInst){chartRadarInst.destroy();chartRadarInst=null;}
+    const labels=filasTbl.map(f=>f.comp); const promedios=filasTbl.map(f=>f.promedio);
+    const bgColors=filasTbl.map(f=>COLORES_COMP[f.comp]||"#94a3b8");
+    chartBarrasInst=new Chart(document.getElementById('chartBarras'),{type:'bar',data:{labels:labels.map(l=>l.length>16?l.slice(0,14)+'…':l),datasets:[{label:'%',data:promedios,backgroundColor:bgColors,borderRadius:8,borderSkipped:false}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}},x:{grid:{display:false}}}}});
+    chartRadarInst=new Chart(document.getElementById('chartRadar'),{type:'radar',data:{labels:labels.map(l=>l.length>14?l.slice(0,12)+'…':l),datasets:[{label:'Promedio',data:promedios,backgroundColor:'rgba(99,102,241,0.15)',borderColor:'#6366f1',pointBackgroundColor:bgColors,pointRadius:4,borderWidth:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{r:{min:0,max:100,ticks:{stepSize:20,callback:v=>v+'%',font:{size:10}},pointLabels:{font:{size:10}}}}}});
+
+    // ─── Consolidado de evaluaciones ───────────────────────────────────────
+    // "Clases Programadas" y "Casos Clínicos y Artículos" se agrupan POR TEMA
+    // (promedio de TODAS las evaluaciones de ese tema para el residente), no por día.
+    // El resto de componentes se mantiene agrupado por día.
+    const PALETA_TEMAS = [
+        { accent:'#6366f1', soft:'#eef2ff', chipTxt:'#3730a3' },
+        { accent:'#8b5cf6', soft:'#f5f3ff', chipTxt:'#5b21b6' },
+        { accent:'#0ea5e9', soft:'#f0f9ff', chipTxt:'#075985' },
+        { accent:'#10b981', soft:'#ecfdf5', chipTxt:'#065f46' },
+        { accent:'#f59e0b', soft:'#fffbeb', chipTxt:'#92400e' },
+        { accent:'#f43f5e', soft:'#fff1f2', chipTxt:'#9f1239' },
+        { accent:'#14b8a6', soft:'#f0fdfa', chipTxt:'#115e59' },
+        { accent:'#d946ef', soft:'#fdf4ff', chipTxt:'#86198f' }
+    ];
+    const COMPS_POR_TEMA = ["Clases Programadas", "Casos Clínicos y Artículos"];
+
+    const gruposDiarios = {};
+    filas.forEach(r => {
+        const porTema = COMPS_POR_TEMA.includes(r._comp);
+        const temaRaw = (r.tema || r.surgeryType || "Evaluación académica").trim();
+        const temaKey = temaRaw.toLowerCase().replace(/\s+/g, ' ');
+        // Agrupación por CLASE: fecha programada (si existe; si no, fecha de
+        // evaluación) + componente + tema. El residente ya viene filtrado.
+        const fpKey   = ((r.fechaProg || '') + '').trim();
+        const clave   = porTema ? `${r._comp}||TEMA||${temaKey}||${fpKey}` : `${fpKey || r.fecha}||${r._comp}||${temaKey}`;
+        if (!gruposDiarios[clave]) {
+            gruposDiarios[clave] = {
+                fecha: r.fecha,
+                sortFecha: r.fecha,
+                fechasSet: new Set(),
+                esPorTema: porTema,
+                fechaProg: fpKey,
+                componente: r._comp,
+                tema: temaRaw,
+                evaluacionesCount: 0,
+                sumaTotal: 0,
+                c1Suma: 0, c1Count: 0,
+                c2Suma: 0, c2Count: 0,
+                c3Suma: 0, c3Count: 0,
+                comentariosList: [],
+                maxPosible: r._comp === "Clases Programadas" ? 30 : (r._comp === "Clases de Investigación" ? 100 : (r._comp === "Casos Clínicos y Artículos" ? 20 : 20))
+            };
+        }
+        if (r.fecha) {
+            gruposDiarios[clave].fechasSet.add(r.fecha);
+            if (parseFecha(r.fecha) > parseFecha(gruposDiarios[clave].sortFecha)) gruposDiarios[clave].sortFecha = r.fecha;
+        }
+        gruposDiarios[clave].evaluacionesCount++;
+        gruposDiarios[clave].sumaTotal += r._pct;
+        const txtComentario = (r.comentarios || r.observaciones || "").trim();
+        if(txtComentario && txtComentario.toLowerCase() !== "ninguno" && txtComentario.toLowerCase() !== "ninguna") {
+            gruposDiarios[clave].comentariosList.push(txtComentario);
+        }
+        let c1 = parseInt(r.criterio1 || r.score1 || r.aspecto1);
+        let c2 = parseInt(r.criterio2 || r.score2 || r.aspecto2);
+        let c3 = parseInt(r.criterio3 || r.score3 || 0);
+        if (!isNaN(c1)) {
+            let maxC1 = r._comp === "Clases Programadas" ? 10 : (r._comp === "Clases de Investigación" ? 35 : (r._comp === "Casos Clínicos y Artículos" ? 7 : 40));
+            if (r._comp === "Sesiones Diarias") maxC1 = 10;
+            gruposDiarios[clave].c1Suma += (c1 / maxC1) * 100; gruposDiarios[clave].c1Count++;
+        }
+        if (!isNaN(c2)) {
+            let maxC2 = r._comp === "Clases Programadas" ? 10 : (r._comp === "Clases de Investigación" ? 35 : (r._comp === "Casos Clínicos y Artículos" ? 6 : 30));
+            if (r._comp === "Sesiones Diarias") maxC2 = 10;
+            gruposDiarios[clave].c2Suma += (c2 / maxC2) * 100; gruposDiarios[clave].c2Count++;
+        }
+        if (!isNaN(c3) && r._comp !== "Sesiones Diarias") {
+            let maxC3 = r._comp === "Clases Programadas" ? 10 : (r._comp === "Clases de Investigación" ? 30 : (r._comp === "Casos Clínicos y Artículos" ? 7 : 30));
+            gruposDiarios[clave].c3Suma += (c3 / maxC3) * 100; gruposDiarios[clave].c3Count++;
+        }
+    });
+
+    const contenedorHTML = document.getElementById('contenedorConsolidadoDiario');
+    if (Object.keys(gruposDiarios).length === 0) {
+        contenedorHTML.innerHTML = `<p class="text-xs text-slate-400 italic text-center py-2">No hay registros detallados para consolidar.</p>`;
+    } else {
+        contenedorHTML.innerHTML = Object.values(gruposDiarios).sort((a,b) => parseFecha(b.sortFecha) - parseFecha(a.sortFecha)).map((g, index) => {
+            const pal = PALETA_TEMAS[index % PALETA_TEMAS.length];
+            const promGlobal = Math.round(g.sumaTotal / g.evaluacionesCount);
+            const notaEscala = Math.round((promGlobal * g.maxPosible) / 100);
+            const promC1 = g.c1Count > 0 ? Math.round(g.c1Suma / g.c1Count) : null;
+            const promC2 = g.c2Count > 0 ? Math.round(g.c2Suma / g.c2Count) : null;
+            const promC3 = g.c3Count > 0 ? Math.round(g.c3Suma / g.c3Count) : null;
+            let aspectoA = g.componente === "Sesiones Diarias" ? "Profundidad y Calidad del Conocimiento Neuroquirúrgico" : "Estructura y Organización de la Presentación";
+            let aspectoB = g.componente === "Sesiones Diarias" ? "Análisis Crítico y Contribución a la Estrategia" : "Literatura Científica Variada y Pertinente";
+            let aspectoC = g.componente === "Práctica Quirúrgica" ? "Comportamiento adecuado dentro y fuera del Quirófano" : "Dominio del Tema y Manejo de Preguntas";
+            if (g.componente === "Práctica Quirúrgica") {
+                aspectoA = "Adecuada Preparación Académica y Clínica para el Caso";
+                aspectoB = "Habilidad Técnica y Destreza con Instrumentos";
+            }
+            if (g.componente === "Clases de Investigación") {
+                aspectoA = "Estructura y Organización de la Presentación";
+                aspectoB = "Dominio del Tema y Manejo de Preguntas";
+                aspectoC = "Aplicación a la Práctica Clínica e Investigación";
+            }
+            const colorBadge = promGlobal >= 70 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200';
+            const nFechas = g.fechasSet.size;
+            const metaChips = g.esPorTema
+                ? `<span class="text-[11px] font-bold px-2 py-0.5 rounded-md" style="background:${pal.accent}22;color:${pal.chipTxt};border:1px solid ${pal.accent}55;">${g.componente}</span>`
+                  + `<span class="text-[11px] text-violet-600 font-bold bg-violet-50 px-2 py-0.5 rounded-md">Promedio de ${g.evaluacionesCount} evaluación${g.evaluacionesCount > 1 ? 'es' : ''}</span>`
+                  + (g.fechaProg ? `<span class="text-[11px] text-sky-700 font-bold bg-sky-50 px-2 py-0.5 rounded-md">Clase programada: ${g.fechaProg}</span>` : '')
+                  + `<span class="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">${nFechas} fecha${nFechas > 1 ? 's' : ''}</span>`
+                : `<span class="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">${g.fecha}</span>`
+                  + `<span class="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">${g.componente}</span>`
+                  + `<span class="text-[11px] text-violet-600 font-bold bg-violet-50 px-2 py-0.5 rounded-md">Evaluado por ${g.evaluacionesCount} especialista${g.evaluacionesCount > 1 ? 'es' : ''}</span>`;
+            return `
+            <div class="rounded-xl overflow-hidden shadow-sm" style="border:1px solid ${pal.accent}55;">
+                <button onclick="document.getElementById('dropc-${index}').classList.toggle('hidden')"
+                    class="w-full text-left px-4 py-3.5 transition flex items-center justify-between gap-3 flex-wrap" style="background:${pal.soft};border-left:6px solid ${pal.accent};">
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 flex-wrap mb-1">
+                            ${metaChips}
+                        </div>
+                        <p class="text-sm font-bold text-slate-800 truncate">"${_esc(g.tema)}"</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="text-center px-3 py-1 rounded-xl border ${colorBadge} bg-white">
+                            <p class="text-base font-black leading-none">${promGlobal}%</p>
+                            <p class="text-[10px] font-bold opacity-70 mt-0.5">${notaEscala}/${g.maxPosible} pts</p>
+                        </div>
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </div>
+                </button>
+                <div id="dropc-${index}" class="hidden p-4 border-t space-y-4 text-sm text-slate-700" style="background:${pal.soft};border-color:${pal.accent}55;">
+                    <p class="text-xs font-bold uppercase tracking-wider border-b pb-1" style="color:${pal.chipTxt};border-color:${pal.accent}33;">Promedio de cada aspecto evaluado</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        ${promC1 !== null ? `<div class="space-y-1"><div class="flex justify-between text-xs font-semibold text-slate-600"><span class="truncate pr-2">a) ${aspectoA}</span><span class="${promC1 >= 70 ? 'text-emerald-600' : 'text-red-500'}">${promC1}%</span></div><div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden"><div class="h-2 rounded-full ${promC1 >= 70 ? 'bg-emerald-500' : 'bg-red-400'}" style="width: ${promC1}%"></div></div></div>` : ''}
+                        ${promC2 !== null ? `<div class="space-y-1"><div class="flex justify-between text-xs font-semibold text-slate-600"><span class="truncate pr-2">b) ${aspectoB}</span><span class="${promC2 >= 70 ? 'text-emerald-600' : 'text-red-500'}">${promC2}%</span></div><div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden"><div class="h-2 rounded-full ${promC2 >= 70 ? 'bg-emerald-500' : 'bg-red-400'}" style="width: ${promC2}%"></div></div></div>` : ''}
+                        ${promC3 !== null ? `<div class="space-y-1 sm:col-span-2"><div class="flex justify-between text-xs font-semibold text-slate-600"><span class="truncate pr-2">c) ${aspectoC}</span><span class="${promC3 >= 70 ? 'text-emerald-600' : 'text-red-500'}">${promC3}%</span></div><div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden"><div class="h-2 rounded-full ${promC3 >= 70 ? 'bg-emerald-500' : 'bg-red-400'}" style="width: ${promC3}%"></div></div></div>` : ''}
+                    </div>
+                    <div class="pt-2">
+                        <p class="text-xs font-bold uppercase tracking-wider border-b pb-1 mb-2" style="color:${pal.chipTxt};border-color:${pal.accent}33;">Retroalimentación docente</p>
+                        ${g.comentariosList.length === 0
+                            ? `<p class="text-xs text-slate-400 italic">No se registraron comentarios cualitativos.</p>`
+                            : `<ul class="list-disc pl-4 space-y-1.5 text-xs text-slate-600 font-medium">${g.comentariosList.map(c => `<li>"${_esc(c)}"</li>`).join('')}</ul>`}
+                    </div>
+                    <div class="rounded-xl p-3 border flex justify-between items-center mt-1" style="background:#ffffffcc;border-color:${pal.accent}55;">
+                        <span class="text-xs font-bold uppercase tracking-wide" style="color:${pal.chipTxt};">Promedio Global Acumulado:</span>
+                        <span class="text-sm font-black ${promGlobal >= 70 ? 'text-emerald-600' : 'text-red-600'}">${promGlobal}% · ${notaEscala}/${g.maxPosible} pts</span>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    const modMap={};
+    filas.forEach(r=>{const m=r._modulo;if(!modMap[m])modMap[m]=[];modMap[m].push(r);});
+    // El promedio de cada módulo usa, para Práctica Quirúrgica, la media de los
+    // promedios de cada especialista (no la media simple de todas sus notas).
+    const _promModulo=rows=>{
+        const pract=rows.filter(r=>r._comp===_COMP_PRACT);
+        const vals=rows.filter(r=>r._comp!==_COMP_PRACT).map(r=>r._pct);
+        if(pract.length){
+            const porEsp={};
+            pract.forEach(r=>{const k=_espKey(r); if(!porEsp[k])porEsp[k]={s:0,n:0}; porEsp[k].s+=r._pct; porEsp[k].n++;});
+            const proms=Object.values(porEsp).map(e=>e.s/e.n);
+            vals.push(proms.reduce((a,b)=>a+b,0)/proms.length);
+        }
+        return vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0;
+    };
+    const _barrasHTML=Object.keys(modMap).sort().map(m=>{
+        const rows=modMap[m]; const prom=_promModulo(rows); const ap=prom>=70;
+        return `<div><div class="flex justify-between items-center mb-1"><span class="text-sm font-semibold text-slate-700">Módulo ${m}</span><span class="text-sm font-bold ${ap?'text-emerald-600':'text-red-500'}">${prom}% — ${ap?'Aprobado':'Reprobado'}</span></div><div class="w-full bg-slate-200 rounded-full h-3"><div class="h-3 rounded-full transition-all ${colorBarra(prom)}" style="width:${prom}%"></div></div><p class="text-xs text-slate-400 mt-0.5">${rows.length} evaluación${rows.length!==1?'es':''}</p></div>`;
+    }).join('');
+
+    // Desglose transparente de la NOTA PRÁCTICA por módulo y especialista
+    const _practHTML = !PRACT_DETALLE.length ? '' : `
+        <div class="mt-5 pt-4 border-t border-slate-200">
+            <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Nota práctica por módulo</h4>
+            <p class="text-[11px] text-slate-400 mb-3">Se promedian primero las notas de cada especialista y luego esos promedios entre sí.</p>
+            <div class="space-y-3">
+            ${PRACT_DETALLE.map(d=>`
+                <div class="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-sm font-bold text-slate-700">Módulo ${d.modulo}</span>
+                        <span class="text-sm font-black ${d.promedio>=70?'text-emerald-600':'text-red-500'}">${d.promedio}%</span>
+                    </div>
+                    <table class="w-full text-xs">
+                        <thead><tr class="text-slate-500">
+                            <th class="text-left font-semibold py-1">Especialista evaluador</th>
+                            <th class="text-center font-semibold">Evaluaciones</th>
+                            <th class="text-right font-semibold">Promedio</th>
+                        </tr></thead>
+                        <tbody>${d.especialistas.map(e=>`<tr class="border-t border-emerald-100">
+                            <td class="py-1 text-slate-700">${e.nombre}</td>
+                            <td class="text-center text-slate-500">${e.n}</td>
+                            <td class="text-right font-bold ${e.promedio>=70?'text-emerald-600':'text-red-500'}">${e.promedio}%</td>
+                        </tr>`).join('')}</tbody>
+                    </table>
+                    <p class="text-[11px] text-slate-500 mt-2">(${d.especialistas.map(e=>e.promedio+'%').join(' + ')}) ÷ ${d.especialistas.length} especialista${d.especialistas.length!==1?'s':''} = <span class="font-bold">${d.promedio}%</span> · ${d.evals} evaluación${d.evals!==1?'es':''} en total</p>
+                </div>`).join('')}
+            </div>
+        </div>`;
+
+    // ── Examen de módulo: nota y fotos del examen escrito ────────────────
+    // El examen pesa el 30 % de la teoría. Se muestra aparte porque es la
+    // única nota que tiene respaldo documental (las páginas escaneadas).
+    const _EXAMENES = filas.filter(r => NOTAS_CANON.comp(r.tipo_evaluacion) === 'Examen')
+        .map(r => ({ modulo: r._modulo, nota: NOTAS_CANON.pct(r), fecha: r.fecha,
+                     comentarios: (r.comentarios || '').trim(),
+                     evaluador: (r.especialista || '').trim() }))
+        .sort((a, b) => String(a.modulo).localeCompare(String(b.modulo)));
+
+    const _examenHTML = !_EXAMENES.length ? `
+        <div class="mt-5 pt-4 border-t border-slate-200">
+            <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Examen de módulo</h4>
+            <p class="text-xs text-slate-400 italic">Todavía no hay ninguna nota de examen registrada. Mientras falte, la nota teórica se calcula solo con los componentes disponibles.</p>
+        </div>` : `
+        <div class="mt-5 pt-4 border-t border-slate-200">
+            <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Examen de módulo</h4>
+            <p class="text-[11px] text-slate-400 mb-3">30 % de la nota teórica de cada módulo.</p>
+            <div class="space-y-3">
+            ${_EXAMENES.map((x, i) => `
+                <div class="rounded-xl border border-violet-200 bg-violet-50/50 p-3">
+                    <div class="flex justify-between items-center gap-3 flex-wrap">
+                        <div>
+                            <span class="text-sm font-bold text-slate-700">Módulo ${_esc(x.modulo)}</span>
+                            ${x.fecha ? `<span class="ml-2 text-[11px] text-slate-500">${_esc(x.fecha)}</span>` : ''}
+                        </div>
+                        <div class="text-right">
+                            <span class="text-sm font-black ${x.nota >= 70 ? 'text-emerald-600' : 'text-red-500'}">${x.nota}%</span>
+                            <span class="block text-[10px] text-slate-400 font-bold">aporta ${Math.round(x.nota * 0.3)} pts al 30 %</span>
+                        </div>
+                    </div>
+                    ${x.comentarios && x.comentarios.toLowerCase() !== 'ninguno'
+                        ? `<p class="text-[11px] text-slate-600 mt-2 leading-relaxed border-t border-violet-100 pt-2">"${_esc(x.comentarios)}"</p>` : ''}
+                    <div class="mt-2 pt-2 border-t border-violet-100">
+                        <button type="button" onclick="verFotosExamen('${_esc(residente).replace(/'/g, "\\'")}','${_esc(x.modulo)}','fotoEx-${i}')"
+                            class="text-[11px] font-bold text-violet-700 hover:text-violet-900 underline">
+                            Ver el examen escrito
+                        </button>
+                        <div id="fotoEx-${i}" class="hidden grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2"></div>
+                    </div>
+                </div>`).join('')}
+            </div>
+        </div>`;
+
+    document.getElementById('barrasModulo').innerHTML = _barrasHTML + _practHTML + _examenHTML;
+
+    document.getElementById('secNotas').classList.remove('hidden');
+}
+
+async function cargarPendientes() {
+    const modo = document.getElementById('selModoVista').value;
+    const sec = document.getElementById('secPendientes');
+    sec.innerHTML='';
+    sec.classList.add('hidden');
+    mostrarMsgPend("Cargando desde Google Sheets…");
+
+    let datos;
+    try { datos = await fetchEvaluaciones(); }
+    catch(e) { mostrarMsgPend("⚠️ No se pudo conectar. Verifica tu conexión."); return; }
+
+    if (!Array.isArray(datos)) { mostrarMsgPend("Error al leer datos."); return; }
+
+    document.getElementById('msgPendEstado').classList.add('hidden');
+
+    if (modo === 'residente') {
+        const residente = document.getElementById('selPendResidente').value.trim();
+        if (!residente) { mostrarMsgPend("Selecciona un residente."); return; }
+        const anio = RESIDENTE_ANIO[residente];
+        const evalRes = datos.filter(r=>(r.nombreResidente||r.residentName||r.residente||"").trim()===residente);
+        sec.innerHTML = renderPanelResidente(residente, anio, evalRes);
+    } else {
+        const anio = document.getElementById('selPendAnio').value;
+        const residentes = ANIO_RESIDENTES[anio]||[];
+        const html = residentes.map(res=>{
+            const evalRes = datos.filter(r=>(r.nombreResidente||r.residentName||r.residente||"").trim()===res);
+            return renderPanelResidente(res, anio, evalRes);
+        }).join('');
+        sec.innerHTML = html || '<p class="text-slate-400 text-sm">Sin residentes.</p>';
+    }
+
+    sec.classList.remove('hidden');
+}
+
+function mostrarMsgPend(txt) {
+    document.getElementById('msgPendTexto').textContent = txt;
+    document.getElementById('msgPendEstado').classList.remove('hidden');
+    document.getElementById('secPendientes').classList.add('hidden');
+}
+
+function renderPanelResidente(residente, anio, evalRes) {
+    const ayer = new Date(); ayer.setHours(0,0,0,0); ayer.setDate(ayer.getDate()-1);
+    const clasesAnio = CLASES.filter(c=>c.anio===anio && parseFecha(c.f)<=ayer).map(c=>({
+        ...c,
+        modulo: getModulo(c.f, anio)||"Sin módulo",
+        tipo: getTipoClase(c.tema)
+    }));
+
+    const clasesConEstado = clasesAnio.map(c => {
+        const evaluada = evalRes.some(ev =>
+            (ev.tipo_evaluacion||"").trim() === c.tipo &&
+            hayCoincidencia(c.tema, ev.tema||"")
+        );
+        return { ...c, evaluada };
+    });
+
+    const pendientes = clasesConEstado.filter(c=>!c.evaluada);
+    const completadas = clasesConEstado.filter(c=>c.evaluada);
+
+    const modulos = _modulosDeAnio(anio);
+    const modPract = {};
+    modulos.forEach(m=>{ modPract[m]=evalRes.some(ev=>(ev.tipo_evaluacion||"").trim()==="Práctica Quirúrgica"&&getModulo(ev.fecha, anio)===m); });
+
+    const modSesiones = {};
+    modulos.forEach(m=>{ modSesiones[m]=evalRes.filter(ev=>(ev.tipo_evaluacion||"").trim()==="Sesiones Diarias"&&getModulo(ev.fecha, anio)===m).length; });
+
+    const pendPorMod = {};
+    pendientes.forEach(c=>{ if(!pendPorMod[c.modulo]) pendPorMod[c.modulo]=[]; pendPorMod[c.modulo].push(c); });
+
+    const pctCompleto = clasesAnio.length > 0 ? Math.round(completadas.length*100/clasesAnio.length) : 0;
+    const colPct = pctCompleto>=80?'text-emerald-600':pctCompleto>=50?'text-amber-500':'text-red-500';
+
+    return `
+    <div class="bg-white rounded-2xl shadow border border-slate-200 overflow-hidden">
+        <div class="bg-gradient-to-r from-slate-800 to-slate-700 text-white px-5 py-4 flex items-center justify-between flex-wrap gap-2">
+            <div>
+                <p class="font-black text-base">${residente}</p>
+                <p class="text-slate-300 text-xs mt-0.5">${anio} año de residencia</p>
+            </div>
+            <div class="flex gap-3 items-center">
+                <div class="text-center">
+                    <p class="text-2xl font-black ${colPct}">${pctCompleto}%</p>
+                    <p class="text-xs text-slate-400">clases evaluadas</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-2xl font-black text-rose-400">${pendientes.length}</p>
+                    <p class="text-xs text-slate-400">pendientes</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-2xl font-black text-emerald-400">${completadas.length}</p>
+                    <p class="text-xs text-slate-400">evaluadas</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-5 space-y-5">
+            <div>
+                <div class="flex justify-between text-xs text-slate-500 mb-1">
+                    <span>Progreso clases teóricas</span><span>${completadas.length}/${clasesAnio.length}</span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-3">
+                    <div class="h-3 rounded-full transition-all ${colorBarra(pctCompleto)}" style="width:${pctCompleto}%"></div>
+                </div>
+            </div>
+
+            <div>
+                <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Práctica Quirúrgica (≥1 por módulo)</h4>
+                <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    ${modulos.map(m=>{
+                        const ok = modPract[m];
+                        const hayClases = clasesAnio.some(c=>c.modulo===m);
+                        if (!hayClases) return '';
+                        return `<div class="rounded-xl p-2 text-center border-2 ${ok?'bg-emerald-50 border-emerald-300':'bg-rose-50 border-rose-200'}">
+                            <p class="text-xs font-black ${ok?'text-emerald-700':'text-rose-600'}">Mód. ${m}</p>
+                            <p class="text-lg">${ok?'✓':'✗'}</p>
+                            <p class="text-xs ${ok?'text-emerald-600':'text-rose-500'}">${ok?'OK':'Falta'}</p>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>
+
+            <div>
+                <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Sesiones Clínicas Diarias evaluadas por módulo</h4>
+                <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    ${modulos.map(m=>{
+                        const n = modSesiones[m]||0;
+                        const hayClases = clasesAnio.some(c=>c.modulo===m);
+                        if (!hayClases) return '';
+                        const color = n>=3?'bg-emerald-50 border-emerald-300 text-emerald-700':n>=1?'bg-amber-50 border-amber-300 text-amber-700':'bg-rose-50 border-rose-200 text-rose-600';
+                        return `<div class="rounded-xl p-2 text-center border-2 ${color}">
+                            <p class="text-xs font-black">Mód. ${m}</p>
+                            <p class="text-2xl font-black">${n}</p>
+                            <p class="text-xs">${n===0?'Ninguna':n===1?'1 sesión':n+' sesiones'}</p>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>
+
+            ${pendientes.length===0
+                ? `<div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center text-emerald-700 font-bold text-sm">✓ Todas las clases del plan docente han sido evaluadas</div>`
+                : `<div>
+                    <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Clases del plan docente sin evaluación registrada</h4>
+                    <div class="space-y-3">
+                    ${Object.keys(pendPorMod).sort().map(mod=>`
+                        <div class="border border-slate-200 rounded-xl overflow-hidden">
+                            <div class="bg-slate-50 px-4 py-2 flex items-center justify-between border-b border-slate-200">
+                                <span class="text-sm font-bold text-slate-700">Módulo ${mod}</span>
+                                <span class="text-xs bg-rose-100 text-rose-700 font-bold px-2 py-0.5 rounded-full">${pendPorMod[mod].length} pendiente${pendPorMod[mod].length!==1?'s':''}</span>
+                            </div>
+                            <div class="divide-y divide-slate-100">
+                            ${pendPorMod[mod].map(c=>`
+                                <div class="px-4 py-2.5 flex items-center gap-3">
+                                    <span class="flex-shrink-0 w-5 h-5 rounded-full bg-rose-100 flex items-center justify-center text-rose-500 text-xs font-black">✗</span>
+                                    <div class="flex-grow min-w-0">
+                                        <p class="text-sm text-slate-800 font-medium leading-snug truncate">${c.tema}</p>
+                                        <p class="text-xs text-slate-400">${c.f} · <span class="text-indigo-600 font-medium">${c.tipo}</span></p>
+                                    </div>
+                                </div>`).join('')}
+                            </div>
+                        </div>`).join('')}
+                    </div>
+                </div>`
+            }
+        </div>
+    </div>`;
+}
+
+// ── INIT ──────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+    // Render inmediato con datos de localStorage (respuesta rápida)
+    renderClases();
+    renderFechasImportantes();
+    setTimeout(scrollFechasAHoy, 200);
+    // Luego actualiza desde Google Sheets y re-renderiza si hay cambios
+    fetchTemas().then(() => renderClases());
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// TEMAS SIMILARES — al escribir un tema (revisión / caso clínico) se
+// comparan las palabras con los temas ya guardados en la pestaña
+// "Tema_de_residentes" y se muestra una ventana emergente con coincidencias.
+// ══════════════════════════════════════════════════════════════════════
+let _temasGuardadosLista = null;
+let _temasGuardadosPromesa = null;
+let _temasSimTimer = null;
+
+const _TEMAS_STOPWORDS = new Set(['de','del','la','el','los','las','y','o','u','e','en','un','una','unos','unas','para','por','con','sin','a','al','se','que','su','sus','lo','es','mas','más','como','sobre','entre','tema','temas']);
+
+function _temasNorm(s) {
+    return (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+function _temasPalabras(s) {
+    return _temasNorm(s).split(/[^a-z0-9ñ]+/).filter(w => w.length >= 3 && !_TEMAS_STOPWORDS.has(w));
+}
+function _cargarTemasGuardados() {
+    if (_temasGuardadosLista) return Promise.resolve(_temasGuardadosLista);
+    if (_temasGuardadosPromesa) return _temasGuardadosPromesa;
+    _temasGuardadosPromesa = fetch(`${URL_SCRIPT}?action=getTemas`, { mode:'cors' })
+        .then(r => r.json())
+        .then(d => { _temasGuardadosLista = Array.isArray(d) ? d.filter(t => t && t.tema) : []; return _temasGuardadosLista; })
+        .catch(() => { _temasGuardadosPromesa = null; return []; });
+    return _temasGuardadosPromesa;
+}
+function _popupTemasEl() {
+    let el = document.getElementById('temasSimilaresPopup');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'temasSimilaresPopup';
+        el.style.cssText = 'display:none;position:fixed;z-index:9999;background:#fff;border:1.5px solid #fbbf24;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18);max-width:340px;min-width:240px;max-height:260px;overflow-y:auto;';
+        document.body.appendChild(el);
+        // Cerrar al hacer clic fuera o con Escape
+        document.addEventListener('click', ev => { if (!el.contains(ev.target) && !(ev.target.id || '').startsWith('inp-')) _ocultarTemasSimilares(); });
+        document.addEventListener('keydown', ev => { if (ev.key === 'Escape') _ocultarTemasSimilares(); });
+        window.addEventListener('scroll', _ocultarTemasSimilares, true);
+    }
+    return el;
+}
+function _ocultarTemasSimilares() {
+    const el = document.getElementById('temasSimilaresPopup');
+    if (el) el.style.display = 'none';
+}
+function _resaltarCoincidencias(tema, palabras) {
+    let html = tema.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    palabras.forEach(p => {
+        html = html.replace(new RegExp('([a-z0-9ñáéíóúü]*' + p.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '[a-z0-9ñáéíóúü]*)','gi'), '<b style="color:#b45309;">$1</b>');
+    });
+    return html;
+}
+function mostrarTemasSimilares(input) {
+    clearTimeout(_temasSimTimer);
+    _temasSimTimer = setTimeout(() => {
+        const palabras = _temasPalabras(input.value);
+        if (!palabras.length) { _ocultarTemasSimilares(); return; }
+        _cargarTemasGuardados().then(lista => {
+            if (document.activeElement !== input) return; // el usuario ya salió del campo
+            const valNorm = _temasNorm(input.value).trim();
+            const similares = [];
+            const vistos = new Set();
+            lista.forEach(t => {
+                const temaNorm = _temasNorm(t.tema).trim();
+                if (!temaNorm || vistos.has(temaNorm + '|' + (t.anio||''))) return;
+                if (temaNorm === valNorm) return; // es exactamente lo que está escribiendo
+                const palabrasTema = new Set(_temasPalabras(t.tema));
+                const coincide = palabras.some(p => { for (const pt of palabrasTema) { if (pt === p || pt.indexOf(p) === 0 || p.indexOf(pt) === 0) return true; } return false; });
+                if (coincide) { vistos.add(temaNorm + '|' + (t.anio||'')); similares.push(t); }
+            });
+            const el = _popupTemasEl();
+            if (!similares.length) { el.style.display = 'none'; return; }
+            el.innerHTML = '<div style="position:sticky;top:0;background:#fffbeb;border-bottom:1px solid #fde68a;padding:7px 12px;font-size:10px;font-weight:800;color:#92400e;">⚠ Temas similares ya guardados (' + similares.length + ')</div>'
+                + similares.slice(0, 10).map(t =>
+                    '<div style="padding:7px 12px;border-bottom:1px solid #f1f5f9;">'
+                    + '<p style="font-size:11px;color:#334155;line-height:1.4;">' + _resaltarCoincidencias(t.tema, palabras) + '</p>'
+                    + '<p style="font-size:9px;color:#94a3b8;margin-top:2px;">' + (t.anio ? t.anio + ' año' : '') + (t.fecha ? ' · clase del ' + t.fecha : '') + (t.tipo ? ' · ' + t.tipo : '') + '</p>'
+                    + '</div>').join('')
+                + (similares.length > 10 ? '<p style="padding:6px 12px;font-size:9px;color:#94a3b8;font-style:italic;">…y ' + (similares.length - 10) + ' más</p>' : '');
+            const r = input.getBoundingClientRect();
+            const abajo = window.innerHeight - r.bottom > 200;
+            el.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 348)) + 'px';
+            if (abajo) { el.style.top = (r.bottom + 4) + 'px'; el.style.bottom = 'auto'; }
+            else       { el.style.bottom = (window.innerHeight - r.top + 4) + 'px'; el.style.top = 'auto'; }
+            el.style.display = 'block';
+        });
+    }, 300);
+}
+// Delegación: cualquier campo de tema (inp-N) del carrusel activa la comparación
+document.addEventListener('input', ev => {
+    if (ev.target && /^inp-\d+$/.test(ev.target.id || '')) mostrarTemasSimilares(ev.target);
+});
+document.addEventListener('focusin', ev => {
+    if (ev.target && /^inp-\d+$/.test(ev.target.id || '')) { _cargarTemasGuardados(); if (ev.target.value.trim()) mostrarTemasSimilares(ev.target); }
+});
+
+
+// ══════════════════════════════════════════════════════════════════════
+// NOTAS DE ROTACIONES EXTERNAS — visor de TODOS los registros
+// ══════════════════════════════════════════════════════════════════════
+var _rotExtD1Datos = null;
+var _rotExtD1Open = false;
+function toggleRotExtDash1() {
+    _rotExtD1Open = !_rotExtD1Open;
+    var panel = document.getElementById('rotExtD1Panel');
+    var chev  = document.getElementById('rotExtD1Chevron');
+    if (!_rotExtD1Open) { panel.classList.add('hidden'); chev.style.transform=''; return; }
+    panel.classList.remove('hidden'); chev.style.transform='rotate(180deg)';
+    var filtro = document.getElementById('rotExtD1Filtro');
+    if (filtro.options.length <= 1) {
+        Object.keys(RESIDENTE_ANIO).forEach(function(r){
+            var o=document.createElement('option'); o.value=r; o.textContent=r+' ('+RESIDENTE_ANIO[r]+' año)'; filtro.appendChild(o);
+        });
+    }
+    if (_rotExtD1Datos) { renderRotExtDash1(); return; }
+    cargarRotExtDash1();
+}
+function cargarRotExtDash1() {
+    document.getElementById('rotExtD1Lista').innerHTML =
+        '<p style="text-align:center;padding:26px;color:#94a3b8;font-size:13px;font-style:italic;">Cargando rotaciones externas…</p>';
+    fetch(URL_SCRIPT + '?action=getRotacionesExternas', { mode:'cors' })
+        .then(function(r){ return r.json(); })
+        .then(function(d){ _rotExtD1Datos = Array.isArray(d) ? d : []; renderRotExtDash1(); })
+        .catch(function(){
+            document.getElementById('rotExtD1Lista').innerHTML =
+                '<p style="text-align:center;padding:26px;color:#e11d48;font-size:13px;font-weight:600;">⚠️ No se pudieron cargar los registros. Verifique que el Apps Script esté republicado.</p>';
+        });
+}
+function verFotoRotExtD1(idx) {
+    var reg = (_rotExtD1Datos||[])[idx];
+    if (!reg || !reg.foto) return;
+    document.getElementById('rotExtD1LightImg').src = reg.foto;
+    document.getElementById('rotExtD1Lightbox').style.display = 'flex';
+}
+function renderRotExtDash1() {
+    var filtro = document.getElementById('rotExtD1Filtro').value;
+    var datos = (_rotExtD1Datos||[]).map(function(x,i){ x._idx=i; return x; });
+    if (filtro) datos = datos.filter(function(x){ return (x.residente||'').trim()===filtro; });
+    document.getElementById('rotExtD1Contador').textContent = datos.length + ' registro' + (datos.length!==1?'s':'');
+    var esc = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+    if (!datos.length) {
+        document.getElementById('rotExtD1Lista').innerHTML =
+            '<p style="text-align:center;padding:26px;color:#94a3b8;font-size:13px;font-style:italic;">Aún no hay rotaciones externas registradas'+(filtro?' para este residente':'')+'.</p>';
+        return;
+    }
+    var orden=[]; ['I','II','III','IV','V'].forEach(function(a){ (ANIO_RESIDENTES[a]||[]).forEach(function(r){ orden.push(r); }); });
+    var porRes={}; datos.forEach(function(x){ var r=(x.residente||'—').trim(); (porRes[r]=porRes[r]||[]).push(x); });
+    var claves=Object.keys(porRes).sort(function(a,b){ var ia=orden.indexOf(a),ib=orden.indexOf(b); return (ia===-1?99:ia)-(ib===-1?99:ib); });
+    var html='';
+    claves.forEach(function(res){
+        var anio=RESIDENTE_ANIO[res]||''; var col=ANIO_COLORS[anio]||ANIO_COLORS['I'];
+        html += '<div style="margin-bottom:16px;">'
+            + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
+            + (anio?'<span style="font-size:11px;font-weight:800;padding:2px 10px;border-radius:99px;'+col.badge+'">'+anio+' Año</span>':'')
+            + '<span style="font-size:13px;font-weight:800;color:#1e293b;">'+esc(res)+'</span>'
+            + '<span style="font-size:10px;color:#94a3b8;">'+porRes[res].length+' rotación'+(porRes[res].length!==1?'es':'')+'</span>'
+            + '</div>'
+            + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;">'
+            + porRes[res].sort(function(a,b){ return (b.ts||0)-(a.ts||0); }).map(function(x){
+                return '<div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#fff;">'
+                    + (x.foto
+                        ? '<img src="'+x.foto+'" onclick="verFotoRotExtD1('+x._idx+')" alt="Evaluación escrita" style="width:100%;height:130px;object-fit:cover;cursor:zoom-in;display:block;border-bottom:1px solid #f1f5f9;">'
+                        : '<div style="height:60px;display:flex;align-items:center;justify-content:center;background:#f8fafc;color:#cbd5e1;font-size:11px;border-bottom:1px solid #f1f5f9;">Sin foto</div>')
+                    + '<div style="padding:10px 12px;">'
+                    + '<p style="font-size:12px;font-weight:800;color:#1e293b;line-height:1.35;">'+esc(x.rotacion)+'</p>'
+                    + (x.fecha?'<p style="font-size:10px;color:#94a3b8;margin-top:2px;">Registrada el '+esc(x.fecha)+'</p>':'')
+                    + '<p style="margin-top:6px;">'
+                    + (x.notaTeorica?'<span style="font-size:10px;background:#eef2ff;color:#3730a3;font-weight:800;padding:2px 8px;border-radius:99px;margin-right:4px;">Teórica: '+esc(x.notaTeorica)+'%</span>':'')
+                    + (x.notaPractica?'<span style="font-size:10px;background:#ecfdf5;color:#065f46;font-weight:800;padding:2px 8px;border-radius:99px;">Práctica: '+esc(x.notaPractica)+'%</span>':'')
+                    + '</p></div></div>';
+            }).join('')
+            + '</div></div>';
+    });
+    document.getElementById('rotExtD1Lista').innerHTML = html;
+}
+
+</script>
+</body>
+</html>
