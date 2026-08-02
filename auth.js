@@ -107,6 +107,11 @@
     }
 
     // ── Pantalla de acceso ───────────────────────────────────────────────
+    // Dos entradas separadas, una por tipo de usuario. Técnicamente ambas
+    // hacen lo mismo —el rol lo decide el servidor a partir del correo—, pero
+    // así cada persona reconoce de un vistazo cuál es la suya y aterriza
+    // directamente donde le toca, sin mensajes de «esta sección no es para
+    // usted» ni redirecciones a media carga.
     function pintarPantalla(mensajeInicial) {
         if (document.getElementById('authOverlay')) return;
 
@@ -114,50 +119,65 @@
         ov.id = 'authOverlay';
         ov.setAttribute('style',
             'position:fixed;inset:0;z-index:2147483647;background:#0f172a;' +
-            'display:flex;align-items:center;justify-content:center;padding:20px;' +
+            'display:flex;align-items:flex-start;justify-content:center;padding:20px;' +
             'font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overflow:auto;');
 
+        var tarjeta =
+            'background:#fff;border-radius:16px;padding:20px 18px;border:1px solid #e2e8f0;';
+        var rotulo =
+            'font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin:0 0 2px;';
+        var sub =
+            'font-size:11.5px;color:#64748b;margin:0 0 14px;line-height:1.4;';
+
         ov.innerHTML =
-          '<div style="background:#fff;border-radius:20px;max-width:400px;width:100%;padding:32px 28px;' +
-               'box-shadow:0 20px 60px rgba(0,0,0,.4);">' +
-            '<div style="text-align:center;margin-bottom:24px;">' +
-              '<div style="font-size:34px;line-height:1;margin-bottom:10px;">🧠</div>' +
-              '<h1 style="font-size:17px;font-weight:800;color:#0f172a;margin:0 0 4px;">' +
-                'Plataforma de Evaluación</h1>' +
-              '<p style="font-size:12px;color:#64748b;margin:0;">Residencia de Neurocirugía</p>' +
+          '<div style="max-width:400px;width:100%;margin:auto 0;">' +
+
+            '<div style="text-align:center;margin-bottom:20px;">' +
+              '<div style="font-size:36px;line-height:1;margin-bottom:10px;">🧠</div>' +
+              '<h1 style="font-size:19px;font-weight:800;color:#fff;margin:0 0 4px;line-height:1.3;">' +
+                'Actividades académicas de Neurocirugía</h1>' +
+              '<p style="font-size:12px;color:#94a3b8;margin:0;">Curso académico 2026 – 2027</p>' +
             '</div>' +
 
             '<div id="authMsg" style="display:none;font-size:12.5px;font-weight:600;padding:10px 12px;' +
-                 'border-radius:10px;margin-bottom:16px;line-height:1.45;"></div>' +
+                 'border-radius:10px;margin-bottom:14px;line-height:1.45;"></div>' +
 
-            '<div id="authGoogleWrap" style="margin-bottom:18px;">' +
-              '<p style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;' +
-                 'letter-spacing:.05em;margin:0 0 10px;">Acceso con cuenta de Google</p>' +
-              '<div id="authGoogleBtn" style="display:flex;justify-content:center;min-height:44px;"></div>' +
-            '</div>' +
-
-            '<div style="display:flex;align-items:center;gap:10px;margin:18px 0;">' +
-              '<div style="flex:1;height:1px;background:#e2e8f0;"></div>' +
-              '<span style="font-size:10.5px;color:#94a3b8;font-weight:700;">O BIEN</span>' +
-              '<div style="flex:1;height:1px;background:#e2e8f0;"></div>' +
-            '</div>' +
-
-            '<div>' +
-              '<p style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;' +
-                 'letter-spacing:.05em;margin:0 0 10px;">Acceso con código</p>' +
+            // ── Docentes y coordinación ──
+            '<div style="' + tarjeta + 'margin-bottom:14px;">' +
+              '<p style="' + rotulo + 'color:#4f46e5;">👨‍⚕️ Docentes y coordinación</p>' +
+              '<p style="' + sub + '">Registrar evaluaciones, consultar el plan docente y el resumen académico.</p>' +
+              '<div id="authGoogleWrapDocente">' +
+                '<div id="authGoogleBtnDocente" style="display:flex;justify-content:center;min-height:44px;"></div>' +
+              '</div>' +
+              '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 12px;">' +
+                '<div style="flex:1;height:1px;background:#e2e8f0;"></div>' +
+                '<span style="font-size:10px;color:#94a3b8;font-weight:700;">O CON CÓDIGO</span>' +
+                '<div style="flex:1;height:1px;background:#e2e8f0;"></div>' +
+              '</div>' +
               '<input id="authCodigo" type="text" autocomplete="one-time-code" spellcheck="false" ' +
                  'placeholder="XXXXX-XXXXX-XXXXX-XXXXX" ' +
-                 'style="width:100%;box-sizing:border-box;padding:11px 13px;border:1.5px solid #cbd5e1;' +
-                 'border-radius:10px;font-size:14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;' +
-                 'letter-spacing:.06em;text-transform:uppercase;outline:none;">' +
+                 'style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #cbd5e1;' +
+                 'border-radius:10px;font-size:13.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;' +
+                 'letter-spacing:.05em;text-transform:uppercase;outline:none;">' +
               '<button id="authCodigoBtn" type="button" ' +
-                 'style="width:100%;margin-top:10px;padding:11px;border:0;border-radius:10px;' +
-                 'background:#4f46e5;color:#fff;font-size:13.5px;font-weight:700;cursor:pointer;">' +
-                 'Entrar</button>' +
+                 'style="width:100%;margin-top:9px;padding:10px;border:0;border-radius:10px;' +
+                 'background:#4f46e5;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">' +
+                 'Entrar con código</button>' +
+              '<p style="font-size:10px;color:#94a3b8;margin:9px 0 0;line-height:1.45;">' +
+                 'Para quien no tenga cuenta de Google. Su código es personal.</p>' +
             '</div>' +
 
-            '<p style="font-size:10.5px;color:#94a3b8;margin:20px 0 0;text-align:center;line-height:1.5;">' +
-              'Su código es personal. No lo comparta ni lo escriba en mensajes.</p>' +
+            // ── Residentes ──
+            '<div style="' + tarjeta + '">' +
+              '<p style="' + rotulo + 'color:#0d9488;">🎓 Médicos residentes</p>' +
+              '<p style="' + sub + '">Consultar mis notas, mi avance por módulo y mis actividades pendientes.</p>' +
+              '<div id="authGoogleWrapResidente">' +
+                '<div id="authGoogleBtnResidente" style="display:flex;justify-content:center;min-height:44px;"></div>' +
+              '</div>' +
+            '</div>' +
+
+            '<p style="font-size:10.5px;color:#64748b;margin:16px 0 0;text-align:center;line-height:1.5;">' +
+              'Use la cuenta de Google que registró en la coordinación.</p>' +
           '</div>';
 
         document.body.appendChild(ov);
@@ -201,26 +221,47 @@
     function aceptar(res) {
         guardarSesion({ token: res.token, email: res.email, nombre: res.nombre,
                         rol: res.rol, caduca: res.caduca });
-        location.reload();
+        // Cada perfil aterriza directamente donde le corresponde. Antes se
+        // recargaba la misma página y, si era un residente en el portal
+        // docente, se le mostraba un aviso y se le redirigía después: dos
+        // pasos y un mensaje innecesario para algo que ya se sabe aquí.
+        var destino = _destinoSegunRol(res.rol);
+        if (destino) location.replace(destino); else location.reload();
     }
 
-    // ── Botón de Google ──────────────────────────────────────────────────
+    /** Página que corresponde a un rol, o null si ya está donde debe */
+    function _destinoSegunRol(rol) {
+        if (rol !== 'residente') return null;                 // docentes: se quedan
+        var destino = _destinoResidente();
+        var actual  = _paginaActual();
+        if (PAGINAS_RESIDENTE.indexOf(actual) !== -1) return null;   // ya está en su panel
+        return destino;
+    }
+
+    // ── Botones de Google ────────────────────────────────────────────────
+    // Se inicializa una sola vez y se dibuja el botón en las dos tarjetas.
+    // Ambos hacen lo mismo: quién es cada uno lo decide el servidor a partir
+    // del correo, así que si alguien pulsa el botón de la tarjeta que no le
+    // toca, entra igual y va a su sitio. Es a propósito: separar las tarjetas
+    // orienta, no restringe.
+    var CONTENEDORES_GOOGLE = ['authGoogleBtnDocente', 'authGoogleBtnResidente'];
+
     function cargarGoogle() {
         if (!CLIENT_ID) {
             // Antes esto ocultaba el botón sin más, y quien no supiera del
             // acceso por código pensaba que la plataforma estaba rota.
-            var w = document.getElementById('authGoogleWrap');
-            if (w) {
+            ['authGoogleWrapDocente', 'authGoogleWrapResidente'].forEach(function (id) {
+                var w = document.getElementById(id);
+                if (!w) return;
                 w.innerHTML =
-                  '<p style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;' +
-                     'letter-spacing:.05em;margin:0 0 8px;">Acceso con cuenta de Google</p>' +
                   '<p style="font-size:11.5px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;' +
                      'border-radius:10px;padding:9px 11px;margin:0;line-height:1.45;">' +
-                     'No disponible: falta <strong>GOOGLE_CLIENT_ID</strong> en config.js. ' +
-                     'Avise a la coordinación. Mientras tanto puede entrar con su código.</p>';
-            }
+                     'Acceso con Google no disponible: falta <strong>GOOGLE_CLIENT_ID</strong> ' +
+                     'en config.js. Avise a la coordinación.</p>';
+            });
             return;
         }
+
         function init() {
             try {
                 google.accounts.id.initialize({
@@ -235,22 +276,32 @@
                         });
                     }
                 });
-                google.accounts.id.renderButton(
-                    document.getElementById('authGoogleBtn'),
-                    { theme: 'outline', size: 'large', width: 320, text: 'signin_with', locale: 'es' });
+                CONTENEDORES_GOOGLE.forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (!el) return;
+                    google.accounts.id.renderButton(el,
+                        { theme: 'outline', size: 'large', width: 300,
+                          text: 'signin_with', locale: 'es' });
+                });
             } catch (e) {
-                var w2 = document.getElementById('authGoogleWrap');
-                if (w2) w2.style.display = 'none';
+                CONTENEDORES_GOOGLE.forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (el) el.style.display = 'none';
+                });
             }
         }
+
         if (window.google && google.accounts && google.accounts.id) { init(); return; }
         var sc = document.createElement('script');
         sc.src = 'https://accounts.google.com/gsi/client';
         sc.async = true;
         sc.onload = init;
         sc.onerror = function () {
-            var w3 = document.getElementById('authGoogleWrap');
-            if (w3) w3.style.display = 'none';
+            ['authGoogleWrapDocente', 'authGoogleWrapResidente'].forEach(function (id) {
+                var w = document.getElementById(id);
+                if (w) w.innerHTML = '<p style="font-size:11.5px;color:#b45309;margin:0;">' +
+                    'No se pudo cargar el acceso con Google. Revise su conexión.</p>';
+            });
         };
         document.head.appendChild(sc);
     }
@@ -280,45 +331,30 @@
 
     function pintarRedireccion(s) {
         var destino = _destinoResidente();
-        var ov = document.createElement('div');
-        ov.id = 'authRedirect';
-        ov.setAttribute('style',
-            'position:fixed;inset:0;z-index:2147483647;background:#0f172a;' +
-            'display:flex;align-items:center;justify-content:center;padding:20px;' +
-            'font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;');
-        ov.innerHTML =
-          '<div style="background:#fff;border-radius:20px;max-width:400px;width:100%;padding:32px 28px;' +
-               'text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.4);">' +
-            '<div style="font-size:34px;line-height:1;margin-bottom:12px;">🧠</div>' +
-            '<h1 style="font-size:17px;font-weight:800;color:#0f172a;margin:0 0 8px;">' +
-              'Esta sección es del equipo docente</h1>' +
-            '<p style="font-size:13px;color:#475569;line-height:1.55;margin:0 0 6px;">' +
-              'Hola, ' + String(s.nombre || '').split(' ')[0] + '. Sus notas y actividades ' +
-              'pendientes están en su propio panel.</p>' +
-            '<p id="authRedirCuenta" style="font-size:11.5px;color:#94a3b8;margin:0 0 20px;"></p>' +
-            '<a href="' + destino + '" ' +
-               'style="display:block;padding:12px;border-radius:12px;background:#4f46e5;color:#fff;' +
-               'font-size:13.5px;font-weight:700;text-decoration:none;">Ir a mi panel</a>' +
-            '<button type="button" id="authRedirSalir" ' +
-               'style="margin-top:10px;width:100%;padding:10px;border:0;background:none;color:#64748b;' +
-               'font-size:12px;font-weight:600;cursor:pointer;text-decoration:underline;">' +
-               'Cerrar sesión</button>' +
-          '</div>';
 
+        // Antes aquí había un aviso de «esta sección es del equipo docente» con
+        // cuenta atrás de cinco segundos. Sobra: con las dos entradas separadas
+        // en la pantalla de acceso, llegar aquí es raro, y cuando pasa lo suyo
+        // es llevarle a su panel sin hacerle sentir que se equivocó.
         function montar() {
             if (document.getElementById('authRedirect')) return;
+            var ov = document.createElement('div');
+            ov.id = 'authRedirect';
+            ov.setAttribute('style',
+                'position:fixed;inset:0;z-index:2147483647;background:#0f172a;' +
+                'display:flex;align-items:center;justify-content:center;' +
+                'font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;');
+            ov.innerHTML =
+              '<div style="text-align:center;color:#fff;">' +
+                '<div style="font-size:34px;line-height:1;margin-bottom:12px;">🧠</div>' +
+                '<p style="font-size:14px;font-weight:700;margin:0 0 6px;">Abriendo su panel…</p>' +
+                '<p style="font-size:12px;color:#94a3b8;margin:0;">' +
+                   (s && s.nombre ? String(s.nombre).split(' ')[0] : '') + '</p>' +
+                '<a href="' + destino + '" style="display:inline-block;margin-top:18px;font-size:12px;' +
+                   'color:#a5b4fc;text-decoration:underline;">Continuar</a>' +
+              '</div>';
             document.body.appendChild(ov);
-            document.getElementById('authRedirSalir').addEventListener('click', salir);
-            // Redirección automática, con cuenta atrás visible para que no
-            // parezca que la página se ha ido sola
-            var seg = 5;
-            var cuenta = document.getElementById('authRedirCuenta');
-            cuenta.textContent = 'Le llevamos allí en ' + seg + ' segundos…';
-            var t = setInterval(function () {
-                seg--;
-                if (seg <= 0) { clearInterval(t); location.replace(destino); return; }
-                cuenta.textContent = 'Le llevamos allí en ' + seg + ' segundo' + (seg === 1 ? '' : 's') + '…';
-            }, 1000);
+            setTimeout(function () { location.replace(destino); }, 400);
         }
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', montar);
         else montar();
