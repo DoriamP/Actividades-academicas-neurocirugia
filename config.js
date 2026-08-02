@@ -23,6 +23,6 @@ window.CONFIG = {
 
     /* Opcional. Los client ID de OAuth son públicos por diseño, así que el de
      * index.html puede quedarse donde está. */
-    GOOGLE_CLIENT_ID: ""
+    GOOGLE_CLIENT_ID: "148157700207-r8g2es764v635uckj1d1ff3dsfsdit56.apps.googleusercontent.com"
 
 };
