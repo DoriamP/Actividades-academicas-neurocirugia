@@ -768,10 +768,21 @@
             var s = (window.AUTH && AUTH.sesion) ? AUTH.sesion() : null;
             if (s) _authDocente = { email: s.email, nombre: s.nombre, rol: s.rol,
                                     esAdmin: s.rol === 'coordinacion' };
-            document.addEventListener('DOMContentLoaded', function () {
+
+            // Arranque del contenido. Antes lo disparaba procesarLoginDocente(),
+            // que se eliminó con el login antiguo: la agenda y las fechas
+            // importantes se quedaban vacías porque nadie llamaba a
+            // arrancarContenido(). Ahora arranca en cuanto hay sesión válida.
+            function iniciar() {
                 var nm = document.getElementById('docenteNombre');
                 if (nm && _authDocente) nm.textContent = _authDocente.nombre;
-            });
+                if (!_authDocente) return;   // sin sesión, auth.js ya tapó la página
+                try { arrancarContenido(); } catch (err) { console.error('arrancarContenido:', err); }
+                if (window.lucide) lucide.createIcons();
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', iniciar);
+            } else { iniciar(); }
         })();
 
         function cerrarSesionDocente() {
