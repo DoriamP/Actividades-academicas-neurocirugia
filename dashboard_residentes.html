@@ -309,6 +309,31 @@
 .clase-card-pasada { opacity:.55; }
 </style>
 
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- INVESTIGACIÓN MONOGRÁFICA                                      -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<section style="max-width:72rem;margin:0 auto 1.5rem;padding:0 1rem;">
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;">
+    <button type="button" onclick="toggleInvestigacion()"
+      style="width:100%;display:flex;align-items:center;gap:12px;padding:16px 20px;background:linear-gradient(to right,#0f766e,#115e59);color:#fff;border:0;cursor:pointer;text-align:left;">
+      <span style="font-size:20px;line-height:1;">🔬</span>
+      <span style="flex:1;">
+        <span style="display:block;font-size:15px;font-weight:800;">Investigación monográfica</span>
+        <span style="display:block;font-size:11px;color:#99f6e4;margin-top:1px;">Calendarios, formatos y líneas de investigación del comité</span>
+      </span>
+      <svg id="invChevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transition:transform .2s;">
+        <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <div id="invPanel" class="hidden">
+      <div id="invLista"></div>
+      <p style="font-size:10.5px;color:#94a3b8;padding:10px 14px;border-top:1px solid #f1f5f9;line-height:1.5;">
+        Documentos del Comité de Investigación. Son de uso interno del programa: no los reenvíe fuera del servicio.
+      </p>
+    </div>
+  </div>
+</section>
+
 <script>
 // ── Configuración externa (config.js, fuera del repositorio) ──────────
         // La URL del Apps Script ya no vive en este archivo: se lee de config.js
@@ -2043,6 +2068,104 @@ function renderRotExtDash1() {
             + '</div></div>';
     });
     document.getElementById('rotExtD1Lista').innerHTML = html;
+}
+
+
+// ══════════════════════════════════════════════════════════════════════
+// INVESTIGACIÓN MONOGRÁFICA — documentos del comité de investigación
+// ══════════════════════════════════════════════════════════════════════
+// Viven en una carpeta de Drive y se piden al servidor solo al abrir el
+// panel: son varios megas y en la mayoría de visitas no se consultan.
+// Se sirven a través del Apps Script, así que exigen sesión válida.
+var _invAbierto = false;
+var _invCargado = false;
+
+function toggleInvestigacion() {
+    var panel = document.getElementById('invPanel');
+    var chev  = document.getElementById('invChevron');
+    if (!panel) return;
+    _invAbierto = !_invAbierto;
+    panel.classList.toggle('hidden', !_invAbierto);
+    if (chev) chev.style.transform = _invAbierto ? 'rotate(180deg)' : '';
+    if (_invAbierto && !_invCargado) cargarDocumentosInvestigacion();
+}
+
+function _invIcono(nombre, tipo) {
+    var n = (nombre || '').toLowerCase();
+    if (n.indexOf('.pdf') !== -1 || (tipo || '').indexOf('pdf') !== -1) return '📕';
+    if (n.indexOf('.doc') !== -1 || (tipo || '').indexOf('word') !== -1) return '📘';
+    if (n.indexOf('.xls') !== -1 || (tipo || '').indexOf('sheet') !== -1) return '📗';
+    return '📄';
+}
+function _invTamano(b) {
+    b = Number(b) || 0;
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return Math.round(b / 1024) + ' KB';
+    return (b / 1048576).toFixed(1) + ' MB';
+}
+
+async function cargarDocumentosInvestigacion() {
+    var cont = document.getElementById('invLista');
+    if (!cont) return;
+    cont.innerHTML = '<p style="font-size:12px;color:#94a3b8;font-style:italic;padding:12px;">Cargando documentos…</p>';
+    try {
+        var r = await fetch(URL_SCRIPT + '?action=getDocumentosInvestigacion', { mode: 'cors' });
+        var docs = await r.json();
+        if (!Array.isArray(docs) || !docs.length) {
+            cont.innerHTML = '<p style="font-size:12px;color:#94a3b8;font-style:italic;padding:12px;">' +
+                'Todavía no hay documentos publicados.</p>';
+            _invCargado = true;
+            return;
+        }
+        cont.innerHTML = docs.map(function (d) {
+            return '<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid #f1f5f9;">' +
+                '<span style="font-size:20px;flex-shrink:0;">' + _invIcono(d.nombre, d.tipo) + '</span>' +
+                '<div style="flex:1;min-width:0;">' +
+                  '<p style="font-size:12.5px;font-weight:700;color:#1e293b;line-height:1.35;word-break:break-word;">' +
+                     _invEsc(d.nombre) + '</p>' +
+                  '<p style="font-size:10.5px;color:#94a3b8;margin-top:2px;">' +
+                     _invTamano(d.tamano) + (d.fecha ? (' · actualizado ' + _invEsc(d.fecha)) : '') + '</p>' +
+                '</div>' +
+                '<button type="button" onclick="descargarDocumento(this,\'' + _invEsc(d.id) + '\')" ' +
+                   'style="flex-shrink:0;padding:7px 14px;border:0;border-radius:9px;background:#0d9488;' +
+                   'color:#fff;font-size:11.5px;font-weight:700;cursor:pointer;">Descargar</button>' +
+            '</div>';
+        }).join('');
+        _invCargado = true;
+    } catch (e) {
+        cont.innerHTML = '<p style="font-size:12px;color:#dc2626;padding:12px;">' +
+            'No se pudieron cargar los documentos. Revise su conexión.</p>';
+    }
+}
+
+function _invEsc(v) {
+    return String(v == null ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+async function descargarDocumento(btn, id) {
+    var txt = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Abriendo…'; btn.style.background = '#94a3b8';
+    try {
+        var r = await fetch(URL_SCRIPT + '?action=getDocumento&id=' + encodeURIComponent(id), { mode: 'cors' });
+        var res = await r.json();
+        if (!res || res.status !== 'success') {
+            alert('No se pudo descargar: ' + ((res && res.message) || 'documento no disponible'));
+        } else {
+            // Se descarga desde el propio navegador: el archivo llega en la
+            // respuesta, no por un enlace público de Drive.
+            var a = document.createElement('a');
+            a.href = res.dataUrl;
+            a.download = res.nombre;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    } catch (e) {
+        alert('No se pudo descargar el documento.');
+    }
+    btn.disabled = false; btn.textContent = txt; btn.style.background = '#0d9488';
 }
 
 </script>
