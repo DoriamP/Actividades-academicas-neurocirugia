@@ -53,6 +53,13 @@
                 var url = (typeof input === 'string') ? input
                         : (input && input.url) ? input.url : '';
                 if (BASE && url.indexOf(BASE) === 0) {
+                    // Sin esto, el navegador puede servir una respuesta guardada
+                    // y el dashboard muestra datos viejos: se registra una nota y
+                    // parece que no se guardó. Safari en escritorio lo hace con
+                    // más ganas que en el móvil, de ahí que el mismo cambio se
+                    // viera en un dispositivo y no en el otro.
+                    init = Object.assign({ cache: 'no-store' }, init || {}, { cache: 'no-store' });
+
                     var s = sesion();
                     var tk = s ? s.token : '';
                     if (tk && url.indexOf('_t=') === -1) {
