@@ -234,7 +234,8 @@
             "Clases de Investigación":   "clases_investigacion.html",
             "Casos Clínicos y Artículos":"casos_clinicos_y_articulos.html",
             "Sesiones Diarias":          "sesiones_diarias.html",
-            "Práctica Quirúrgica":       "practica_quirurgica.html"
+            "Práctica Quirúrgica":       "practica_quirurgica.html",
+            "Examen":                    "examen_modulo.html"
         };
 
         let dbMasterData    = [];
@@ -563,6 +564,13 @@
                 s3:          row.score3 != null ? row.score3 : '',
                 comentarios: row.comentarios || ''
             };
+            // El examen de módulo tiene otros campos: el módulo va en el tema
+            // («Examen módulo II») y la nota es el total, no tres puntajes.
+            if (getComponente(row) === 'Examen') {
+                var m = (row.tema || '').match(/m[óo]dulo\s+([IVX]+)/i);
+                datos.modulo = m ? m[1].toUpperCase() : '';
+                datos.nota   = row.total != null ? row.total : '';
+            }
             if (clave) datos.clave = clave;
             const params = new URLSearchParams(datos);
             window.location.href = `${archivo}?${params.toString()}`;
