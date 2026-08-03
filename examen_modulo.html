@@ -409,6 +409,8 @@
         btn.textContent = 'Guardando la nota…';
         btn.className = 'w-full bg-slate-400 cursor-not-allowed text-white font-bold py-3.5 px-6 rounded-xl text-sm';
 
+        // Los desplegables bloqueados conservan su valor: al venir del
+        // calendario, año y módulo se leen igual aunque no se puedan tocar.
         const datos = {
             residente: $('nombreResidente').value,
             anio:      $('anioResidencia').value,
@@ -429,6 +431,7 @@
                 anoResidencia:   datos.anio,
                 modulo:          datos.modulo,
                 fecha:           datos.fecha,
+                fechaProg:       window.__FECHA_PROG || '',
                 nota:            datos.nota,
                 comentarios:     $('comentarios').value || 'Ninguno'
             }));
@@ -574,6 +577,55 @@
 
     // Fecha de hoy por defecto
     $('fecha').value = new Date().toISOString().slice(0, 10);
+
+    // ── LLAMADO DESDE «FECHAS IMPORTANTES» ───────────────────────────────
+    // Llega con ?desde=fecha y el año, el módulo y la fecha prevista. Esos
+    // tres campos quedan fijos: el módulo lo define el examen que se pulsó,
+    // no la fecha en que se aplique. Solo hay que elegir residente y nota.
+    (function () {
+        const p = new URLSearchParams(location.search);
+        if (p.get('desde') !== 'fecha') return;
+
+        const anio   = p.get('anio')   || '';
+        const modulo = p.get('modulo') || '';
+        const prog   = p.get('fechaProg') || '';
+
+        if (anio) {
+            $('anioResidencia').value = anio;
+            $('anioResidencia').dispatchEvent(new Event('change'));
+            $('anioResidencia').disabled = true;
+            $('anioResidencia').className =
+                'w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm outline-none text-slate-600 cursor-not-allowed';
+        }
+        if (modulo) {
+            $('modulo').value = modulo;
+            $('modulo').dispatchEvent(new Event('change'));
+            $('modulo').disabled = true;
+            $('modulo').className =
+                'w-full px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm outline-none text-slate-600 cursor-not-allowed';
+        }
+        // La fecha real por defecto es la prevista, pero se puede cambiar:
+        // el examen pudo aplicarse otro día y eso no altera el módulo.
+        if (prog) {
+            const a = prog.split('/');
+            if (a.length === 3) $('fecha').value = a[2] + '-' + a[1] + '-' + a[0];
+        }
+
+        const h1 = document.querySelector('h1');
+        if (h1) h1.textContent = 'Examen de Módulo ' + modulo;
+        const sub = h1 && h1.nextElementSibling;
+        if (sub) sub.textContent = anio + ' año · fecha prevista ' + prog;
+
+        const aviso = $('avisoExistente');
+        aviso.innerHTML = '📌 Está evaluando el <strong>examen del módulo ' + modulo +
+            '</strong> del <strong>' + anio + ' año</strong>. El módulo queda fijado por el ' +
+            'examen que eligió, así que la nota cuenta para ese módulo aunque el examen se ' +
+            'haya aplicado en otra fecha.';
+        aviso.className = 'rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900 font-semibold leading-relaxed';
+        aviso.classList.remove('hidden');
+
+        window.__FECHA_PROG = prog;
+    })();
 
     // ── MODO EDICIÓN (desde el panel docente) ────────────────────────────
     // Llega con ?modo=editar y los datos del examen en la dirección. No hace
