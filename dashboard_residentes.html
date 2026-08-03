@@ -2137,10 +2137,28 @@ async function cargarDocumentosInvestigacion() {
     cont.innerHTML = '<p style="font-size:12px;color:#94a3b8;font-style:italic;padding:12px;">Cargando documentos…</p>';
     try {
         var r = await fetch(URL_SCRIPT + '?action=getDocumentosInvestigacion', { mode: 'cors' });
-        var docs = await r.json();
-        if (!Array.isArray(docs) || !docs.length) {
-            cont.innerHTML = '<p style="font-size:12px;color:#94a3b8;font-style:italic;padding:12px;">' +
-                'Todavía no hay documentos publicados.</p>';
+        var res = await r.json();
+        // Compatible con la respuesta antigua, que era una lista pelada
+        var docs = Array.isArray(res) ? res : (res && res.documentos) || [];
+        var configurada = Array.isArray(res) ? true : !!(res && res.configurada);
+        var esCoord = !Array.isArray(res) && res && res.esCoordinacion;
+
+        if (!docs.length) {
+            // Decir qué pasa y qué hacer, en vez de un «no hay nada» que no
+            // distingue entre «falta configurarlo» y «la carpeta está vacía».
+            cont.innerHTML = !configurada
+              ? ('<div style="padding:14px;">' +
+                 '<p style="font-size:12.5px;font-weight:700;color:#b45309;margin-bottom:6px;">' +
+                    'La carpeta de documentos todavía no está configurada.</p>' +
+                 (esCoord
+                   ? '<p style="font-size:11.5px;color:#64748b;line-height:1.6;">Para activarla:<br>' +
+                     '1. Cree una carpeta en su Drive y suba ahí los documentos del comité.<br>' +
+                     '2. Copie el identificador de su dirección: <code style="background:#f1f5f9;padding:1px 4px;border-radius:4px;">drive.google.com/drive/folders/<strong>ESTO</strong></code><br>' +
+                     '3. En el editor de Apps Script, ejecute <strong>configurarDocumentosInvestigacion()</strong> con ese valor.</p>'
+                   : '<p style="font-size:11.5px;color:#64748b;line-height:1.6;">Avise a la coordinación para que la active.</p>') +
+                 '</div>')
+              : ('<p style="font-size:12px;color:#94a3b8;font-style:italic;padding:14px;">' +
+                 'La carpeta está configurada pero no contiene documentos todavía.</p>');
             _invCargado = true;
             return;
         }
