@@ -1078,6 +1078,32 @@ var NOTAS_CANON = (function () {
     }
 
     /**
+     * Módulo al que pertenece una evaluación.
+     *
+     * Para el EXAMEN el módulo va escrito en el propio registro («Examen
+     * módulo II»), no se deduce de la fecha. Antes se calculaba por fecha y
+     * un examen aplicado unos días después de lo previsto caía en el módulo
+     * siguiente: el del Dr. Bobb, corregido pasada la fecha del plan, salía
+     * como examen del módulo II cuando era del I.
+     *
+     * El resto de componentes sí se ubican por fecha, que es lo correcto:
+     * una clase o una cirugía pertenecen al módulo en que ocurrieron.
+     */
+    function moduloDeExamen(row) {
+        var t = (row.tema || row.surgeryType || '') + '';
+        var m = t.match(/m[óo]dulo\s+([IVX]+)/i);
+        return m ? m[1].toUpperCase() : null;
+    }
+
+    function moduloDeFila(row, componente, fnModulo) {
+        if (componente === 'Examen') {
+            var m = moduloDeExamen(row);
+            if (m) return m;
+        }
+        return (fnModulo ? fnModulo(row) : null) || 'Sin módulo';
+    }
+
+    /**
      * Calcula las notas de UN residente.
      * @param {Array}    filas    evaluaciones del residente (ya filtradas)
      * @param {Function} fnModulo (fila) → módulo al que pertenece, o null
@@ -1093,7 +1119,7 @@ var NOTAS_CANON = (function () {
             var v = pct(r);
             if (v === null) return;
             var c   = comp(r.tipo_evaluacion);
-            var mod = (fnModulo ? fnModulo(r) : null) || 'Sin módulo';
+            var mod = moduloDeFila(r, c, fnModulo);
             conteo.total++;
             if (c === "Práctica Quirúrgica")            conteo.practico++;
             else if (c === "Clases de Investigación")   conteo.investigacion++;
@@ -1196,7 +1222,8 @@ var NOTAS_CANON = (function () {
     }
 
     return { VERSION: VERSION, PESOS: PESOS, pct: pct, comp: comp,
-             normTxt: normTxt, calcular: calcular };
+             normTxt: normTxt, calcular: calcular,
+             moduloDeExamen: moduloDeExamen, moduloDeFila: moduloDeFila };
 })();
 /* ══════════════ FIN DEL BLOQUE CANÓNICO DE CÁLCULO DE NOTAS ══════════════ */
 
