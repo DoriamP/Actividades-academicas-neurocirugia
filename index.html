@@ -171,9 +171,7 @@
                     </div>
                 </div>
                 <div class="p-6 space-y-4 flex-grow flex flex-col justify-between">
-                    <p class="text-slate-500 text-xs md:text-sm italic">Instrumentos destinados a medir el dominio cognitivo, la preparación de sesiones y el análisis crítico de la literatura médica.</p>
                     <div class="space-y-3 pt-2">
-                        <p class="text-xs text-slate-400 italic bg-slate-50 border border-slate-200 rounded-xl p-3 leading-relaxed">Las <span class="font-semibold text-slate-500">Clases Programadas</span> y los <span class="font-semibold text-slate-500">Casos Clínicos y Artículos</span> se evalúan directamente desde el carrusel «Clases Programadas» (botón ▶ Evaluar) en la parte superior, para evitar secciones redundantes.</p>
                         <a href="sesiones_diarias.html" class="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-indigo-50/50 border border-slate-200 hover:border-indigo-200 rounded-xl transition group">
                             <div class="flex items-center gap-3">
                                 <div class="bg-white p-2 rounded-lg border border-slate-200 text-slate-600 group-hover:text-indigo-600 group-hover:border-indigo-100 shadow-sm"><i data-lucide="message-square" class="w-5 h-5"></i></div>
@@ -184,8 +182,6 @@
                             </div>
                             <i data-lucide="chevron-right" class="w-5 h-5 text-slate-400 group-hover:text-indigo-600 transform group-hover:translate-x-1 transition"></i>
                         </a>
-                        <p class="text-[11px] text-slate-400 italic leading-relaxed">El <span class="font-semibold text-slate-500">Examen de Módulo</span> se evalúa desde «Fechas Importantes», con el botón que aparece en cada examen: así la nota queda ligada a ese examen concreto aunque se aplique en otra fecha.</p>
-                        <p class="text-[11px] text-slate-400 italic leading-relaxed">Ponderación del módulo: clases programadas 30 % · casos clínicos y artículos 20 % · sesiones diarias 20 % · examen de módulo 30 %.</p>
                     </div>
                 </div>
             </section>
@@ -3378,10 +3374,28 @@ async function cargarDocumentosInvestigacion() {
     cont.innerHTML = '<p style="font-size:12px;color:#94a3b8;font-style:italic;padding:12px;">Cargando documentos…</p>';
     try {
         var r = await fetch(URL_SCRIPT + '?action=getDocumentosInvestigacion', { mode: 'cors' });
-        var docs = await r.json();
-        if (!Array.isArray(docs) || !docs.length) {
-            cont.innerHTML = '<p style="font-size:12px;color:#94a3b8;font-style:italic;padding:12px;">' +
-                'Todavía no hay documentos publicados.</p>';
+        var res = await r.json();
+        // Compatible con la respuesta antigua, que era una lista pelada
+        var docs = Array.isArray(res) ? res : (res && res.documentos) || [];
+        var configurada = Array.isArray(res) ? true : !!(res && res.configurada);
+        var esCoord = !Array.isArray(res) && res && res.esCoordinacion;
+
+        if (!docs.length) {
+            // Decir qué pasa y qué hacer, en vez de un «no hay nada» que no
+            // distingue entre «falta configurarlo» y «la carpeta está vacía».
+            cont.innerHTML = !configurada
+              ? ('<div style="padding:14px;">' +
+                 '<p style="font-size:12.5px;font-weight:700;color:#b45309;margin-bottom:6px;">' +
+                    'La carpeta de documentos todavía no está configurada.</p>' +
+                 (esCoord
+                   ? '<p style="font-size:11.5px;color:#64748b;line-height:1.6;">Para activarla:<br>' +
+                     '1. Cree una carpeta en su Drive y suba ahí los documentos del comité.<br>' +
+                     '2. Copie el identificador de su dirección: <code style="background:#f1f5f9;padding:1px 4px;border-radius:4px;">drive.google.com/drive/folders/<strong>ESTO</strong></code><br>' +
+                     '3. En el editor de Apps Script, ejecute <strong>configurarDocumentosInvestigacion()</strong> con ese valor.</p>'
+                   : '<p style="font-size:11.5px;color:#64748b;line-height:1.6;">Avise a la coordinación para que la active.</p>') +
+                 '</div>')
+              : ('<p style="font-size:12px;color:#94a3b8;font-style:italic;padding:14px;">' +
+                 'La carpeta está configurada pero no contiene documentos todavía.</p>');
             _invCargado = true;
             return;
         }
