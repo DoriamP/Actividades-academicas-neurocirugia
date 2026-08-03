@@ -134,6 +134,9 @@
                         <h3 class="font-bold text-sm">Fechas Importantes</h3>
                         <div class="ml-auto flex items-center gap-1.5">
                             <span id="fechasContador" class="text-xs bg-amber-600/50 border border-amber-500/50 px-2 py-0.5 rounded-full"></span>
+                            <button id="btnAlertasCorreo" onclick="alternarAlertasCorreo()" title="Activa o desactiva todos los avisos por correo"
+                                class="hover:opacity-90 text-white rounded-lg px-2 py-1 transition border border-white/20 text-[10px] font-bold"
+                                style="background:#065f46;">🔔 Avisos por correo</button>
                             <button id="btnFechasHoy" onclick="irAFechasHoy()" title="Volver a las fechas de hoy"
                                 class="bg-amber-600/60 hover:bg-amber-500/80 text-white rounded-lg px-2 py-1 transition border border-amber-500/50 text-[10px] font-bold uppercase tracking-wide">
                                 Hoy
@@ -148,7 +151,8 @@
                             </button>
                         </div>
                     </div>
-                    <div id="fechasImportantesList" class="divide-y divide-slate-100" style="max-height:340px;overflow-y:auto;"></div>
+                    <p id="avisoExamenes" class="hidden text-xs font-semibold text-red-700 bg-red-50 border border-red-200 px-4 py-2.5 leading-relaxed"></p>
+                <div id="fechasImportantesList" class="divide-y divide-slate-100" style="max-height:340px;overflow-y:auto;"></div>
                     <div class="px-4 py-2.5 border-t border-slate-100">
                         <p class="text-xs text-slate-400 italic">Exámenes y presentaciones de avances</p>
                     </div>
@@ -180,16 +184,7 @@
                             </div>
                             <i data-lucide="chevron-right" class="w-5 h-5 text-slate-400 group-hover:text-indigo-600 transform group-hover:translate-x-1 transition"></i>
                         </a>
-                        <a href="examen_modulo.html" class="flex items-center justify-between p-3.5 bg-violet-50/60 hover:bg-violet-50 border border-violet-200 hover:border-violet-300 rounded-xl transition group">
-                            <div class="flex items-center gap-3">
-                                <div class="bg-white p-2 rounded-lg border border-violet-200 text-violet-600 group-hover:border-violet-300 shadow-sm"><i data-lucide="file-check-2" class="w-5 h-5"></i></div>
-                                <div class="text-left">
-                                    <span class="block text-sm font-semibold text-slate-800 group-hover:text-violet-950">b) Examen de Módulo</span>
-                                    <span class="block text-xs text-slate-500">Nota del examen escrito · 30 % de la teoría</span>
-                                </div>
-                            </div>
-                            <i data-lucide="chevron-right" class="w-5 h-5 text-violet-400 group-hover:text-violet-600 transform group-hover:translate-x-1 transition"></i>
-                        </a>
+                        <p class="text-[11px] text-slate-400 italic leading-relaxed">El <span class="font-semibold text-slate-500">Examen de Módulo</span> se evalúa desde «Fechas Importantes», con el botón que aparece en cada examen: así la nota queda ligada a ese examen concreto aunque se aplique en otra fecha.</p>
                         <p class="text-[11px] text-slate-400 italic leading-relaxed">Ponderación del módulo: clases programadas 30 % · casos clínicos y artículos 20 % · sesiones diarias 20 % · examen de módulo 30 %.</p>
                     </div>
                 </div>
@@ -1344,6 +1339,100 @@
             renderFechasImportantes(new Date());
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // EXÁMENES DE MÓDULO desde «Fechas Importantes»
+        // ══════════════════════════════════════════════════════════════
+        // El año y el módulo salen de la descripción del examen, no de la
+        // fecha. Así, aunque el examen se aplique o se corrija días después,
+        // la nota queda ligada al examen correcto.
+        function _exModulo(desc) {
+            var m = String(desc || '').match(/m[óo]dulo\s+([IVX]+)/i);
+            if (m) return m[1].toUpperCase();
+            if (/final|grado/i.test(desc || '')) return 'Cierre';
+            return '';
+        }
+        function _exAnio(desc) {
+            var m = String(desc || '').match(/—\s*([IVX]+)\s*a[ñn]o/i);
+            return m ? m[1].toUpperCase() : '';
+        }
+
+        function evaluarExamen(anio, modulo, fechaPlan) {
+            var p = new URLSearchParams({
+                desde:     'fecha',       // viene del calendario: año y módulo fijos
+                anio:      anio,
+                modulo:    modulo,
+                fechaProg: fechaPlan || ''
+            });
+            window.location.href = 'examen_modulo.html?' + p.toString();
+        }
+
+        // Exámenes vencidos con residentes sin nota, para el símbolo de alerta
+        var _examenesPendientesMapa = {};
+        function cargarExamenesPendientes() {
+            return fetch(URL_SCRIPT + '?action=getExamenesPendientes', { mode: 'cors' })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (!res || res.status !== 'success') return;
+                    _examenesPendientesMapa = {};
+                    (res.pendientes || []).forEach(function (p) {
+                        _examenesPendientesMapa[p.anio + '||' + p.modulo] = p;
+                    });
+                    renderFechasImportantes(new Date());
+                    _pintarResumenAlertas(res);
+                })
+                .catch(function () {});
+        }
+
+        function _pintarResumenAlertas(res) {
+            var el = document.getElementById('avisoExamenes');
+            if (!el) return;
+            var n = (res.pendientes || []).length;
+            if (!n) { el.classList.add('hidden'); return; }
+            var total = res.pendientes.reduce(function (a, p) { return a + p.faltan.length; }, 0);
+            el.innerHTML = '⚠ <strong>' + n + ' examen' + (n !== 1 ? 'es' : '') +
+                '</strong> con ' + total + ' nota' + (total !== 1 ? 's' : '') +
+                ' sin registrar pasados ' + (res.dias || 7) + ' días. ' +
+                (res.alertasCorreo ? 'Se está avisando por correo a diario.'
+                                   : 'Los avisos por correo están desactivados.');
+            el.classList.remove('hidden');
+        }
+
+        // ── Interruptor general de avisos por correo ───────────────────
+        var _alertasCorreoOn = true;
+        function cargarEstadoAlertas() {
+            return fetch(URL_SCRIPT + '?action=getEstadoAlertas', { mode: 'cors' })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res && res.status === 'success') {
+                        _alertasCorreoOn = !!res.activas;
+                        _pintarBotonAlertas();
+                    }
+                }).catch(function () {});
+        }
+        function _pintarBotonAlertas() {
+            var b = document.getElementById('btnAlertasCorreo');
+            if (!b) return;
+            b.textContent = _alertasCorreoOn ? '🔔 Avisos por correo: activados'
+                                             : '🔕 Avisos por correo: desactivados';
+            b.style.background = _alertasCorreoOn ? '#065f46' : '#7f1d1d';
+        }
+        function alternarAlertasCorreo() {
+            var b = document.getElementById('btnAlertasCorreo');
+            var nuevo = _alertasCorreoOn ? 'off' : 'on';
+            if (nuevo === 'off' &&
+                !confirm('Se desactivarán TODOS los avisos por correo: recordatorios de examen, ' +
+                         'exámenes sin evaluar, alertas de edición y el respaldo semanal.\n\n¿Continuar?')) return;
+            if (b) { b.disabled = true; b.textContent = 'Guardando…'; }
+            fetch(URL_SCRIPT + '?action=getEstadoAlertas&valor=' + nuevo, { mode: 'cors' })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res && res.status === 'success') { _alertasCorreoOn = !!res.activas; }
+                    else alert((res && res.message) || 'No se pudo cambiar el ajuste.');
+                })
+                .catch(function () { alert('No se pudo conectar con el servidor.'); })
+                .then(function () { if (b) b.disabled = false; _pintarBotonAlertas(); });
+        }
+
         function svgTriangulo(f, s) {
             return '<svg width="22" height="20" viewBox="0 0 22 20" style="flex-shrink:0;"><polygon points="11,1.5 20.5,18.5 1.5,18.5" fill="'+f+'" stroke="'+s+'" stroke-width="1.5"/><text x="11" y="15.5" text-anchor="middle" font-size="9" font-weight="900" fill="white">!</text></svg>';
         }
@@ -1390,12 +1479,20 @@
                 var lbl = fi.tipo==='examen'
                     ? '<span style="background:#fef3c7;color:#92400e;font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;margin-left:4px;">EXAMEN</span>'
                     : '<span style="background:#ede9fe;color:#5b21b6;font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;margin-left:4px;">PRESENTACIÓN</span>';
+                // Alerta cuando el examen ya pasó y falta alguna nota
+                var claveEx = fi.tipo==='examen' ? (_exAnio(fi.desc) + '||' + _exModulo(fi.desc)) : '';
+                var pend    = claveEx ? _examenesPendientesMapa[claveEx] : null;
+                if (pend) lbl += '<span title="' + _invEsc(pend.faltan.join(', ')) + '" style="background:#fee2e2;color:#991b1b;font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;margin-left:4px;">⚠ ' + pend.faltan.length + ' SIN NOTA</span>';
                 var fs = fi.dateObj.getDate()+' '+MESES_ES[fi.dateObj.getMonth()]+' '+fi.dateObj.getFullYear();
                 return '<div style="padding:11px 16px;display:flex;align-items:center;gap:10px;'+(past?'opacity:.5;':'')+'border-bottom:1px solid #f1f5f9;">'
                     + tri
                     + '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:2px;">'+lbl+'<span style="font-size:10px;color:#94a3b8;font-weight:500;">'+fs+'</span></div>'
                     + '<p style="font-size:12px;font-weight:700;color:#1e293b;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+fi.desc+'</p></div>'
-                    + '<div style="text-align:right;flex-shrink:0;"><p style="font-size:12px;font-weight:800;color:'+dc+';white-space:nowrap;">'+dt+'</p>'+((!past&&diff>0)?'<p style="font-size:9px;color:#94a3b8;margin-top:1px;">restantes</p>':'')+'</div></div>';
+                    + '<div style="text-align:right;flex-shrink:0;"><p style="font-size:12px;font-weight:800;color:'+dc+';white-space:nowrap;">'+dt+'</p>'+((!past&&diff>0)?'<p style="font-size:9px;color:#94a3b8;margin-top:1px;">restantes</p>':'')
+                    + (fi.tipo==='examen' && _exModulo(fi.desc) && _exAnio(fi.desc)
+                        ? '<button type="button" onclick="evaluarExamen(\''+_exAnio(fi.desc)+'\',\''+_exModulo(fi.desc)+'\',\''+fi.f+'\')" style="margin-top:5px;padding:4px 10px;border:0;border-radius:7px;background:'+(pend?'#dc2626':'#7c3aed')+';color:#fff;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">▶ Evaluar</button>'
+                        : '')
+                    + '</div></div>';
             }).join('');
             lucide.createIcons();
             _activarGestosFechas(lista);
@@ -1977,6 +2074,8 @@
                 String(hoy.getDate()).padStart(2,'0') + '/' + String(hoy.getMonth()+1).padStart(2,'0') + '/' + hoy.getFullYear();
             renderAgenda();
             fetchTemas();
+            cargarEstadoAlertas();
+            cargarExamenesPendientes();
             // Cargar evaluaciones en segundo plano para los puntos del carrusel
             fetch(URL_SCRIPT + '?action=getEvaluations', { mode: 'cors' })
                 .then(function(r) { return r.json(); })
@@ -2435,6 +2534,32 @@ var NOTAS_CANON = (function () {
     }
 
     /**
+     * Módulo al que pertenece una evaluación.
+     *
+     * Para el EXAMEN el módulo va escrito en el propio registro («Examen
+     * módulo II»), no se deduce de la fecha. Antes se calculaba por fecha y
+     * un examen aplicado unos días después de lo previsto caía en el módulo
+     * siguiente: el del Dr. Bobb, corregido pasada la fecha del plan, salía
+     * como examen del módulo II cuando era del I.
+     *
+     * El resto de componentes sí se ubican por fecha, que es lo correcto:
+     * una clase o una cirugía pertenecen al módulo en que ocurrieron.
+     */
+    function moduloDeExamen(row) {
+        var t = (row.tema || row.surgeryType || '') + '';
+        var m = t.match(/m[óo]dulo\s+([IVX]+)/i);
+        return m ? m[1].toUpperCase() : null;
+    }
+
+    function moduloDeFila(row, componente, fnModulo) {
+        if (componente === 'Examen') {
+            var m = moduloDeExamen(row);
+            if (m) return m;
+        }
+        return (fnModulo ? fnModulo(row) : null) || 'Sin módulo';
+    }
+
+    /**
      * Calcula las notas de UN residente.
      * @param {Array}    filas    evaluaciones del residente (ya filtradas)
      * @param {Function} fnModulo (fila) → módulo al que pertenece, o null
@@ -2450,7 +2575,7 @@ var NOTAS_CANON = (function () {
             var v = pct(r);
             if (v === null) return;
             var c   = comp(r.tipo_evaluacion);
-            var mod = (fnModulo ? fnModulo(r) : null) || 'Sin módulo';
+            var mod = moduloDeFila(r, c, fnModulo);
             conteo.total++;
             if (c === "Práctica Quirúrgica")            conteo.practico++;
             else if (c === "Clases de Investigación")   conteo.investigacion++;
@@ -2553,7 +2678,8 @@ var NOTAS_CANON = (function () {
     }
 
     return { VERSION: VERSION, PESOS: PESOS, pct: pct, comp: comp,
-             normTxt: normTxt, calcular: calcular };
+             normTxt: normTxt, calcular: calcular,
+             moduloDeExamen: moduloDeExamen, moduloDeFila: moduloDeFila };
 })();
 /* ══════════════ FIN DEL BLOQUE CANÓNICO DE CÁLCULO DE NOTAS ══════════════ */
 
