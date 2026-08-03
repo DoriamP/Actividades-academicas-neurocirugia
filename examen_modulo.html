@@ -143,6 +143,23 @@
 </div>
 
 <script>
+    // ── Configuración externa (config.js) ─────────────────────────────────
+    // Esta declaración FALTABA. El archivo se creó después de que los demás
+    // formularios la recibieran, así que usaba URL_SCRIPT sin haberla definido:
+    // cada envío lanzaba un ReferenceError que el try/catch confundía con un
+    // fallo de conexión. Ninguna nota de examen llegó a guardarse.
+    if (!window.CONFIG || !window.CONFIG.URL_SCRIPT ||
+        window.CONFIG.URL_SCRIPT.indexOf('PEGAR_AQUI') !== -1) {
+        document.addEventListener('DOMContentLoaded', function () {
+            var _av = document.createElement('div');
+            _av.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#b91c1c;' +
+                'color:#fff;padding:10px 14px;font:600 13px system-ui,sans-serif;text-align:center;';
+            _av.textContent = '⚠ Falta config.js o no tiene una URL_SCRIPT válida.';
+            document.body.appendChild(_av);
+        });
+    }
+    const URL_SCRIPT = (window.CONFIG && window.CONFIG.URL_SCRIPT) || '';
+
     // ── Residentes por año ────────────────────────────────────────────────
     const residentesPorAnio = {
         "I":   ["María Teresa Quintana Duarte", "Kevin Yassir Bobb García"],
