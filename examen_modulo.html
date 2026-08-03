@@ -116,6 +116,12 @@
             Registrar Examen de Módulo
         </button>
 
+        <button type="button" onclick="diagnosticar()"
+            class="w-full mt-1 py-2 text-xs font-semibold text-slate-500 hover:text-violet-700 underline">
+            ¿Da error al guardar? Probar la conexión
+        </button>
+        <pre id="diagSalida" class="hidden mt-2 p-3 bg-slate-900 text-slate-100 rounded-xl text-[11px] leading-relaxed whitespace-pre-wrap"></pre>
+
         <!-- Progreso de subida -->
         <div id="progreso" class="hidden">
             <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
@@ -369,7 +375,9 @@
                 await fetch(URL_SCRIPT, Object.assign({}, opciones, { mode: 'no-cors' }));
                 return { status: 'sin_respuesta' };
             } catch (e2) {
-                return { status: 'error', message: 'No se pudo conectar con el servidor.' };
+                return { status: 'error', paso: 'POST-2',
+                         message: 'No se pudo enviar (POST-2): ' + (e2 && e2.message || e2) +
+                                  '  ·  el primero falló con: ' + (e && e.message || e) };
             }
         }
     }
@@ -501,6 +509,68 @@
             restaurar();
         }
     });
+
+    // ── Diagnóstico de conexión ──────────────────────────────────────────
+    // Prueba cada paso por separado y muestra el error REAL del navegador.
+    // Los mensajes genéricos («no se pudo conectar») esconden la causa, y sin
+    // la causa solo se puede adivinar.
+    async function diagnosticar() {
+        const out = $('diagSalida');
+        out.classList.remove('hidden');
+        const L = [];
+        const escribe = t => { L.push(t); out.textContent = L.join('\n'); };
+
+        escribe('── Configuración ──');
+        escribe('config.js cargado : ' + (window.CONFIG ? 'sí' : 'NO'));
+        escribe('URL_SCRIPT        : ' + (URL_SCRIPT ? URL_SCRIPT.slice(0, 52) + '…' : '(VACÍA)'));
+        escribe('auth.js cargado   : ' + (window.AUTH ? 'sí' : 'NO'));
+        const ses = window.AUTH && AUTH.sesion ? AUTH.sesion() : null;
+        escribe('sesión            : ' + (ses ? (ses.rol + ' — ' + ses.nombre) : 'NO HAY SESIÓN'));
+        escribe('origen de la web  : ' + location.origin);
+
+        if (!URL_SCRIPT) { escribe('\n✗ Sin URL no se puede probar nada más.'); return; }
+
+        escribe('\n── 1. Lectura (GET) ──');
+        try {
+            const r = await fetch(`${URL_SCRIPT}?action=getEvaluations`, { mode: 'cors' });
+            const d = await r.json();
+            escribe('✓ OK — ' + (Array.isArray(d) ? (d.length + ' evaluaciones') : JSON.stringify(d).slice(0, 90)));
+        } catch (e) { escribe('✗ ' + e.name + ': ' + e.message); }
+
+        escribe('\n── 2. Envío (POST) leyendo respuesta ──');
+        try {
+            const p = new URLSearchParams({ action: 'getEvaluations' });
+            const r = await fetch(URL_SCRIPT, { method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                body: p.toString(), redirect: 'follow' });
+            const d = await r.json();
+            escribe('✓ OK — ' + (Array.isArray(d) ? (d.length + ' evaluaciones') : JSON.stringify(d).slice(0, 90)));
+        } catch (e) { escribe('✗ ' + e.name + ': ' + e.message); }
+
+        escribe('\n── 3. Envío (POST) sin leer respuesta ──');
+        try {
+            const p = new URLSearchParams({ action: 'getEvaluations' });
+            await fetch(URL_SCRIPT, { method: 'POST', mode: 'no-cors',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                body: p.toString(), redirect: 'follow' });
+            escribe('✓ OK — la petición salió (no se puede leer la respuesta, es lo esperado)');
+        } catch (e) { escribe('✗ ' + e.name + ': ' + e.message); }
+
+        escribe('\n── 4. saveExamen de prueba (nota 0, se puede borrar) ──');
+        try {
+            const p = new URLSearchParams({ action: 'saveExamen',
+                nombreResidente: $('nombreResidente').value || 'Martha Elena Abarca Morales',
+                anoResidencia: $('anioResidencia').value || 'V',
+                modulo: $('modulo').value || 'I',
+                fecha: $('fecha').value, nota: 0, comentarios: 'PRUEBA DE DIAGNÓSTICO' });
+            const r = await fetch(URL_SCRIPT, { method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                body: p.toString(), redirect: 'follow' });
+            escribe('respuesta cruda   : ' + (await r.text()).slice(0, 220));
+        } catch (e) { escribe('✗ ' + e.name + ': ' + e.message); }
+
+        escribe('\n── Copie todo este texto y envíelo ──');
+    }
 
     // Fecha de hoy por defecto
     $('fecha').value = new Date().toISOString().slice(0, 10);
