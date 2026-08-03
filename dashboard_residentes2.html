@@ -2165,20 +2165,22 @@ function renderNotas(residente, filas) {
     filas.forEach(r=>{const m=r._modulo;if(!modMap[m])modMap[m]=[];modMap[m].push(r);});
     // El promedio de cada módulo usa, para Práctica Quirúrgica, la media de los
     // promedios de cada especialista (no la media simple de todas sus notas).
-    const _promModulo=rows=>{
-        const pract=rows.filter(r=>r._comp===_COMP_PRACT);
-        const vals=rows.filter(r=>r._comp!==_COMP_PRACT).map(r=>r._pct);
-        if(pract.length){
-            const porEsp={};
-            pract.forEach(r=>{const k=_espKey(r); if(!porEsp[k])porEsp[k]={s:0,n:0}; porEsp[k].s+=r._pct; porEsp[k].n++;});
-            const proms=Object.values(porEsp).map(e=>e.s/e.n);
-            vals.push(proms.reduce((a,b)=>a+b,0)/proms.length);
-        }
-        return vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0;
-    };
+    // La nota de cada módulo se calcula EXACTAMENTE igual que la nota final
+    // estimada de arriba: mismo bloque canónico, mismos pesos por componente,
+    // mismo promedio por especialista en la práctica. Antes esta barra hacía
+    // una media simple de todas las evaluaciones del módulo, así que nunca
+    // cuadraba con la tabla de componentes.
+    const _notaModulo = rows => NOTAS_CANON.calcular(rows, r => r._modulo);
+
     const _barrasHTML=Object.keys(modMap).sort().map(m=>{
-        const rows=modMap[m]; const prom=_promModulo(rows); const ap=prom>=70;
-        return `<div><div class="flex justify-between items-center mb-1"><span class="text-sm font-semibold text-slate-700">Módulo ${m}</span><span class="text-sm font-bold ${ap?'text-emerald-600':'text-red-500'}">${prom}% — ${ap?'Aprobado':'Reprobado'}</span></div><div class="w-full bg-slate-200 rounded-full h-3"><div class="h-3 rounded-full transition-all ${colorBarra(prom)}" style="width:${prom}%"></div></div><p class="text-xs text-slate-400 mt-0.5">${rows.length} evaluación${rows.length!==1?'es':''}</p></div>`;
+        const rows=modMap[m];
+        const r=_notaModulo(rows);
+        const prom=r.final!==null?r.final:0; const ap=prom>=70;
+        const detalle=[
+            r.teorica!==null?('Teórica '+r.teorica+'%'):null,
+            r.practica!==null?('Práctica '+r.practica+'%'):null
+        ].filter(Boolean).join(' · ');
+        return `<div><div class="flex justify-between items-center mb-1"><span class="text-sm font-semibold text-slate-700">Módulo ${_esc(m)}</span><span class="text-sm font-bold ${ap?'text-emerald-600':'text-red-500'}">${prom}% — ${ap?'Aprobado':'Reprobado'}</span></div><div class="w-full bg-slate-200 rounded-full h-3"><div class="h-3 rounded-full transition-all ${colorBarra(prom)}" style="width:${prom}%"></div></div><p class="text-xs text-slate-400 mt-0.5">${detalle}${detalle?' · ':''}${rows.length} evaluación${rows.length!==1?'es':''}</p></div>`;
     }).join('');
 
     // Desglose transparente de la NOTA PRÁCTICA por módulo y especialista
