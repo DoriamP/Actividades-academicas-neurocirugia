@@ -574,6 +574,62 @@
 
     // Fecha de hoy por defecto
     $('fecha').value = new Date().toISOString().slice(0, 10);
+
+    // ── MODO EDICIÓN (desde el panel docente) ────────────────────────────
+    // Llega con ?modo=editar y los datos del examen en la dirección. No hace
+    // falta una acción distinta en el servidor: saveExamen identifica cada
+    // examen por residente + módulo, así que volver a guardarlo lo corrige.
+    (function () {
+        const p = new URLSearchParams(location.search);
+        if (p.get('modo') !== 'editar') return;
+
+        function d2iso(d) {
+            if (!d) return '';
+            const a = String(d).split('/');
+            return a.length === 3 ? a[2] + '-' + a[1] + '-' + a[0] : d;
+        }
+
+        // Cabecera distinta, para que se note que se está corrigiendo
+        const h1 = document.querySelector('h1');
+        if (h1) h1.textContent = 'Corregir Examen de Módulo';
+        const sub = h1 && h1.nextElementSibling;
+        if (sub) sub.textContent = 'Está modificando una nota ya registrada';
+
+        const anio = p.get('anio') || '';
+        if (anio) {
+            $('anioResidencia').value = anio;
+            $('anioResidencia').dispatchEvent(new Event('change'));
+        }
+        if (p.get('residente')) $('nombreResidente').value = p.get('residente');
+        if (p.get('modulo')) {
+            $('modulo').value = p.get('modulo');
+            $('modulo').dispatchEvent(new Event('change'));
+        }
+        if (p.get('fecha')) $('fecha').value = d2iso(p.get('fecha'));
+        if (p.get('nota') !== null && p.get('nota') !== '') {
+            $('nota').value = p.get('nota');
+            $('nota').dispatchEvent(new Event('input'));
+        }
+        const com = p.get('comentarios');
+        if (com && com.toLowerCase() !== 'ninguno') $('comentarios').value = com;
+
+        const btn = $('btnSubmit');
+        if (btn) btn.textContent = 'Guardar la corrección';
+
+        // Aviso claro de qué se está corrigiendo
+        const aviso = $('avisoExistente');
+        aviso.innerHTML = '✏️ Corrigiendo el examen de <strong>' + (p.get('residente') || '') +
+            '</strong>, módulo <strong>' + (p.get('modulo') || '?') + '</strong>' +
+            (p.get('evaluador') ? (' · registrado por ' + p.get('evaluador')) : '') +
+            '. Al guardar se sustituye la nota anterior.';
+        aviso.classList.remove('hidden');
+
+        // Las fotos ya subidas no se tocan al corregir la nota
+        const zona = document.querySelector('label[for="inputFotos"]');
+        if (zona) zona.insertAdjacentHTML('beforebegin',
+            '<p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-2 leading-relaxed">' +
+            'Las páginas que ya estén guardadas se conservan. Las que añada aquí se suman a las existentes.</p>');
+    })();
 </script>
 </body>
 </html>
