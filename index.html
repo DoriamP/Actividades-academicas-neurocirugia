@@ -1362,6 +1362,123 @@
             window.location.href = 'examen_modulo.html?' + p.toString();
         }
 
+        // ══════════════════════════════════════════════════════════════
+        //  EXÁMENES ESCRITOS — solo desde aquí
+        //  --------------------------------------------------------------
+        //  Las páginas escaneadas del examen se consultan únicamente en el
+        //  portal docente. Antes se veían también en el panel de residentes;
+        //  se quitaron de ahí porque la hoja de examen es material de
+        //  revisión docente: el residente ve su nota y el comentario del
+        //  evaluador, que es lo que le corresponde saber.
+        //
+        //  Las fotos se piden al abrir, no al cargar la página: son las
+        //  peticiones más pesadas de la plataforma y casi nunca se miran.
+        // ══════════════════════════════════════════════════════════════
+        function verEscritosExamen(anio, modulo) {
+            var residentes = RESIDENTES_POR_ANIO[anio] || [];
+            _abrirPanelEscritos(anio, modulo);
+
+            var cuerpo = document.getElementById('escritosCuerpo');
+            if (!residentes.length) {
+                cuerpo.innerHTML = '<p style="font-size:12px;color:#94a3b8;font-style:italic;padding:14px;">No hay residentes registrados en el ' + _invEsc(anio) + ' año.</p>';
+                return;
+            }
+
+            cuerpo.innerHTML = '<p style="font-size:12px;color:#94a3b8;font-style:italic;padding:14px;">Buscando los exámenes escritos…</p>';
+
+            Promise.all(residentes.map(function (nombre) {
+                var u = URL_SCRIPT + '?action=getExamenFotos' +
+                        '&nombreResidente=' + encodeURIComponent(nombre) +
+                        '&modulo=' + encodeURIComponent(modulo);
+                return fetch(u, { mode: 'cors' })
+                    .then(function (r) { return r.json(); })
+                    .then(function (l) { return { nombre: nombre, fotos: Array.isArray(l) ? l : [] }; })
+                    .catch(function () { return { nombre: nombre, fotos: [], error: true }; });
+            })).then(function (res) {
+                var conFotos = res.filter(function (r) { return r.fotos.length; }).length;
+
+                cuerpo.innerHTML = res.map(function (r) {
+                    var cab = '<p style="font-size:12px;font-weight:800;color:#1e293b;margin-bottom:6px;">' + _invEsc(r.nombre) + '</p>';
+                    if (r.error) {
+                        return '<div style="padding:12px 14px;border-bottom:1px solid #f1f5f9;">' + cab +
+                               '<p style="font-size:11px;color:#dc2626;font-style:italic;">No se pudo consultar.</p></div>';
+                    }
+                    if (!r.fotos.length) {
+                        return '<div style="padding:12px 14px;border-bottom:1px solid #f1f5f9;">' + cab +
+                               '<p style="font-size:11px;color:#94a3b8;font-style:italic;">Sin examen escrito adjunto.</p></div>';
+                    }
+                    var pags = r.fotos.map(function (f, i) {
+                        return '<button type="button" onclick="abrirFotoEscrito(\'' + _invEsc(f.id) + '\')" ' +
+                            'style="width:62px;height:80px;border:1px solid #ddd6fe;border-radius:8px;background:#fff;' +
+                            'display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:zoom-in;">' +
+                            '<span style="font-size:17px;">📄</span>' +
+                            '<span style="font-size:9px;font-weight:800;color:#64748b;margin-top:2px;">Pág. ' + (f.orden || i + 1) + '</span>' +
+                            '</button>';
+                    }).join('');
+                    return '<div style="padding:12px 14px;border-bottom:1px solid #f1f5f9;">' + cab +
+                           '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + pags + '</div></div>';
+                }).join('') +
+                '<p style="font-size:10px;color:#94a3b8;padding:10px 14px;">' + conFotos + ' de ' + res.length +
+                ' residente' + (res.length !== 1 ? 's' : '') + ' con el examen escaneado.</p>';
+            });
+        }
+
+        function _abrirPanelEscritos(anio, modulo) {
+            var ov = document.getElementById('panelEscritos');
+            if (!ov) {
+                ov = document.createElement('div');
+                ov.id = 'panelEscritos';
+                ov.setAttribute('style', 'display:none;position:fixed;inset:0;background:rgba(15,23,42,.6);' +
+                    'z-index:280;align-items:center;justify-content:center;padding:18px;');
+                ov.innerHTML =
+                    '<div id="panelEscritosCaja" style="background:#fff;border-radius:16px;max-width:520px;width:100%;' +
+                    'max-height:82vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35);">' +
+                      '<div style="padding:14px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:10px;">' +
+                        '<div style="flex:1;min-width:0;">' +
+                          '<p id="escritosTitulo" style="font-size:13px;font-weight:800;color:#1e293b;"></p>' +
+                          '<p style="font-size:10px;color:#94a3b8;margin-top:1px;">Las páginas no se ven desde el panel de residentes.</p>' +
+                        '</div>' +
+                        '<button type="button" onclick="document.getElementById(\'panelEscritos\').style.display=\'none\'" ' +
+                          'style="border:0;background:#f1f5f9;border-radius:8px;width:28px;height:28px;font-size:15px;cursor:pointer;color:#475569;">×</button>' +
+                      '</div>' +
+                      '<div id="escritosCuerpo" style="overflow-y:auto;"></div>' +
+                    '</div>';
+                // Cerrar al pulsar fuera de la caja, no dentro
+                ov.addEventListener('click', function (ev) {
+                    if (ev.target === ov) ov.style.display = 'none';
+                });
+                document.body.appendChild(ov);
+            }
+            document.getElementById('escritosTitulo').textContent =
+                'Examen escrito · Módulo ' + modulo + ' — ' + anio + ' año';
+            document.getElementById('escritosCuerpo').innerHTML = '';
+            ov.style.display = 'flex';
+        }
+
+        function abrirFotoEscrito(id) {
+            var lb = document.getElementById('lightboxEscrito');
+            if (!lb) {
+                lb = document.createElement('div');
+                lb.id = 'lightboxEscrito';
+                lb.setAttribute('style', 'display:none;position:fixed;inset:0;background:rgba(15,23,42,.94);' +
+                    'z-index:320;align-items:center;justify-content:center;padding:18px;cursor:zoom-out;');
+                lb.onclick = function () { lb.style.display = 'none'; };
+                lb.innerHTML = '<img id="lightboxEscritoImg" alt="Página del examen" ' +
+                    'style="max-width:96%;max-height:94%;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.5);">';
+                document.body.appendChild(lb);
+            }
+            var img = document.getElementById('lightboxEscritoImg');
+            img.removeAttribute('src');
+            lb.style.display = 'flex';
+            fetch(URL_SCRIPT + '?action=getExamenFoto&id=' + encodeURIComponent(id), { mode: 'cors' })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res && res.status === 'success') img.src = res.dataUrl;
+                    else { lb.style.display = 'none'; alert('No se pudo abrir la página: ' + ((res && res.message) || '')); }
+                })
+                .catch(function () { lb.style.display = 'none'; alert('No se pudo abrir la página.'); });
+        }
+
         // Exámenes vencidos con residentes sin nota, para el símbolo de alerta
         var _examenesPendientesMapa = {};
         function cargarExamenesPendientes() {
@@ -1487,6 +1604,8 @@
                     + '<div style="text-align:right;flex-shrink:0;"><p style="font-size:12px;font-weight:800;color:'+dc+';white-space:nowrap;">'+dt+'</p>'+((!past&&diff>0)?'<p style="font-size:9px;color:#94a3b8;margin-top:1px;">restantes</p>':'')
                     + (fi.tipo==='examen' && _exModulo(fi.desc) && _exAnio(fi.desc)
                         ? '<button type="button" onclick="evaluarExamen(\''+_exAnio(fi.desc)+'\',\''+_exModulo(fi.desc)+'\',\''+fi.f+'\')" style="margin-top:5px;padding:4px 10px;border:0;border-radius:7px;background:'+(pend?'#dc2626':'#7c3aed')+';color:#fff;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">▶ Evaluar</button>'
+                          // Las hojas escaneadas solo se consultan desde aquí
+                          + '<button type="button" onclick="verEscritosExamen(\''+_exAnio(fi.desc)+'\',\''+_exModulo(fi.desc)+'\')" style="margin-top:4px;display:block;width:100%;padding:4px 10px;border:1px solid #ddd6fe;border-radius:7px;background:#f5f3ff;color:#6d28d9;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">📄 Escritos</button>'
                         : '')
                     + '</div></div>';
             }).join('');
