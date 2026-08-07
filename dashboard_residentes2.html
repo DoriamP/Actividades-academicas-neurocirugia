@@ -927,69 +927,11 @@ const MODULOS_FECHAS = [
 
 
 // ── Fotos del examen escrito ─────────────────────────────────────────────
-// Se piden solo al pulsar «Ver el examen escrito»: cargarlas todas de entrada
-// haría lenta la pantalla, y en la mayoría de consultas no se miran.
-const _fotosExamenCache = {};
+// Ya no se muestran aquí. Las páginas escaneadas del examen se consultan solo
+// desde el portal docente (index.html), en «Fechas Importantes» ▸ Ver escritos.
+// El residente sigue viendo su nota del examen y el comentario del evaluador;
+// lo que no ve es su hoja de examen, que es material de revisión docente.
 
-async function verFotosExamen(residente, modulo, contenedorId) {
-    const cont = document.getElementById(contenedorId);
-    if (!cont) return;
-    if (!cont.classList.contains('hidden')) { cont.classList.add('hidden'); return; }
-    cont.classList.remove('hidden');
-
-    const clave = residente + '||' + modulo;
-    if (_fotosExamenCache[clave]) { pintarFotosExamen(cont, _fotosExamenCache[clave]); return; }
-
-    cont.innerHTML = '<p class="col-span-full text-[11px] text-slate-400 italic">Cargando el examen…</p>';
-    try {
-        const url = `${URL_SCRIPT}?action=getExamenFotos&nombreResidente=${encodeURIComponent(residente)}&modulo=${encodeURIComponent(modulo)}`;
-        const r = await fetch(url, { mode: 'cors' });
-        const lista = await r.json();
-        _fotosExamenCache[clave] = Array.isArray(lista) ? lista : [];
-        pintarFotosExamen(cont, _fotosExamenCache[clave]);
-    } catch (e) {
-        cont.innerHTML = '<p class="col-span-full text-[11px] text-red-500 italic">No se pudieron cargar las fotos del examen.</p>';
-    }
-}
-
-function pintarFotosExamen(cont, lista) {
-    if (!lista.length) {
-        cont.innerHTML = '<p class="col-span-full text-[11px] text-slate-400 italic">No hay fotos del examen escrito para este módulo.</p>';
-        return;
-    }
-    cont.innerHTML = lista.map((f, i) => `
-        <button type="button" onclick="abrirFotoExamen('${_esc(f.id)}')"
-            class="relative rounded-lg border border-violet-200 bg-white aspect-[3/4] flex flex-col items-center justify-center hover:border-violet-400 hover:bg-violet-50 transition cursor-zoom-in">
-            <span class="text-lg">📄</span>
-            <span class="text-[10px] font-bold text-slate-500 mt-1">Pág. ${f.orden || i + 1}</span>
-        </button>`).join('');
-}
-
-async function abrirFotoExamen(id) {
-    let lb = document.getElementById('lightboxExamen');
-    if (!lb) {
-        lb = document.createElement('div');
-        lb.id = 'lightboxExamen';
-        lb.setAttribute('style', 'display:none;position:fixed;inset:0;background:rgba(15,23,42,.92);' +
-            'z-index:300;align-items:center;justify-content:center;padding:20px;cursor:zoom-out;');
-        lb.onclick = () => { lb.style.display = 'none'; };
-        lb.innerHTML = '<img id="lightboxExamenImg" alt="Página del examen" ' +
-            'style="max-width:96%;max-height:94%;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.5);">';
-        document.body.appendChild(lb);
-    }
-    const img = document.getElementById('lightboxExamenImg');
-    img.removeAttribute('src');
-    lb.style.display = 'flex';
-    try {
-        const r = await fetch(`${URL_SCRIPT}?action=getExamenFoto&id=${encodeURIComponent(id)}`, { mode: 'cors' });
-        const res = await r.json();
-        if (res && res.status === 'success') img.src = res.dataUrl;
-        else { lb.style.display = 'none'; alert('No se pudo abrir la foto: ' + ((res && res.message) || '')); }
-    } catch (e) {
-        lb.style.display = 'none';
-        alert('No se pudo abrir la foto.');
-    }
-}
 
 // ── Escapado de HTML ─────────────────────────────────────────────────────
 // Los comentarios y los temas los escriben personas y se guardan tal cual en
@@ -2212,7 +2154,7 @@ function renderNotas(residente, filas) {
             </div>
         </div>`;
 
-    // ── Examen de módulo: nota y fotos del examen escrito ────────────────
+    // ── Examen de módulo: la nota y el comentario del evaluador ─────────
     // El examen pesa el 30 % de la teoría. Se muestra aparte porque es la
     // única nota que tiene respaldo documental (las páginas escaneadas).
     const _EXAMENES = filas.filter(r => NOTAS_CANON.comp(r.tipo_evaluacion) === 'Examen')
@@ -2244,13 +2186,6 @@ function renderNotas(residente, filas) {
                     </div>
                     ${x.comentarios && x.comentarios.toLowerCase() !== 'ninguno'
                         ? `<p class="text-[11px] text-slate-600 mt-2 leading-relaxed border-t border-violet-100 pt-2">"${_esc(x.comentarios)}"</p>` : ''}
-                    <div class="mt-2 pt-2 border-t border-violet-100">
-                        <button type="button" onclick="verFotosExamen('${_esc(residente).replace(/'/g, "\\'")}','${_esc(x.modulo)}','fotoEx-${i}')"
-                            class="text-[11px] font-bold text-violet-700 hover:text-violet-900 underline">
-                            Ver el examen escrito
-                        </button>
-                        <div id="fotoEx-${i}" class="hidden grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2"></div>
-                    </div>
                 </div>`).join('')}
             </div>
         </div>`;
