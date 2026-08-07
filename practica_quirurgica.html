@@ -97,8 +97,21 @@
             <!-- Procedimiento -->
             <div>
                 <label for="surgeryType" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Tipo de Procedimiento Quirúrgico *</label>
-                <input type="text" id="surgeryType" required placeholder="Ej. Craneotomía, Microdiscectomía…"
-                    class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none">
+
+                <!-- Autorrelleno: sugiere procedimientos ya registrados en la hoja.
+                     Sigue siendo texto libre; las sugerencias solo ahorran tecleo y
+                     hacen que la grafía coincida con la de registros anteriores. -->
+                <div class="relative">
+                    <input type="text" id="surgeryType" required placeholder="Ej. Craneotomía, Microdiscectomía…"
+                        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                        role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sugProc"
+                        class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none">
+
+                    <div id="sugProc" role="listbox" class="hidden absolute left-0 right-0 top-full mt-1 z-40 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto"></div>
+                </div>
+
+                <p id="sugProcAyuda" class="hidden text-[11px] text-slate-400 mt-1"></p>
+                <div id="sugProcParecido" class="hidden mt-1 text-[11px] rounded-lg bg-amber-50 border border-amber-200 text-amber-800 px-2 py-1.5"></div>
             </div>
 
             <hr class="border-slate-200">
@@ -245,6 +258,287 @@
                 }
             }
         });
+
+        /* ═══════════════════════════════════════════════════════════════════
+           AUTORRELLENO DEL TIPO DE PROCEDIMIENTO
+           ───────────────────────────────────────────────────────────────────
+           El campo es texto libre, y eso hace que «Craneotomía», «craneotomia»
+           y «Craniotomia» acaben siendo tres procedimientos distintos en los
+           consolidados. Aquí se ofrecen los que ya están escritos en la hoja
+           Evaluaciones, ordenados por lo usados que son.
+
+           Nadie queda obligado a elegir de la lista: si el procedimiento es
+           nuevo, se escribe y punto — a partir de la siguiente evaluación ya
+           saldrá sugerido. Lo único que se hace al perder el foco es avisar
+           cuando lo tecleado se parece mucho a algo ya existente, que casi
+           siempre es una tilde o una letra de diferencia.
+           ═══════════════════════════════════════════════════════════════════ */
+        const PROC = {
+            lista: [],          // [{t: "Craneotomía", n: 12}]
+            cargada: false,
+            visibles: [],
+            activo: -1
+        };
+
+        function _procNorm(s) {
+            return String(s == null ? '' : s)
+                .toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9ñ ]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        /* Distancia de edición acotada: sirve para cazar erratas de una o dos
+           letras. Se corta en 3 porque más allá ya no es la misma palabra. */
+        function _distancia(a, b) {
+            if (a === b) return 0;
+            if (Math.abs(a.length - b.length) > 3) return 99;
+            let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+            for (let i = 1; i <= a.length; i++) {
+                const fila = [i];
+                let mejorFila = i;
+                for (let j = 1; j <= b.length; j++) {
+                    const coste = a[i - 1] === b[j - 1] ? 0 : 1;
+                    fila[j] = Math.min(prev[j] + 1, fila[j - 1] + 1, prev[j - 1] + coste);
+                    if (fila[j] < mejorFila) mejorFila = fila[j];
+                }
+                if (mejorFila > 3) return 99;   // ya no puede bajar de 3
+                prev = fila;
+            }
+            return prev[b.length];
+        }
+
+        /* Parecido 0–1 entre dos textos ya normalizados */
+        function _parecido(a, b) {
+            if (!a || !b) return 0;
+            if (a === b) return 1;
+            const d = _distancia(a, b);
+            if (d === 99) return 0;
+            return 1 - d / Math.max(a.length, b.length);
+        }
+
+        /* Puntúa un candidato frente a lo tecleado.
+           El orden de las reglas es el orden en que uno espera las sugerencias:
+           lo que empieza igual, luego lo que empieza igual palabra por palabra,
+           luego lo que lo contiene, y al final lo que se le parece con erratas. */
+        function _puntuar(candidato, consulta) {
+            const c = _procNorm(candidato);
+            if (!c) return 0;
+
+            let base = 0;
+            if (c === consulta)              base = 1.00;
+            else if (c.indexOf(consulta) === 0) base = 0.90;
+            else {
+                const tokC = c.split(' ');
+                const tokQ = consulta.split(' ').filter(Boolean);
+                const todosPrefijo = tokQ.every(q => tokC.some(t => t.indexOf(q) === 0));
+                if (todosPrefijo)                base = 0.78;
+                else if (c.indexOf(consulta) !== -1) base = 0.66;
+                else {
+                    // Erratas: se compara palabra a palabra, no la frase entera,
+                    // porque «craniotomia frontal» vs «craneotomía frontal»
+                    // difiere poco en una palabra y mucho en la cadena completa.
+                    const sim = tokQ.length
+                        ? tokQ.reduce((acc, q) =>
+                            acc + Math.max(0, ...tokC.map(t => _parecido(q, t))), 0) / tokQ.length
+                        : 0;
+                    if (sim >= 0.72) base = 0.40 + sim * 0.20;
+                }
+            }
+            return base;
+        }
+
+        function _procOrdenar(consulta) {
+            const q = _procNorm(consulta);
+            const maxN = PROC.lista.reduce((m, p) => Math.max(m, p.n), 1);
+
+            const conPuntos = PROC.lista.map(p => {
+                const base = q ? _puntuar(p.t, q) : 0.5;
+                if (!base) return null;
+                // La frecuencia desempata, no manda: como mucho suma 0.08.
+                return { t: p.t, n: p.n, s: base + 0.08 * (Math.log(1 + p.n) / Math.log(1 + maxN)) };
+            }).filter(Boolean);
+
+            conPuntos.sort((a, b) => b.s - a.s || b.n - a.n || a.t.localeCompare(b.t));
+            return conPuntos.slice(0, 8);
+        }
+
+        function _procPintar(items, consulta) {
+            const caja  = document.getElementById('sugProc');
+            const input = document.getElementById('surgeryType');
+            PROC.visibles = items;
+            PROC.activo   = -1;
+
+            if (!items.length) { _procCerrar(); return; }
+
+            const q = _procNorm(consulta);
+            caja.innerHTML = items.map((p, i) => {
+                // Resaltar la parte que coincide ayuda a decidir de un vistazo
+                let etiqueta = _escProc(p.t);
+                if (q) {
+                    const pos = _procNorm(p.t).indexOf(q);
+                    if (pos !== -1) {
+                        etiqueta = _escProc(p.t.slice(0, pos)) +
+                            '<span class="font-bold text-emerald-700">' + _escProc(p.t.slice(pos, pos + q.length)) + '</span>' +
+                            _escProc(p.t.slice(pos + q.length));
+                    }
+                }
+                return '<div role="option" data-i="' + i + '" ' +
+                    'class="px-3 py-2 text-sm cursor-pointer flex justify-between items-center gap-3 hover:bg-emerald-50 border-b border-slate-100 last:border-0">' +
+                    '<span class="text-slate-700">' + etiqueta + '</span>' +
+                    '<span class="text-[10px] font-bold text-slate-400 whitespace-nowrap">' + p.n + '×</span>' +
+                    '</div>';
+            }).join('');
+
+            caja.classList.remove('hidden');
+            input.setAttribute('aria-expanded', 'true');
+        }
+
+        function _escProc(s) {
+            return String(s).replace(/[&<>"']/g, c =>
+                ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function _procCerrar() {
+            const caja = document.getElementById('sugProc');
+            caja.classList.add('hidden');
+            caja.innerHTML = '';
+            PROC.visibles = [];
+            PROC.activo = -1;
+            document.getElementById('surgeryType').setAttribute('aria-expanded', 'false');
+        }
+
+        function _procResaltar(i) {
+            const caja = document.getElementById('sugProc');
+            Array.from(caja.children).forEach((el, k) => {
+                el.className = el.className.replace(/ bg-emerald-100/g, '') + (k === i ? ' bg-emerald-100' : '');
+            });
+            const el = caja.children[i];
+            if (el) el.scrollIntoView({ block: 'nearest' });
+        }
+
+        function _procElegir(i) {
+            const p = PROC.visibles[i];
+            if (!p) return;
+            const input = document.getElementById('surgeryType');
+            input.value = p.t;
+            _procCerrar();
+            document.getElementById('sugProcParecido').classList.add('hidden');
+            input.focus();
+        }
+
+        /* Aviso de «esto ya existe escrito de otra forma». Solo al salir del
+           campo: interrumpir mientras se escribe sería insufrible. */
+        function _procComprobarParecido() {
+            const aviso = document.getElementById('sugProcParecido');
+            const valor = document.getElementById('surgeryType').value.trim();
+            aviso.classList.add('hidden');
+            if (!valor || !PROC.lista.length) return;
+
+            const q = _procNorm(valor);
+
+            // Caso 1 — el mismo procedimiento escrito con otra tilde o
+            // mayúscula. Lo que se guarda en la hoja es lo tecleado tal cual,
+            // así que si no se ofrece la grafía buena la columna acaba con
+            // «Craneoplastia» y «Craneoplastía» como si fueran dos cosas.
+            const igual = PROC.lista.find(p => _procNorm(p.t) === q);
+            if (igual) {
+                if (igual.t === valor) return;            // ya está idéntico
+                _avisarProc(igual, 'Se ha escrito antes como');
+                return;
+            }
+
+            // Caso 2 — una errata: una o dos letras de diferencia.
+            let mejor = null, mejorS = 0;
+            PROC.lista.forEach(p => {
+                const s = _parecido(q, _procNorm(p.t));
+                if (s > mejorS) { mejorS = s; mejor = p; }
+            });
+            if (!mejor || mejorS < 0.80) return;
+            _avisarProc(mejor, 'Ya existe');
+        }
+
+        function _avisarProc(mejor, encabezado) {
+            const aviso = document.getElementById('sugProcParecido');
+            aviso.innerHTML = encabezado + ' <b>' + _escProc(mejor.t) + '</b> (' + mejor.n + ' registro' +
+                (mejor.n === 1 ? '' : 's') + '). ¿Es el mismo procedimiento? ' +
+                '<button type="button" id="btnUsarParecido" class="underline font-bold">Usar ese nombre</button> · ' +
+                '<button type="button" id="btnDejarComoEsta" class="underline">Dejarlo como está</button>';
+            aviso.classList.remove('hidden');
+
+            document.getElementById('btnUsarParecido').onclick = () => {
+                document.getElementById('surgeryType').value = mejor.t;
+                aviso.classList.add('hidden');
+            };
+            document.getElementById('btnDejarComoEsta').onclick = () => aviso.classList.add('hidden');
+        }
+
+        async function cargarProcedimientos() {
+            if (PROC.cargada || !URL_SCRIPT) return;
+            try {
+                const r = await fetch(URL_SCRIPT + '?action=getProcedimientos', { mode: 'cors' });
+                const lista = await r.json();
+                PROC.lista = Array.isArray(lista) ? lista.filter(p => p && p.t) : [];
+                PROC.cargada = true;
+                const ayuda = document.getElementById('sugProcAyuda');
+                if (PROC.lista.length) {
+                    ayuda.textContent = PROC.lista.length + ' procedimientos ya registrados. Escriba y elija, o escriba uno nuevo.';
+                    ayuda.classList.remove('hidden');
+                }
+            } catch (e) {
+                // Sin sugerencias el campo sigue siendo un texto libre normal:
+                // no tiene sentido molestar con un error por esto.
+                PROC.cargada = true;
+            }
+        }
+
+        (function conectarAutorrelleno() {
+            const input = document.getElementById('surgeryType');
+            const caja  = document.getElementById('sugProc');
+            if (!input || !caja) return;
+
+            input.addEventListener('focus', () => {
+                cargarProcedimientos().then(() => {
+                    if (!input.value.trim() && PROC.lista.length) _procPintar(_procOrdenar(''), '');
+                });
+            });
+
+            input.addEventListener('input', () => {
+                document.getElementById('sugProcParecido').classList.add('hidden');
+                if (!PROC.lista.length) return;
+                _procPintar(_procOrdenar(input.value), input.value);
+            });
+
+            input.addEventListener('keydown', (ev) => {
+                if (caja.classList.contains('hidden')) return;
+                if (ev.key === 'ArrowDown') {
+                    ev.preventDefault();
+                    PROC.activo = Math.min(PROC.activo + 1, PROC.visibles.length - 1);
+                    _procResaltar(PROC.activo);
+                } else if (ev.key === 'ArrowUp') {
+                    ev.preventDefault();
+                    PROC.activo = Math.max(PROC.activo - 1, 0);
+                    _procResaltar(PROC.activo);
+                } else if (ev.key === 'Enter') {
+                    if (PROC.activo >= 0) { ev.preventDefault(); _procElegir(PROC.activo); }
+                } else if (ev.key === 'Escape') {
+                    _procCerrar();
+                }
+            });
+
+            // mousedown, no click: el blur del input se dispara antes que el click
+            caja.addEventListener('mousedown', (ev) => {
+                const fila = ev.target.closest('[data-i]');
+                if (!fila) return;
+                ev.preventDefault();
+                _procElegir(parseInt(fila.dataset.i, 10));
+            });
+
+            input.addEventListener('blur', () => {
+                setTimeout(() => { _procCerrar(); _procComprobarParecido(); }, 120);
+            });
+        })();
 
         document.getElementById('residencyYear').addEventListener('change', function () {
             const sel = document.getElementById('residentName');
