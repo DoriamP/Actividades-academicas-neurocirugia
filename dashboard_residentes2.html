@@ -1004,6 +1004,11 @@ var NOTAS_CANON = (function () {
     // Nombre canónico del componente a partir del texto de la hoja
     function comp(tipo) {
         var t = normTxt(tipo);
+        // Los avances de tesis NO son un componente aparte: se promedian con
+        // las clases de investigación. Miden lo mismo —el trabajo de
+        // investigación del residente— en dos momentos del año, y separarlos
+        // daría dos notas parciales en vez de una del componente.
+        if (t.indexOf('tesis')       !== -1) return "Clases de Investigación";
         if (t.indexOf('investigaci') !== -1) return "Clases de Investigación";
         if (t.indexOf('practica')    !== -1) return "Práctica Quirúrgica";
         if (t.indexOf('quirurgic')   !== -1) return "Práctica Quirúrgica";
@@ -1599,11 +1604,55 @@ function svgTriangulo(color, borderColor) {
     </svg>`;
 }
 
+// ══════════════════════════════════════════════════════════
+// EXÁMENES REPROGRAMADOS
+// ----------------------------------------------------------
+// La coordinación puede mover la fecha de un examen desde el
+// portal docente. Aquí se lee para que el residente vea la
+// fecha que de verdad le aplica, con la del plan tachada al
+// lado y el motivo del cambio. Solo se lee: desde el panel de
+// residentes no se puede modificar nada.
+// ══════════════════════════════════════════════════════════
+let _REPROG = {};
+
+function cargarReprogramaciones() {
+    return fetch(`${URL_SCRIPT}?action=getReprogramaciones`, { mode: 'cors' })
+        .then(r => r.json())
+        .then(res => {
+            if (res && res.status === 'success') {
+                _REPROG = res.reprogramaciones || {};
+                renderFechasImportantes();
+            }
+        })
+        .catch(() => {});
+}
+
+/** Módulo romano escrito en la descripción del examen */
+function _modDeDesc(desc) {
+    const m = String(desc || '').match(/m[óo]dulo\s+([IVX]+)/i);
+    return m ? m[1].toUpperCase() : '';
+}
+
+/** «dd/mm/aaaa» → «aaaa-mm-dd» */
+function _aIso(f) {
+    const p = String(f || '').split('/');
+    return p.length === 3 ? p[2] + '-' + ('0'+p[1]).slice(-2) + '-' + ('0'+p[0]).slice(-2) : '';
+}
+
 function renderFechasImportantes() {
     const hoy = hoyMedianoche();
 
     const futuras = FECHAS_IMPORTANTES
-        .map(f => ({ ...f, dateObj: new Date(f.fecha + 'T00:00:00') }))
+        .map(f => {
+            const o = { ...f, fechaPlan: f.fecha };
+            if (f.tipo === 'examen') {
+                const r = _REPROG[String(f.anio).toUpperCase() + '||' + _modDeDesc(f.desc)];
+                const iso = r && r.fechaNueva ? _aIso(r.fechaNueva) : '';
+                if (iso && iso !== f.fecha) { o.fecha = iso; o.reprog = r; }
+            }
+            o.dateObj = new Date(o.fecha + 'T00:00:00');
+            return o;
+        })
         .sort((a,b) => a.dateObj - b.dateObj);
 
     const lista = document.getElementById('listFechasImportantes');
@@ -1655,7 +1704,13 @@ function renderFechasImportantes() {
             ? '<span style="background:#fef3c7;color:#92400e;font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;margin-left:4px;">EXAMEN</span>'
             : '<span style="background:#ede9fe;color:#5b21b6;font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;margin-left:4px;">PRESENTACIÓN</span>';
 
-        const fechaStr = f.dateObj.getDate() + ' ' + MESES[f.dateObj.getMonth()] + ' ' + f.dateObj.getFullYear();
+        let fechaStr = f.dateObj.getDate() + ' ' + MESES[f.dateObj.getMonth()] + ' ' + f.dateObj.getFullYear();
+        // La fecha nueva manda; la del plan se enseña tachada para que se vea
+        // que hubo un cambio y no parezca un error de la plataforma.
+        if (f.reprog) {
+            const p = new Date(f.fechaPlan + 'T00:00:00');
+            fechaStr += ` <span style="text-decoration:line-through;color:#cbd5e1;">${p.getDate()} ${MESES[p.getMonth()]}</span>`;
+        }
 
         return `<div style="padding:12px 20px;display:flex;align-items:center;gap:12px;${pasada?'opacity:.5;':''}">
             ${warning}
@@ -1663,9 +1718,11 @@ function renderFechasImportantes() {
                 <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:2px;">
                     <span style="font-size:10px;font-weight:800;${col.badge}padding:2px 7px;border-radius:5px;">${f.anio} Año</span>
                     ${tipoLabel}
+                    ${f.reprog ? '<span style="background:#dbeafe;color:#1e40af;font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;margin-left:4px;">🗓 NUEVA FECHA</span>' : ''}
                     <span style="font-size:11px;color:#94a3b8;font-weight:500;margin-left:2px;">${fechaStr}</span>
                 </div>
                 <p style="font-size:13px;font-weight:600;color:#1e293b;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${f.desc}</p>
+                ${f.reprog ? `<p style="font-size:10.5px;color:#1e40af;line-height:1.3;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Reprogramado — ${_esc(f.reprog.razon)}</p>` : ''}
             </div>
             <div style="text-align:right;flex-shrink:0;">
                 <p style="font-size:13px;font-weight:800;color:${diasColor};white-space:nowrap;">${diasTexto}</p>
@@ -2005,6 +2062,7 @@ function renderNotas(residente, filas) {
             gruposDiarios[clave].fechasSet.add(r.fecha);
             if (parseFecha(r.fecha) > parseFecha(gruposDiarios[clave].sortFecha)) gruposDiarios[clave].sortFecha = r.fecha;
         }
+        if (/tesis/i.test(r.tipo_evaluacion || '')) gruposDiarios[clave].esTesis = true;
         gruposDiarios[clave].evaluacionesCount++;
         gruposDiarios[clave].sumaTotal += r._pct;
         const txtComentario = (r.comentarios || r.observaciones || "").trim();
@@ -2014,18 +2072,23 @@ function renderNotas(residente, filas) {
         let c1 = parseInt(r.criterio1 || r.score1 || r.aspecto1);
         let c2 = parseInt(r.criterio2 || r.score2 || r.aspecto2);
         let c3 = parseInt(r.criterio3 || r.score3 || 0);
+        // Los máximos de cada dominio dependen del FORMULARIO, no del
+        // componente: un avance de tesis reparte 25/25/50 donde una clase de
+        // investigación reparte 35/35/30, y ambos son el mismo componente.
+        // Sin esta distinción, un 50/50 en la tesis se pintaría como 143 %.
+        const _esTesis = /tesis/i.test(r.tipo_evaluacion || '');
         if (!isNaN(c1)) {
-            let maxC1 = r._comp === "Clases Programadas" ? 10 : (r._comp === "Clases de Investigación" ? 35 : (r._comp === "Casos Clínicos y Artículos" ? 7 : 40));
+            let maxC1 = r._comp === "Clases Programadas" ? 10 : (r._comp === "Clases de Investigación" ? (_esTesis ? 25 : 35) : (r._comp === "Casos Clínicos y Artículos" ? 7 : 40));
             if (r._comp === "Sesiones Diarias") maxC1 = 10;
             gruposDiarios[clave].c1Suma += (c1 / maxC1) * 100; gruposDiarios[clave].c1Count++;
         }
         if (!isNaN(c2)) {
-            let maxC2 = r._comp === "Clases Programadas" ? 10 : (r._comp === "Clases de Investigación" ? 35 : (r._comp === "Casos Clínicos y Artículos" ? 6 : 30));
+            let maxC2 = r._comp === "Clases Programadas" ? 10 : (r._comp === "Clases de Investigación" ? (_esTesis ? 25 : 35) : (r._comp === "Casos Clínicos y Artículos" ? 6 : 30));
             if (r._comp === "Sesiones Diarias") maxC2 = 10;
             gruposDiarios[clave].c2Suma += (c2 / maxC2) * 100; gruposDiarios[clave].c2Count++;
         }
         if (!isNaN(c3) && r._comp !== "Sesiones Diarias") {
-            let maxC3 = r._comp === "Clases Programadas" ? 10 : (r._comp === "Clases de Investigación" ? 30 : (r._comp === "Casos Clínicos y Artículos" ? 7 : 30));
+            let maxC3 = r._comp === "Clases Programadas" ? 10 : (r._comp === "Clases de Investigación" ? (_esTesis ? 50 : 30) : (r._comp === "Casos Clínicos y Artículos" ? 7 : 30));
             gruposDiarios[clave].c3Suma += (c3 / maxC3) * 100; gruposDiarios[clave].c3Count++;
         }
     });
@@ -2051,7 +2114,9 @@ function renderNotas(residente, filas) {
             if (g.componente === "Clases de Investigación") {
                 aspectoA = "Estructura y Organización de la Presentación";
                 aspectoB = "Dominio del Tema y Manejo de Preguntas";
-                aspectoC = "Aplicación a la Práctica Clínica e Investigación";
+                aspectoC = g.esTesis
+                    ? "Calidad y Utilidad de la Investigación Realizada"
+                    : "Aplicación a la Práctica Clínica e Investigación";
             }
             const colorBadge = promGlobal >= 70 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200';
             const nFechas = g.fechasSet.size;
@@ -2708,6 +2773,7 @@ document.addEventListener('DOMContentLoaded', function() {
     renderClases();
     renderFechasImportantes();
     setTimeout(scrollFechasAHoy, 200);
+    cargarReprogramaciones();
     fetchTemas().then(function() { renderClases(); });
 });
 
