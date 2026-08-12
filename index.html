@@ -1360,14 +1360,28 @@
         //  enseñando al lado, y el «Cumplimiento de fechas» se mide contra
         //  ella: posponer calla la alerta, no borra el retraso.
         // ══════════════════════════════════════════════════════════════
-        var _reprogExamenes = {};
+        // Se guardan en el navegador para pintarlas ANTES de preguntar al
+        // servidor. Sin esto, al abrir la página las fechas movidas tardaban en
+        // aparecer lo que tardara la petición —a veces bastantes segundos, si
+        // Apps Script estaba frío— y durante ese rato se veía la fecha vieja,
+        // que es peor que no ver nada.
+        var CLAVE_REPROG = 'neuro_reprog_v1';
+        var _reprogExamenes = (function () {
+            try { return JSON.parse(localStorage.getItem(CLAVE_REPROG) || '{}') || {}; }
+            catch (e) { return {}; }
+        })();
+
+        function _guardarReprogLocal(mapa) {
+            _reprogExamenes = mapa || {};
+            try { localStorage.setItem(CLAVE_REPROG, JSON.stringify(_reprogExamenes)); } catch (e) {}
+        }
 
         function cargarReprogramaciones() {
             return fetch(URL_SCRIPT + '?action=getReprogramaciones', { mode: 'cors' })
                 .then(function (r) { return r.json(); })
                 .then(function (res) {
                     if (res && res.status === 'success') {
-                        _reprogExamenes = res.reprogramaciones || {};
+                        _guardarReprogLocal(res.reprogramaciones || {});
                         renderFechasImportantes(new Date());
                         if (typeof renderExamenesResumen === 'function') renderExamenesResumen();
                     }
@@ -2205,7 +2219,7 @@
                 .then(function (r) { return r.json(); })
                 .then(function (res) {
                     if (res && res.status === 'success' && Array.isArray(res.evaluaciones)) {
-                        _reprogExamenes = res.reprogramaciones || {};
+                        if (res.reprogramaciones) _guardarReprogLocal(res.reprogramaciones);
                         return res;
                     }
                     // Backend antiguo (aún sin getArranque): se sigue por el
