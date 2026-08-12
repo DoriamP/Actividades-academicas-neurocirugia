@@ -731,10 +731,10 @@
                 <div class="border-t border-slate-200 bg-slate-50 px-5 py-4">
                     <div class="flex items-center gap-2 mb-1 flex-wrap">
                         <span style="font-size:15px;">📝</span>
-                        <h4 class="font-bold text-slate-800 text-sm">Exámenes de módulo</h4>
-                        <span class="text-xs text-slate-400">Registrar la nota y consultar el examen escrito</span>
+                        <h4 class="font-bold text-slate-800 text-sm">Exámenes escritos por módulo</h4>
+                        <span class="text-xs text-slate-400">Toque un año para desplegarlo</span>
                     </div>
-                    <p class="text-[11px] text-slate-500 mb-3">Las páginas escaneadas del examen solo se consultan desde aquí; no se muestran en el panel de los residentes.</p>
+                    <p class="text-[11px] text-slate-500 mb-3">Las páginas escaneadas solo se consultan desde aquí; no se muestran en el panel de los residentes. Para <b>registrar</b> la nota de un examen, use el botón «Evaluar» en «Fechas Importantes».</p>
                     <div id="examenesResumen"></div>
                 </div>
             </div>
@@ -1444,6 +1444,62 @@
             return m ? m[1].toUpperCase() : '';
         }
 
+        // ══════════════════════════════════════════════════════════════
+        //  AVANCES DE TESIS
+        //  --------------------------------------------------------------
+        //  Las presentaciones de avances de tesis y de investigación se
+        //  evalúan desde su propia fecha, con la hoja avances_tesis.html
+        //  (25 / 25 / 50 puntos). Su nota NO forma un componente aparte:
+        //  se promedia con las clases de investigación, porque miden lo
+        //  mismo en dos momentos distintos del año.
+        //
+        //  El año y el residente salen de la descripción de la fecha:
+        //  «Presentación avances de tesis — Dr. Cuadra (II año)».
+        // ══════════════════════════════════════════════════════════════
+        function _tesisAnio(desc) {
+            var m = String(desc || '').match(/\(([IVX]+)\s*a[ñn]o\)/i);
+            return m ? m[1].toUpperCase() : '';
+        }
+
+        /** Residente al que corresponde la presentación, por apellido */
+        function _tesisResidente(desc) {
+            var anio = _tesisAnio(desc);
+            if (!anio) return '';
+            var m = String(desc || '').match(/—\s*(.+?)\s*\(/);
+            if (!m) return '';
+            // «Dr. Cuadra» / «Dra. Blandón» → nos quedamos con el apellido
+            var apellido = _invNorm(m[1].replace(/^dra?\.?\s*/i, '').trim());
+            if (!apellido) return '';
+            var lista = RESIDENTES_POR_ANIO[anio] || [];
+            var hallado = lista.filter(function (n) {
+                return _invNorm(n).split(' ').indexOf(apellido) !== -1;
+            });
+            // Si el apellido no identifica a uno solo, mejor no rellenar nada
+            // que rellenar al residente equivocado.
+            return hallado.length === 1 ? hallado[0] : '';
+        }
+
+        function _invNorm(s) {
+            return String(s == null ? '' : s).normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+        }
+
+        /** Comillas seguras para meter un texto dentro de un onclick */
+        function _invAttr(s) {
+            return "'" + String(s == null ? '' : s)
+                .replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+                .replace(/"/g, '&quot;').replace(/\n/g, ' ') + "'";
+        }
+
+        function evaluarAvanceTesis(desc, fechaPlan) {
+            var anio = _tesisAnio(desc);
+            if (!anio) { alert('No se pudo determinar el año de esta presentación.'); return; }
+            var p = new URLSearchParams({ anio: anio, fechaProg: fechaPlan || '' });
+            var res = _tesisResidente(desc);
+            if (res) p.set('residente', res);
+            window.location.href = 'avances_tesis.html?' + p.toString();
+        }
+
         // ── Reprogramar: solo coordinación ────────────────────────────
         function _puedeReprogramar() {
             return !!(_authDocente && _authDocente.rol === 'coordinacion');
@@ -1648,18 +1704,26 @@
                         + (fi.reprog ? '<p style="font-size:9.5px;color:#1e40af;margin-bottom:4px;line-height:1.3;">Motivo: ' + _invEsc(fi.reprog.razon) + '</p>' : '')
                         + (faltan.length && (hechas > 0 || pasado)
                             ? '<p style="font-size:9.5px;color:#b45309;margin-bottom:5px;line-height:1.3;">Sin nota: ' + _invEsc(faltan.join(', ')) + '</p>' : '')
-                        + '<div style="display:flex;gap:5px;margin-top:6px;">'
-                        +   '<button type="button" onclick="evaluarExamen(\'' + anio + '\',\'' + mod + '\',\'' + fi.fPlan + '\')" style="flex:1;padding:5px 8px;border:0;border-radius:7px;background:' + (pasado && !hechas ? '#dc2626' : '#7c3aed') + ';color:#fff;font-size:10px;font-weight:800;cursor:pointer;">▶ Evaluar</button>'
-                        +   '<button type="button" onclick="verEscritosExamen(\'' + anio + '\',\'' + mod + '\')" style="flex:1;padding:5px 8px;border:1px solid #ddd6fe;border-radius:7px;background:#f5f3ff;color:#6d28d9;font-size:10px;font-weight:800;cursor:pointer;">📄 Escritos</button>'
-                        + '</div>'
+                        // Evaluar se hace desde «Fechas Importantes», en la fecha del
+                        // examen. Aquí solo se consultan las hojas escaneadas.
+                        + '<button type="button" onclick="verEscritosExamen(\'' + anio + '\',\'' + mod + '\')" style="width:100%;margin-top:6px;padding:5px 8px;border:1px solid #ddd6fe;border-radius:7px;background:#f5f3ff;color:#6d28d9;font-size:10px;font-weight:800;cursor:pointer;">📄 Ver examen escrito</button>'
                         + '</div>';
                 }).join('');
 
-                return '<div style="margin-bottom:14px;">'
-                    + '<p style="font-size:11px;font-weight:900;color:#7c3aed;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">'
-                    +   anio + ' año <span style="color:#94a3b8;font-weight:600;text-transform:none;letter-spacing:0;">· ' + totalRes + ' residente' + (totalRes !== 1 ? 's' : '') + '</span></p>'
-                    + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:8px;">' + tarjetas + '</div>'
-                    + '</div>';
+                // Cada año va plegado: con veinte exámenes en pantalla, buscar el
+                // escrito de un módulo concreto era recorrer la lista entera.
+                var conEscritos = delAnio.filter(function (fi) {
+                    return (notas[anio + '||' + _exModulo(fi.desc)] || []).length;
+                }).length;
+
+                return '<details style="border:1px solid #e2e8f0;border-radius:11px;background:#fff;margin-bottom:8px;overflow:hidden;">'
+                    + '<summary style="padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">'
+                    +   '<span style="font-size:11.5px;font-weight:900;color:#7c3aed;text-transform:uppercase;letter-spacing:.05em;">' + anio + ' año</span>'
+                    +   '<span style="font-size:10px;color:#94a3b8;">' + totalRes + ' residente' + (totalRes !== 1 ? 's' : '') + ' · ' + delAnio.length + ' examen' + (delAnio.length !== 1 ? 'es' : '') + '</span>'
+                    +   '<span style="margin-left:auto;font-size:10px;font-weight:800;color:' + (conEscritos ? '#059669' : '#cbd5e1') + ';white-space:nowrap;">' + conEscritos + ' con nota</span>'
+                    + '</summary>'
+                    + '<div style="padding:4px 12px 12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:8px;">' + tarjetas + '</div>'
+                    + '</details>';
             }).join('');
 
             cont.innerHTML = html;
@@ -1915,6 +1979,7 @@
                 // la nueva manda, pero nadie tiene que fiarse de la memoria
                 if (fi.reprog) fs += ' <span style="text-decoration:line-through;color:#cbd5e1;">' + _invEsc(fi.fPlan) + '</span>';
                 var esExamen = fi.tipo==='examen' && _exModulo(fi.desc) && _exAnio(fi.desc);
+                var esTesis  = fi.tipo==='presentacion' && !!_tesisAnio(fi.desc);
                 return '<div style="padding:11px 16px;display:flex;align-items:center;gap:10px;'+(past?'opacity:.5;':'')+'border-bottom:1px solid #f1f5f9;">'
                     + tri
                     + '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:2px;">'+lbl+'<span style="font-size:10px;color:#94a3b8;font-weight:500;">'+fs+'</span></div>'
@@ -1922,10 +1987,16 @@
                     + (fi.reprog ? '<p style="font-size:10px;color:#1e40af;line-height:1.3;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Motivo: '+_invEsc(fi.reprog.razon)+'</p>' : '')
                     + '</div>'
                     + '<div style="text-align:right;flex-shrink:0;"><p style="font-size:12px;font-weight:800;color:'+dc+';white-space:nowrap;">'+dt+'</p>'+((!past&&diff>0)?'<p style="font-size:9px;color:#94a3b8;margin-top:1px;">restantes</p>':'')
-                    // Evaluar y ver los escritos vive ahora en el Resumen Académico,
-                    // organizado por año y módulo. Aquí solo se mueve la fecha.
+                    // Evaluar el examen, desde la fecha misma
+                    + (esExamen
+                        ? '<button type="button" onclick="evaluarExamen(\''+_exAnio(fi.desc)+'\',\''+_exModulo(fi.desc)+'\',\''+fi.fPlan+'\')" style="margin-top:5px;display:block;width:100%;padding:4px 10px;border:0;border-radius:7px;background:'+(pend?'#dc2626':'#7c3aed')+';color:#fff;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">▶ Evaluar</button>'
+                        : '')
+                    // Avances de tesis: su nota se promedia con las clases de investigación
+                    + (esTesis
+                        ? '<button type="button" onclick="evaluarAvanceTesis('+_invAttr(fi.desc)+',\''+fi.fPlan+'\')" style="margin-top:5px;display:block;width:100%;padding:4px 10px;border:0;border-radius:7px;background:#0f766e;color:#fff;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">▶ Evaluar</button>'
+                        : '')
                     + (esExamen && _puedeReprogramar()
-                        ? '<button type="button" onclick="abrirReprogramar(\''+_exAnio(fi.desc)+'\',\''+_exModulo(fi.desc)+'\',\''+fi.fPlan+'\')" style="margin-top:5px;padding:4px 10px;border:1px solid #bfdbfe;border-radius:7px;background:#eff6ff;color:#1d4ed8;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">🗓 Mover fecha</button>'
+                        ? '<button type="button" onclick="abrirReprogramar(\''+_exAnio(fi.desc)+'\',\''+_exModulo(fi.desc)+'\',\''+fi.fPlan+'\')" style="margin-top:4px;display:block;width:100%;padding:4px 10px;border:1px solid #bfdbfe;border-radius:7px;background:#eff6ff;color:#1d4ed8;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">🗓 Mover fecha</button>'
                         : '')
                     + '</div></div>';
             }).join('');
@@ -3229,6 +3300,11 @@ var NOTAS_CANON = (function () {
     // Nombre canónico del componente a partir del texto de la hoja
     function comp(tipo) {
         var t = normTxt(tipo);
+        // Los avances de tesis NO son un componente aparte: se promedian con
+        // las clases de investigación. Miden lo mismo —el trabajo de
+        // investigación del residente— en dos momentos del año, y separarlos
+        // daría dos notas parciales en vez de una del componente.
+        if (t.indexOf('tesis')       !== -1) return "Clases de Investigación";
         if (t.indexOf('investigaci') !== -1) return "Clases de Investigación";
         if (t.indexOf('practica')    !== -1) return "Práctica Quirúrgica";
         if (t.indexOf('quirurgic')   !== -1) return "Práctica Quirúrgica";
