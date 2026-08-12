@@ -274,15 +274,53 @@
                 <div id="statsLoading" class="p-6 text-center text-slate-400 text-sm italic">Cargando estadísticas…</div>
                 <div id="statsError" class="hidden p-6 text-rose-500 text-sm font-medium">⚠️ No se pudo conectar con Google Sheets.</div>
                 <div id="statsContent" class="hidden p-6 space-y-8">
+
+                    <!-- Filtro por mes y vista de tendencia. Afectan a la tabla de
+                         honor y al gráfico de participación total, que son las dos
+                         cosas que se miran para ver quién está evaluando. -->
+                    <div class="flex flex-wrap gap-3 items-end bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Periodo</label>
+                            <select id="statsMes" onchange="_pintarEstadisticas()"
+                                class="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-violet-500 outline-none">
+                                <option value="">Todo el curso</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Vista</label>
+                            <div class="flex rounded-lg overflow-hidden border border-slate-300">
+                                <button type="button" id="btnVistaTotales" onclick="cambiarVistaStats('totales')"
+                                    class="px-3 py-1.5 text-xs font-bold bg-violet-700 text-white">Totales</button>
+                                <button type="button" id="btnVistaTendencia" onclick="cambiarVistaStats('tendencia')"
+                                    class="px-3 py-1.5 text-xs font-bold bg-white text-slate-600">Tendencia por mes</button>
+                            </div>
+                        </div>
+                        <p id="statsMesResumen" class="ml-auto self-center text-xs text-slate-400 font-medium"></p>
+                    </div>
+
                     <div id="statsHonor"></div>
+
+                    <div class="border-t border-slate-100"></div>
+                    <!-- CUMPLIMIENTO DE FECHAS DE EXÁMENES -->
+                    <div>
+                        <div class="flex items-center gap-2 mb-1 flex-wrap">
+                            <div class="w-1 h-5 bg-amber-500 rounded-full"></div>
+                            <h4 class="font-bold text-slate-800 text-sm">Cumplimiento de fechas de exámenes</h4>
+                        </div>
+                        <p class="text-[11px] text-slate-500 mb-4 leading-relaxed">Días entre la fecha del examen <b>en el plan docente</b> y el momento en que la nota entró en la plataforma. Se mide siempre contra la fecha original: reprogramar un examen silencia los avisos por correo, pero el retraso se sigue contando desde el plan.</p>
+                        <div id="statsCumplimiento"></div>
+                    </div>
+
                     <div class="border-t border-slate-100"></div>
                     <div>
                         <div class="flex items-center gap-2 mb-4">
                             <div class="w-1 h-5 bg-violet-600 rounded-full"></div>
                             <h4 class="font-bold text-slate-800 text-sm">1) Participación total por especialista evaluador</h4>
-                            <span class="text-xs text-slate-400 ml-auto">(Componentes teórico + práctico)</span>
+                            <span id="statsTotalSub" class="text-xs text-slate-400 ml-auto">(Componentes teórico + práctico)</span>
                         </div>
-                        <div style="position:relative;height:240px;"><canvas id="chartTotalEsp"></canvas></div>
+                        <div id="cajaChartTotal" style="position:relative;height:240px;"><canvas id="chartTotalEsp"></canvas></div>
+                        <div id="cajaChartTendencia" class="hidden" style="position:relative;height:300px;"><canvas id="chartTendencia"></canvas></div>
+                        <p id="tendenciaNota" class="hidden text-[11px] text-slate-400 mt-2">Evaluaciones registradas cada mes por especialista. El filtro de periodo no afecta a este gráfico: la tendencia se ve sobre el curso entero.</p>
                     </div>
                     <div class="border-t border-slate-100"></div>
                     <div>
@@ -685,6 +723,20 @@
                     <p class="text-xs text-amber-700 font-medium">Promedios en % (hoja «Evaluaciones» de Google). Práctica quirúrgica: mínimo 1 nota al mes por residente; al completarse un mes sin ninguna nota práctica aparece en <span style="color:#dc2626;font-weight:800;">rojo</span> una alerta con el especialista de la rotación de ese mes, acumulándose mes a mes; si la rotación (que puede abarcar varios meses) ya tiene al menos una nota práctica, no se alerta. «Todo el curso» incluye también evaluaciones sin fecha válida.</p>
                 </div>
                 <div id="resumenContenido" class="p-4"></div>
+
+                <!-- EXÁMENES DE MÓDULO — organizados por año y módulo.
+                     Antes se evaluaban desde «Fechas Importantes», donde había
+                     que buscar el examen entre las 36 fechas del curso. Aquí
+                     están los 20 juntos, con su estado de un vistazo. -->
+                <div class="border-t border-slate-200 bg-slate-50 px-5 py-4">
+                    <div class="flex items-center gap-2 mb-1 flex-wrap">
+                        <span style="font-size:15px;">📝</span>
+                        <h4 class="font-bold text-slate-800 text-sm">Exámenes de módulo</h4>
+                        <span class="text-xs text-slate-400">Registrar la nota y consultar el examen escrito</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mb-3">Las páginas escaneadas del examen solo se consultan desde aquí; no se muestran en el panel de los residentes.</p>
+                    <div id="examenesResumen"></div>
+                </div>
             </div>
         </section>
 
@@ -1298,10 +1350,50 @@
             renderCarousel();
         }
 
-        // Lista de fechas ordenada, con el objeto Date ya resuelto
+        // ══════════════════════════════════════════════════════════════
+        //  EXÁMENES REPROGRAMADOS
+        //  --------------------------------------------------------------
+        //  La fecha del plan docente no se toca nunca. Lo que se guarda es
+        //  que un examen concreto se aplicará otro día, con su motivo.
+        //  A partir de aquí manda la fecha nueva: el orden de la lista, la
+        //  cuenta atrás y los avisos por correo. La original se sigue
+        //  enseñando al lado, y el «Cumplimiento de fechas» se mide contra
+        //  ella: posponer calla la alerta, no borra el retraso.
+        // ══════════════════════════════════════════════════════════════
+        var _reprogExamenes = {};
+
+        function cargarReprogramaciones() {
+            return fetch(URL_SCRIPT + '?action=getReprogramaciones', { mode: 'cors' })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res && res.status === 'success') {
+                        _reprogExamenes = res.reprogramaciones || {};
+                        renderFechasImportantes(new Date());
+                        if (typeof renderExamenesResumen === 'function') renderExamenesResumen();
+                    }
+                })
+                .catch(function () {});
+        }
+
+        function _reprogDe(anio, modulo) {
+            if (!anio || !modulo) return null;
+            return _reprogExamenes[String(anio).toUpperCase() + '||' + String(modulo).toUpperCase()] || null;
+        }
+
+        // Lista de fechas ordenada, con el objeto Date ya resuelto.
+        // Es el único sitio donde se decide qué fecha vale, así que basta con
+        // aplicar aquí la reprogramación para que la use toda la sección.
         function _fechasOrdenadas() {
             return FECHAS_IMPORTANTES
-                .map(function (fi) { return Object.assign({}, fi, { dateObj: parseDate(fi.f) }); })
+                .map(function (fi) {
+                    var o = Object.assign({}, fi, { fPlan: fi.f });
+                    if (fi.tipo === 'examen') {
+                        var r = _reprogDe(_exAnio(fi.desc), _exModulo(fi.desc));
+                        if (r && r.fechaNueva && r.fechaNueva !== fi.f) { o.f = r.fechaNueva; o.reprog = r; }
+                    }
+                    o.dateObj = parseDate(o.f);
+                    return o;
+                })
                 .sort(function (a, b) { return a.dateObj - b.dateObj; });
         }
 
@@ -1352,6 +1444,121 @@
             return m ? m[1].toUpperCase() : '';
         }
 
+        // ── Reprogramar: solo coordinación ────────────────────────────
+        function _puedeReprogramar() {
+            return !!(_authDocente && _authDocente.rol === 'coordinacion');
+        }
+
+        function abrirReprogramar(anio, modulo, fechaPlan) {
+            if (!_puedeReprogramar()) { alert('Solo la coordinación puede mover la fecha de un examen.'); return; }
+            var actual = _reprogDe(anio, modulo);
+
+            var ov = document.getElementById('panelReprog');
+            if (!ov) {
+                ov = document.createElement('div');
+                ov.id = 'panelReprog';
+                ov.setAttribute('style', 'display:none;position:fixed;inset:0;background:rgba(15,23,42,.6);' +
+                    'z-index:290;align-items:center;justify-content:center;padding:18px;');
+                ov.innerHTML =
+                    '<div style="background:#fff;border-radius:16px;max-width:440px;width:100%;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35);">' +
+                      '<div style="padding:14px 16px;border-bottom:1px solid #e2e8f0;">' +
+                        '<p id="reprogTitulo" style="font-size:13px;font-weight:800;color:#1e293b;"></p>' +
+                        '<p style="font-size:10px;color:#94a3b8;margin-top:2px;">La fecha del plan docente no se modifica. Esto solo registra cuándo se aplicará y por qué.</p>' +
+                      '</div>' +
+                      '<div style="padding:16px;">' +
+                        '<p id="reprogPlan" style="font-size:11px;color:#64748b;margin-bottom:10px;"></p>' +
+                        '<label style="display:block;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Nueva fecha</label>' +
+                        '<input type="date" id="reprogFecha" style="width:100%;padding:9px 10px;border:1px solid #cbd5e1;border-radius:9px;font-size:13px;margin-bottom:12px;">' +
+                        '<label style="display:block;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Motivo <span style="color:#dc2626;">*</span></label>' +
+                        '<textarea id="reprogRazon" rows="3" maxlength="300" placeholder="Ej. Feriado nacional · Rotación externa de los residentes · Docente en congreso" style="width:100%;padding:9px 10px;border:1px solid #cbd5e1;border-radius:9px;font-size:13px;resize:vertical;"></textarea>' +
+                        '<p id="reprogAviso" style="display:none;font-size:11px;color:#dc2626;margin-top:8px;"></p>' +
+                        '<p id="reprogHistoria" style="display:none;font-size:10px;color:#94a3b8;margin-top:8px;line-height:1.4;"></p>' +
+                      '</div>' +
+                      '<div style="padding:12px 16px;border-top:1px solid #e2e8f0;display:flex;gap:8px;justify-content:flex-end;">' +
+                        '<button type="button" onclick="document.getElementById(\'panelReprog\').style.display=\'none\'" style="padding:8px 14px;border:1px solid #e2e8f0;border-radius:9px;background:#fff;font-size:12px;font-weight:700;color:#475569;cursor:pointer;">Cancelar</button>' +
+                        '<button type="button" id="btnGuardarReprog" style="padding:8px 16px;border:0;border-radius:9px;background:#1d4ed8;color:#fff;font-size:12px;font-weight:800;cursor:pointer;">Guardar fecha</button>' +
+                      '</div>' +
+                    '</div>';
+                ov.addEventListener('click', function (ev) { if (ev.target === ov) ov.style.display = 'none'; });
+                document.body.appendChild(ov);
+            }
+
+            document.getElementById('reprogTitulo').textContent = 'Mover el examen del módulo ' + modulo + ' — ' + anio + ' año';
+            document.getElementById('reprogPlan').innerHTML = 'Fecha del plan docente: <b>' + _invEsc(fechaPlan) + '</b>';
+            document.getElementById('reprogAviso').style.display = 'none';
+
+            var f = document.getElementById('reprogFecha');
+            var partes = String((actual && actual.fechaNueva) || fechaPlan).split('/');
+            f.value = partes.length === 3
+                ? partes[2] + '-' + ('0' + partes[1]).slice(-2) + '-' + ('0' + partes[0]).slice(-2) : '';
+            document.getElementById('reprogRazon').value = (actual && actual.razon) || '';
+
+            var hist = document.getElementById('reprogHistoria');
+            if (actual) {
+                hist.textContent = 'Ya estaba movido al ' + actual.fechaNueva +
+                    (actual.autor ? ' por ' + actual.autor : '') +
+                    (actual.cuando ? ' el ' + actual.cuando : '') + '. Guardar de nuevo lo cambia y queda registrado.';
+                hist.style.display = 'block';
+            } else { hist.style.display = 'none'; }
+
+            document.getElementById('btnGuardarReprog').onclick = function () {
+                guardarReprogramacion(anio, modulo, fechaPlan, this);
+            };
+            ov.style.display = 'flex';
+        }
+
+        function guardarReprogramacion(anio, modulo, fechaPlan, btn) {
+            var iso   = document.getElementById('reprogFecha').value;
+            var razon = document.getElementById('reprogRazon').value.trim();
+            var aviso = document.getElementById('reprogAviso');
+
+            if (!iso) { aviso.textContent = 'Elija la fecha nueva.'; aviso.style.display = 'block'; return; }
+            if (razon.length < 5) { aviso.textContent = 'Escriba el motivo: es lo que nadie recordará dentro de tres meses.'; aviso.style.display = 'block'; return; }
+            aviso.style.display = 'none';
+
+            var p = iso.split('-');
+            var nueva = p[2] + '/' + p[1] + '/' + p[0];
+
+            btn.disabled = true;
+            btn.textContent = 'Guardando…';
+
+            var cuerpo = new URLSearchParams({
+                action: 'saveReprogramacion',
+                anio: anio, modulo: modulo,
+                fechaPlan: fechaPlan, fechaNueva: nueva, razon: razon
+            });
+
+            fetch(URL_SCRIPT, { method: 'POST', mode: 'cors',
+                                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                                body: cuerpo.toString() })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res && res.status === 'success') {
+                        document.getElementById('panelReprog').style.display = 'none';
+                        // Volver a leerlo del servidor, no darlo por hecho
+                        cargarReprogramaciones().then(cargarExamenesPendientes);
+                    } else {
+                        aviso.textContent = (res && res.message) || 'No se pudo guardar.';
+                        aviso.style.display = 'block';
+                    }
+                })
+                .catch(function () {
+                    // Apps Script redirige el POST y a veces el navegador no deja
+                    // leer la respuesta. Se comprueba releyendo, que es lo fiable.
+                    cargarReprogramaciones().then(function () {
+                        var r = _reprogDe(anio, modulo);
+                        if (r && r.fechaNueva === nueva) {
+                            document.getElementById('panelReprog').style.display = 'none';
+                            cargarExamenesPendientes();
+                        } else {
+                            aviso.textContent = 'No se pudo confirmar el guardado. Vuelva a intentarlo.';
+                            aviso.style.display = 'block';
+                        }
+                    });
+                })
+                .then(function () { btn.disabled = false; btn.textContent = 'Guardar fecha'; });
+        }
+
         function evaluarExamen(anio, modulo, fechaPlan) {
             var p = new URLSearchParams({
                 desde:     'fecha',       // viene del calendario: año y módulo fijos
@@ -1360,6 +1567,112 @@
                 fechaProg: fechaPlan || ''
             });
             window.location.href = 'examen_modulo.html?' + p.toString();
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        //  EXÁMENES DE MÓDULO EN EL RESUMEN ACADÉMICO
+        //  --------------------------------------------------------------
+        //  Agrupados por año y módulo. Antes se evaluaban desde «Fechas
+        //  Importantes», donde el examen del III año del módulo II estaba
+        //  perdido entre las 36 fechas del curso; aquí los 20 se ven de
+        //  una vez, con quién falta por evaluar en cada uno.
+        // ══════════════════════════════════════════════════════════════
+        var ANIOS_ROMANOS = ['I', 'II', 'III', 'IV', 'V'];
+
+        function renderExamenesResumen() {
+            var cont = document.getElementById('examenesResumen');
+            if (!cont) return;
+
+            var examenes = _fechasOrdenadas().filter(function (fi) {
+                return fi.tipo === 'examen' && _exAnio(fi.desc) && _exModulo(fi.desc);
+            });
+            if (!examenes.length) {
+                cont.innerHTML = '<p style="font-size:12px;color:#94a3b8;font-style:italic;">Sin exámenes en el plan.</p>';
+                return;
+            }
+
+            // Notas ya registradas, por año+módulo
+            var datos = _estadisticasDatos || [];
+            var notas = {};
+            datos.forEach(function (r) {
+                if (String(r.tipo_evaluacion || '').trim().toLowerCase() !== 'examen') return;
+                var mod = _exModulo(r.tema || '');
+                if (!mod) return;
+                var anio = _anioRomano(r.anoResidencia);
+                if (!anio) return;
+                (notas[anio + '||' + mod] = notas[anio + '||' + mod] || []).push(r);
+            });
+
+            var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+
+            var html = ANIOS_ROMANOS.map(function (anio) {
+                var delAnio = examenes.filter(function (fi) { return _exAnio(fi.desc) === anio; });
+                if (!delAnio.length) return '';
+                var totalRes = (RESIDENTES_POR_ANIO[anio] || []).length;
+
+                var tarjetas = delAnio.map(function (fi) {
+                    var mod    = _exModulo(fi.desc);
+                    var regs   = notas[anio + '||' + mod] || [];
+                    var conNota = {};
+                    regs.forEach(function (r) { conNota[(r.nombreResidente || '').trim()] = true; });
+                    var hechas = Object.keys(conNota).length;
+                    var faltan = (RESIDENTES_POR_ANIO[anio] || []).filter(function (n) { return !conNota[n]; });
+                    var pasado = fi.dateObj < hoy;
+
+                    var estado, colorEstado;
+                    if (totalRes && hechas >= totalRes) { estado = 'Completo'; colorEstado = '#059669'; }
+                    else if (hechas > 0)                { estado = hechas + ' de ' + totalRes; colorEstado = '#d97706'; }
+                    else if (pasado)                    { estado = 'Sin evaluar'; colorEstado = '#dc2626'; }
+                    else                                { estado = 'Pendiente';  colorEstado = '#94a3b8'; }
+
+                    var promedio = null;
+                    if (regs.length) {
+                        var suma = regs.reduce(function (a, r) {
+                            var v = parseFloat(String(r.porcentaje || r.total || '').replace('%', ''));
+                            return a + (isNaN(v) ? 0 : v);
+                        }, 0);
+                        promedio = Math.round(suma / regs.length);
+                    }
+
+                    return '<div style="border:1px solid ' + (pasado && !hechas ? '#fecaca' : '#e2e8f0') +
+                           ';border-radius:11px;background:#fff;padding:11px 12px;">'
+                        + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px;">'
+                        +   '<span style="font-size:12px;font-weight:900;color:#1e293b;">Módulo ' + _invEsc(mod) + '</span>'
+                        +   '<span style="font-size:9px;font-weight:800;color:#fff;background:' + colorEstado + ';padding:1px 7px;border-radius:99px;">' + _invEsc(estado) + '</span>'
+                        +   (promedio !== null ? '<span style="font-size:10px;font-weight:800;color:' + (promedio >= 70 ? '#059669' : '#dc2626') + ';margin-left:auto;">media ' + promedio + '%</span>' : '')
+                        + '</div>'
+                        + '<p style="font-size:10.5px;color:#64748b;margin-bottom:2px;">'
+                        +   (fi.reprog ? '🗓 ' : '') + _invEsc(fi.f)
+                        +   (fi.reprog ? ' <span style="text-decoration:line-through;color:#cbd5e1;">' + _invEsc(fi.fPlan) + '</span>' : '')
+                        + '</p>'
+                        + (fi.reprog ? '<p style="font-size:9.5px;color:#1e40af;margin-bottom:4px;line-height:1.3;">Motivo: ' + _invEsc(fi.reprog.razon) + '</p>' : '')
+                        + (faltan.length && (hechas > 0 || pasado)
+                            ? '<p style="font-size:9.5px;color:#b45309;margin-bottom:5px;line-height:1.3;">Sin nota: ' + _invEsc(faltan.join(', ')) + '</p>' : '')
+                        + '<div style="display:flex;gap:5px;margin-top:6px;">'
+                        +   '<button type="button" onclick="evaluarExamen(\'' + anio + '\',\'' + mod + '\',\'' + fi.fPlan + '\')" style="flex:1;padding:5px 8px;border:0;border-radius:7px;background:' + (pasado && !hechas ? '#dc2626' : '#7c3aed') + ';color:#fff;font-size:10px;font-weight:800;cursor:pointer;">▶ Evaluar</button>'
+                        +   '<button type="button" onclick="verEscritosExamen(\'' + anio + '\',\'' + mod + '\')" style="flex:1;padding:5px 8px;border:1px solid #ddd6fe;border-radius:7px;background:#f5f3ff;color:#6d28d9;font-size:10px;font-weight:800;cursor:pointer;">📄 Escritos</button>'
+                        + '</div>'
+                        + '</div>';
+                }).join('');
+
+                return '<div style="margin-bottom:14px;">'
+                    + '<p style="font-size:11px;font-weight:900;color:#7c3aed;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">'
+                    +   anio + ' año <span style="color:#94a3b8;font-weight:600;text-transform:none;letter-spacing:0;">· ' + totalRes + ' residente' + (totalRes !== 1 ? 's' : '') + '</span></p>'
+                    + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:8px;">' + tarjetas + '</div>'
+                    + '</div>';
+            }).join('');
+
+            cont.innerHTML = html;
+        }
+
+        /** «R3», «III año», «3» → «III». La hoja no es consistente. */
+        function _anioRomano(v) {
+            var s = String(v == null ? '' : v).trim().toUpperCase();
+            if (!s) return '';
+            var m = s.match(/^R\s*([1-5])$/) || s.match(/^([1-5])$/);
+            if (m) return ANIOS_ROMANOS[+m[1] - 1];
+            var r = s.match(/\b(I{1,3}|IV|V)\b/);
+            return r ? r[1] : '';
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -1596,16 +1909,23 @@
                 var claveEx = fi.tipo==='examen' ? (_exAnio(fi.desc) + '||' + _exModulo(fi.desc)) : '';
                 var pend    = claveEx ? _examenesPendientesMapa[claveEx] : null;
                 if (pend) lbl += '<span title="' + _invEsc(pend.faltan.join(', ')) + '" style="background:#fee2e2;color:#991b1b;font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;margin-left:4px;">⚠ ' + pend.faltan.length + ' SIN NOTA</span>';
+                if (fi.reprog) lbl += '<span title="' + _invEsc('Motivo: ' + fi.reprog.razon + (fi.reprog.autor ? ' — ' + fi.reprog.autor : '')) + '" style="background:#dbeafe;color:#1e40af;font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;margin-left:4px;cursor:help;">🗓 REPROGRAMADO</span>';
                 var fs = fi.dateObj.getDate()+' '+MESES_ES[fi.dateObj.getMonth()]+' '+fi.dateObj.getFullYear();
+                // Al reprogramar, la fecha del plan se enseña tachada al lado:
+                // la nueva manda, pero nadie tiene que fiarse de la memoria
+                if (fi.reprog) fs += ' <span style="text-decoration:line-through;color:#cbd5e1;">' + _invEsc(fi.fPlan) + '</span>';
+                var esExamen = fi.tipo==='examen' && _exModulo(fi.desc) && _exAnio(fi.desc);
                 return '<div style="padding:11px 16px;display:flex;align-items:center;gap:10px;'+(past?'opacity:.5;':'')+'border-bottom:1px solid #f1f5f9;">'
                     + tri
                     + '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:2px;">'+lbl+'<span style="font-size:10px;color:#94a3b8;font-weight:500;">'+fs+'</span></div>'
-                    + '<p style="font-size:12px;font-weight:700;color:#1e293b;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+fi.desc+'</p></div>'
+                    + '<p style="font-size:12px;font-weight:700;color:#1e293b;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+fi.desc+'</p>'
+                    + (fi.reprog ? '<p style="font-size:10px;color:#1e40af;line-height:1.3;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Motivo: '+_invEsc(fi.reprog.razon)+'</p>' : '')
+                    + '</div>'
                     + '<div style="text-align:right;flex-shrink:0;"><p style="font-size:12px;font-weight:800;color:'+dc+';white-space:nowrap;">'+dt+'</p>'+((!past&&diff>0)?'<p style="font-size:9px;color:#94a3b8;margin-top:1px;">restantes</p>':'')
-                    + (fi.tipo==='examen' && _exModulo(fi.desc) && _exAnio(fi.desc)
-                        ? '<button type="button" onclick="evaluarExamen(\''+_exAnio(fi.desc)+'\',\''+_exModulo(fi.desc)+'\',\''+fi.f+'\')" style="margin-top:5px;padding:4px 10px;border:0;border-radius:7px;background:'+(pend?'#dc2626':'#7c3aed')+';color:#fff;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">▶ Evaluar</button>'
-                          // Las hojas escaneadas solo se consultan desde aquí
-                          + '<button type="button" onclick="verEscritosExamen(\''+_exAnio(fi.desc)+'\',\''+_exModulo(fi.desc)+'\')" style="margin-top:4px;display:block;width:100%;padding:4px 10px;border:1px solid #ddd6fe;border-radius:7px;background:#f5f3ff;color:#6d28d9;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">📄 Escritos</button>'
+                    // Evaluar y ver los escritos vive ahora en el Resumen Académico,
+                    // organizado por año y módulo. Aquí solo se mueve la fecha.
+                    + (esExamen && _puedeReprogramar()
+                        ? '<button type="button" onclick="abrirReprogramar(\''+_exAnio(fi.desc)+'\',\''+_exModulo(fi.desc)+'\',\''+fi.fPlan+'\')" style="margin-top:5px;padding:4px 10px;border:1px solid #bfdbfe;border-radius:7px;background:#eff6ff;color:#1d4ed8;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">🗓 Mover fecha</button>'
                         : '')
                     + '</div></div>';
             }).join('');
@@ -1740,11 +2060,285 @@
             }
         }
 
+        // ══════════════════════════════════════════════════════════════
+        //  FILTRO POR MES Y TENDENCIA
+        //  --------------------------------------------------------------
+        //  Los totales del curso dicen quién ha evaluado mucho, pero no
+        //  cuándo. Un docente que evaluó doce veces en mayo y ninguna desde
+        //  entonces sale igual de bien que quien reparte una al mes. El
+        //  filtro y las líneas por mes son para distinguir esos dos casos.
+        // ══════════════════════════════════════════════════════════════
+        var _statsDatosCompletos = null;
+        var _statsVista = 'totales';
+        var _chartTendencia = null;
+
+        /** «dd/MM/yyyy» → «yyyy-MM», que ordena solo */
+        function _mesDe(fechaTxt) {
+            var m = String(fechaTxt || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            return m ? m[3] + '-' + ('0' + m[2]).slice(-2) : '';
+        }
+
+        function _mesBonito(clave) {
+            var p = String(clave).split('-');
+            if (p.length !== 2) return clave;
+            return MESES_ES[+p[1] - 1] + ' ' + p[0];
+        }
+
+        /** Meses presentes en los datos, en orden */
+        function _mesesDisponibles(datos) {
+            var set = {};
+            datos.forEach(function (r) { var m = _mesDe(r.fecha); if (m) set[m] = true; });
+            return Object.keys(set).sort();
+        }
+
+        function cambiarVistaStats(vista) {
+            _statsVista = vista;
+            var esT = vista === 'tendencia';
+            document.getElementById('btnVistaTotales').className =
+                'px-3 py-1.5 text-xs font-bold ' + (esT ? 'bg-white text-slate-600' : 'bg-violet-700 text-white');
+            document.getElementById('btnVistaTendencia').className =
+                'px-3 py-1.5 text-xs font-bold ' + (esT ? 'bg-violet-700 text-white' : 'bg-white text-slate-600');
+            document.getElementById('cajaChartTotal').classList.toggle('hidden', esT);
+            document.getElementById('cajaChartTendencia').classList.toggle('hidden', !esT);
+            document.getElementById('tendenciaNota').classList.toggle('hidden', !esT);
+            document.getElementById('statsTotalSub').textContent = esT
+                ? '(Evaluaciones por mes, curso completo)' : '(Componentes teórico + práctico)';
+            if (esT) _pintarTendencia();
+        }
+
+        /** Punto de entrada: guarda los datos completos y pinta */
         function renderEstadisticas(datos) {
+            _statsDatosCompletos = Array.isArray(datos) ? datos : [];
+
+            var sel = document.getElementById('statsMes');
+            if (sel && sel.options.length <= 1) {
+                _mesesDisponibles(_statsDatosCompletos).forEach(function (m) {
+                    var o = document.createElement('option');
+                    o.value = m; o.textContent = _mesBonito(m);
+                    sel.appendChild(o);
+                });
+            }
+            _pintarEstadisticas();
+        }
+
+        function _pintarEstadisticas() {
+            var mes = (document.getElementById('statsMes') || {}).value || '';
+            var datos = (_statsDatosCompletos || []).filter(function (r) {
+                return !mes || _mesDe(r.fecha) === mes;
+            });
+
+            var resumen = document.getElementById('statsMesResumen');
+            if (resumen) {
+                resumen.textContent = mes
+                    ? datos.length + ' evaluación' + (datos.length !== 1 ? 'es' : '') + ' en ' + _mesBonito(mes)
+                    : (_statsDatosCompletos || []).length + ' evaluaciones en todo el curso';
+            }
+
+            // El cumplimiento de fechas mira el curso entero, no el mes elegido:
+            // un examen de julio registrado en octubre pertenece a los dos.
+            _pintarCumplimiento();
+
+            if (!datos.length && mes) {
+                document.getElementById('statsLoading').classList.add('hidden');
+                document.getElementById('statsContent').classList.remove('hidden');
+                document.getElementById('statsHonor').innerHTML =
+                    '<p class="text-slate-400 text-sm italic">Ninguna evaluación registrada en ' + _mesBonito(mes) + '.</p>';
+                if (_chartTotal) { _chartTotal.destroy(); _chartTotal = null; }
+                if (_chartForm)  { _chartForm.destroy();  _chartForm  = null; }
+                return;
+            }
+            _renderEstadisticas(datos);
+            if (_statsVista === 'tendencia') _pintarTendencia();
+        }
+
+        function _pintarTendencia() {
+            var canvas = document.getElementById('chartTendencia');
+            if (!canvas || typeof Chart === 'undefined') return;
+            var datos = _statsDatosCompletos || [];
+            var meses = _mesesDisponibles(datos);
+
+            var porEspMes = {};
+            datos.forEach(function (r) {
+                var esp = (r.especialista || '').trim();
+                var m = _mesDe(r.fecha);
+                if (!esp || !m) return;
+                porEspMes[esp] = porEspMes[esp] || {};
+                porEspMes[esp][m] = (porEspMes[esp][m] || 0) + 1;
+            });
+
+            // De más a menos activos: con seis o siete líneas, el orden de la
+            // leyenda es lo único que hace el gráfico legible
+            var esps = Object.keys(porEspMes).sort(function (a, b) {
+                var sa = meses.reduce(function (s, m) { return s + (porEspMes[a][m] || 0); }, 0);
+                var sb = meses.reduce(function (s, m) { return s + (porEspMes[b][m] || 0); }, 0);
+                return sb - sa;
+            });
+
+            if (_chartTendencia) _chartTendencia.destroy();
+            _chartTendencia = new Chart(canvas.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: meses.map(_mesBonito),
+                    datasets: esps.map(function (e, i) {
+                        var color = 'hsl(' + (210 + i * 42) + ',65%,52%)';
+                        return {
+                            label: e,
+                            data: meses.map(function (m) { return porEspMes[e][m] || 0; }),
+                            borderColor: color, backgroundColor: color,
+                            tension: 0.3, borderWidth: 2, pointRadius: 3, pointHoverRadius: 5, fill: false
+                        };
+                    })
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { position: 'top', labels: { font: { size: 11 }, padding: 10, boxWidth: 12 } } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: '#f1f5f9' },
+                             title: { display: true, text: 'Evaluaciones', font: { size: 10 } } },
+                        x: { ticks: { font: { size: 10 } }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        //  CUMPLIMIENTO DE FECHAS DE EXÁMENES
+        //  --------------------------------------------------------------
+        //  Por cada docente: cuánto tardó, desde la fecha del plan docente,
+        //  en que la nota del examen entrara en la plataforma.
+        //
+        //  Se usa la MARCA DE TIEMPO del registro, no la fecha escrita en el
+        //  formulario: la primera la pone el sistema y no se puede retocar.
+        //  Si alguien registra en octubre un examen de julio, aquí se ve.
+        //
+        //  Y se mide contra la fecha ORIGINAL del plan, incluso si el examen
+        //  se reprogramó. Posponer alivia el aviso por correo; el retraso
+        //  frente a lo planificado sigue siendo el que fue.
+        //
+        //  Un examen tiene varias notas (una por residente): cuenta la última,
+        //  porque hasta esa el examen no estaba cerrado.
+        // ══════════════════════════════════════════════════════════════
+        function _parseMarca(txt) {
+            var m = String(txt || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+            if (!m) return null;
+            return new Date(+m[3], +m[2] - 1, +m[1]);
+        }
+
+        function _pintarCumplimiento() {
+            var cont = document.getElementById('statsCumplimiento');
+            if (!cont) return;
+            var datos = _statsDatosCompletos || [];
+
+            // Fecha del plan por año+módulo (la original, sin reprogramar)
+            var plan = {};
+            FECHAS_IMPORTANTES.forEach(function (fi) {
+                if (fi.tipo !== 'examen') return;
+                var a = _exAnio(fi.desc), m = _exModulo(fi.desc);
+                if (a && m) plan[a + '||' + m] = fi.f;
+            });
+
+            // Última marca de tiempo por docente + año + módulo
+            var reg = {};
+            datos.forEach(function (r) {
+                if (String(r.tipo_evaluacion || '').trim().toLowerCase() !== 'examen') return;
+                var esp = (r.especialista || '').trim();
+                var mod = _exModulo(r.tema || '');
+                var anio = _anioRomano(r.anoResidencia);
+                if (!esp || !mod || !anio) return;
+                var marca = _parseMarca(r.registrado) || parseDate(r.fecha);
+                if (!marca) return;
+                var k = esp + '||' + anio + '||' + mod;
+                if (!reg[k]) reg[k] = { esp: esp, anio: anio, mod: mod, marca: marca, n: 0 };
+                // La última marca es la que cierra el examen: hasta que entra la
+                // nota del último residente, el examen no está evaluado.
+                if (marca > reg[k].marca) reg[k].marca = marca;
+                reg[k].n++;
+            });
+
+            var filas = Object.keys(reg).map(function (k) {
+                var e = reg[k];
+                var fPlan = plan[e.anio + '||' + e.mod];
+                if (!fPlan) return null;
+                var d = parseDate(fPlan);
+                if (!d) return null;
+                var dias = Math.round((e.marca - d) / 86400000);
+                var rep = _reprogDe(e.anio, e.mod);
+                return { esp: e.esp, anio: e.anio, mod: e.mod, n: e.n,
+                         fPlan: fPlan, marca: e.marca, dias: dias, reprog: rep };
+            }).filter(Boolean);
+
+            if (!filas.length) {
+                cont.innerHTML = '<p style="font-size:12px;color:#94a3b8;font-style:italic;">Todavía no hay ninguna nota de examen registrada, así que no hay nada que medir.</p>';
+                return;
+            }
+
+            // Agrupar por docente
+            var porDoc = {};
+            filas.forEach(function (f) {
+                var g = porDoc[f.esp] = porDoc[f.esp] || { esp: f.esp, exs: [] };
+                g.exs.push(f);
+            });
+
+            var docentes = Object.keys(porDoc).map(function (nombre) {
+                var g = porDoc[nombre];
+                var retrasos = g.exs.map(function (x) { return Math.max(0, x.dias); });
+                var media = Math.round(retrasos.reduce(function (a, b) { return a + b; }, 0) / retrasos.length);
+                var peor  = Math.max.apply(null, retrasos);
+                var aTiempo = g.exs.filter(function (x) { return x.dias <= 0; }).length;
+                return { esp: nombre, exs: g.exs.sort(function (a, b) { return b.dias - a.dias; }),
+                         media: media, peor: peor, aTiempo: aTiempo, total: g.exs.length };
+            }).sort(function (a, b) { return b.media - a.media || b.peor - a.peor; });
+
+            var colorDias = function (d) {
+                if (d <= 0)  return '#059669';
+                if (d <= 7)  return '#65a30d';
+                if (d <= 21) return '#d97706';
+                return '#dc2626';
+            };
+            var textoDias = function (d) {
+                if (d < 0)  return Math.abs(d) + ' d antes';
+                if (d === 0) return 'el mismo día';
+                return d + ' d después';
+            };
+
+            cont.innerHTML = docentes.map(function (d) {
+                var detalle = d.exs.map(function (x) {
+                    return '<tr>'
+                        + '<td style="padding:5px 10px;border-top:1px solid #f1f5f9;font-size:11px;color:#475569;white-space:nowrap;">' + x.anio + ' año · Mód. ' + _invEsc(x.mod) + '</td>'
+                        + '<td style="padding:5px 10px;border-top:1px solid #f1f5f9;font-size:11px;color:#94a3b8;white-space:nowrap;">' + _invEsc(x.fPlan)
+                        +   (x.reprog ? ' <span title="' + _invEsc('Reprogramado al ' + x.reprog.fechaNueva + ' — ' + x.reprog.razon) + '" style="color:#1d4ed8;cursor:help;">🗓</span>' : '')
+                        + '</td>'
+                        + '<td style="padding:5px 10px;border-top:1px solid #f1f5f9;font-size:11px;color:#64748b;white-space:nowrap;">' + x.marca.getDate() + ' ' + MESES_ES[x.marca.getMonth()] + ' ' + x.marca.getFullYear() + '</td>'
+                        + '<td style="padding:5px 10px;border-top:1px solid #f1f5f9;text-align:right;font-size:11px;font-weight:800;color:' + colorDias(x.dias) + ';white-space:nowrap;">' + textoDias(x.dias) + '</td>'
+                        + '</tr>';
+                }).join('');
+
+                return '<details style="border:1px solid #e2e8f0;border-radius:11px;margin-bottom:7px;overflow:hidden;">'
+                    + '<summary style="padding:10px 12px;cursor:pointer;display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:#fff;">'
+                    +   '<span style="font-size:12.5px;font-weight:800;color:#1e293b;flex:1;min-width:150px;">' + _invEsc(d.esp) + '</span>'
+                    +   '<span style="font-size:10px;color:#94a3b8;">' + d.total + ' examen' + (d.total !== 1 ? 'es' : '') + '</span>'
+                    +   '<span style="font-size:10px;font-weight:800;color:#fff;background:' + colorDias(d.media) + ';padding:2px 9px;border-radius:99px;white-space:nowrap;">' + d.media + ' d de media</span>'
+                    +   '<span style="font-size:10px;color:#64748b;white-space:nowrap;">peor: ' + d.peor + ' d</span>'
+                    + '</summary>'
+                    + '<div style="overflow-x:auto;background:#fafafa;">'
+                    + '<table style="width:100%;border-collapse:collapse;min-width:420px;">'
+                    + '<thead><tr style="background:#f1f5f9;">'
+                    +   '<th style="padding:5px 10px;text-align:left;font-size:9.5px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.03em;">Examen</th>'
+                    +   '<th style="padding:5px 10px;text-align:left;font-size:9.5px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.03em;">Fecha del plan</th>'
+                    +   '<th style="padding:5px 10px;text-align:left;font-size:9.5px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.03em;">Nota registrada</th>'
+                    +   '<th style="padding:5px 10px;text-align:right;font-size:9.5px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.03em;">Retraso</th>'
+                    + '</tr></thead><tbody>' + detalle + '</tbody></table></div>'
+                    + '</details>';
+            }).join('')
+            + '<p style="font-size:10px;color:#94a3b8;margin-top:8px;line-height:1.4;">Verde: registrado el mismo día o antes. Hasta 7 días, verde oliva; hasta 21, ámbar; más, rojo. La media no cuenta como negativos los registros adelantados.</p>';
+        }
+
+        function _renderEstadisticas(datos) {
             if (!datos.length) {
                 document.getElementById('statsLoading').classList.add('hidden');
                 document.getElementById('statsContent').classList.remove('hidden');
-                document.getElementById('statsContent').innerHTML = '<p class="text-slate-400 text-sm italic">Sin evaluaciones registradas.</p>';
+                document.getElementById('statsHonor').innerHTML = '<p class="text-slate-400 text-sm italic">Sin evaluaciones registradas.</p>';
                 return;
             }
             var porEsp = {};
@@ -1772,11 +2366,11 @@
             var honorEl = document.getElementById('statsHonor');
             if (honorEl) {
                 var filasHonor = rankEsp.map(function(r, i) {
-                    var bg = i === 0 ? 'background:#fef3c7;' : i === 1 ? 'background:#f1f5f9;' : i === 2 ? 'background:#ffedd5;' : '';
-                    var medalla = i === 0 ? '🥇 ' : i === 1 ? '🥈 ' : i === 2 ? '🥉 ' : '';
+                    // Sin medallas ni fondos de podio: la tabla es un recuento de
+                    // participación, no una competición entre colegas.
                     var barW = Math.round((r.total / maxTotalEsp) * 100);
-                    return '<tr style="' + bg + '">'
-                        + '<td style="padding:9px 12px;text-align:center;border-top:1px solid #e2e8f0;font-weight:900;color:#334155;white-space:nowrap;">' + medalla + (i + 1) + '.º</td>'
+                    return '<tr>'
+                        + '<td style="padding:9px 12px;text-align:center;border-top:1px solid #e2e8f0;font-weight:900;color:#334155;white-space:nowrap;">' + (i + 1) + '.º</td>'
                         + '<td style="padding:9px 12px;border-top:1px solid #e2e8f0;font-size:12.5px;font-weight:800;color:#1e293b;">' + r.esp + '</td>'
                         + '<td style="padding:9px 12px;text-align:center;border-top:1px solid #e2e8f0;"><span style="font-size:16px;font-weight:900;color:#4c1d95;">' + r.total + '</span><span style="font-size:9px;color:#94a3b8;"> eval.</span></td>'
                         + '<td style="padding:9px 12px;text-align:center;border-top:1px solid #e2e8f0;"><span style="background:#ede9fe;color:#5b21b6;font-size:10px;font-weight:800;padding:2px 9px;border-radius:99px;">' + r.pct + '%</span></td>'
@@ -2190,6 +2784,7 @@
             renderAgenda();
             fetchTemas();
             cargarEstadoAlertas();
+            cargarReprogramaciones();
             cargarExamenesPendientes();
             // Cargar evaluaciones en segundo plano para los puntos del carrusel
             fetch(URL_SCRIPT + '?action=getEvaluations', { mode: 'cors' })
@@ -2199,6 +2794,7 @@
                     buildEvalCache(datos);
                     renderCarousel();
                     _estadisticasDatos = datos; // guardar para estadísticas
+                    renderExamenesResumen();
                 })
                 .catch(function(){});
         }
