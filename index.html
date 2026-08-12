@@ -1592,6 +1592,7 @@
                     if (res && res.status === 'success') {
                         document.getElementById('panelReprog').style.display = 'none';
                         // Volver a leerlo del servidor, no darlo por hecho
+                        refrescarArranque();
                         cargarReprogramaciones().then(cargarExamenesPendientes);
                     } else {
                         aviso.textContent = (res && res.message) || 'No se pudo guardar.';
@@ -1647,6 +1648,14 @@
                 return;
             }
 
+            // Mientras las evaluaciones no han llegado, TODO saldría como
+            // «Pendiente»: parece que no hay ninguna nota registrada cuando lo
+            // que pasa es que aún no se han leído. Mejor decirlo.
+            if (!_estadisticasDatos) {
+                cont.innerHTML = '<p style="font-size:12px;color:#94a3b8;font-style:italic;">Leyendo las notas registradas…</p>';
+                return;
+            }
+
             // Notas ya registradas, por año+módulo
             var datos = _estadisticasDatos || [];
             var notas = {};
@@ -1681,14 +1690,34 @@
                     else if (pasado)                    { estado = 'Sin evaluar'; colorEstado = '#dc2626'; }
                     else                                { estado = 'Pendiente';  colorEstado = '#94a3b8'; }
 
+                    var _nota = function (r) {
+                        var v = parseFloat(String(r.porcentaje == null ? '' : r.porcentaje).replace('%', '').replace(',', '.'));
+                        if (isNaN(v)) v = parseFloat(r.total);
+                        return isNaN(v) ? null : Math.round(v);
+                    };
+
                     var promedio = null;
                     if (regs.length) {
-                        var suma = regs.reduce(function (a, r) {
-                            var v = parseFloat(String(r.porcentaje || r.total || '').replace('%', ''));
-                            return a + (isNaN(v) ? 0 : v);
-                        }, 0);
-                        promedio = Math.round(suma / regs.length);
+                        var vals = regs.map(_nota).filter(function (v) { return v !== null; });
+                        if (vals.length) promedio = Math.round(vals.reduce(function (a, b) { return a + b; }, 0) / vals.length);
                     }
+
+                    // La nota de cada residente, que es lo que se viene a mirar.
+                    // Antes solo salía la media del módulo y había que abrir el
+                    // panel del residente para saber quién sacó qué.
+                    var notasHTML = regs.length ? '<div style="margin:6px 0 2px;border-top:1px solid #ede9fe;padding-top:5px;">'
+                        + regs.slice().sort(function (a, b) {
+                            return String(a.nombreResidente || '').localeCompare(String(b.nombreResidente || ''));
+                          }).map(function (r) {
+                            var v = _nota(r);
+                            var nom = String(r.nombreResidente || '').trim();
+                            var corto = nom.split(' ').slice(0, 2).join(' ');
+                            return '<div style="display:flex;justify-content:space-between;gap:6px;align-items:baseline;font-size:10.5px;line-height:1.5;">'
+                                + '<span title="' + _invEsc(nom) + '" style="color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _invEsc(corto) + '</span>'
+                                + '<span style="font-weight:900;color:' + (v !== null && v >= 70 ? '#059669' : '#dc2626') + ';white-space:nowrap;">' + (v === null ? '—' : v + '%') + '</span>'
+                                + '</div>';
+                          }).join('')
+                        + '</div>' : '';
 
                     return '<div style="border:1px solid ' + (pasado && !hechas ? '#fecaca' : '#e2e8f0') +
                            ';border-radius:11px;background:#fff;padding:11px 12px;">'
@@ -1701,7 +1730,7 @@
                         +   (fi.reprog ? '🗓 ' : '') + _invEsc(fi.f)
                         +   (fi.reprog ? ' <span style="text-decoration:line-through;color:#cbd5e1;">' + _invEsc(fi.fPlan) + '</span>' : '')
                         + '</p>'
-                        + (fi.reprog ? '<p style="font-size:9.5px;color:#1e40af;margin-bottom:4px;line-height:1.3;">Motivo: ' + _invEsc(fi.reprog.razon) + '</p>' : '')
+                        + notasHTML
                         + (faltan.length && (hechas > 0 || pasado)
                             ? '<p style="font-size:9.5px;color:#b45309;margin-bottom:5px;line-height:1.3;">Sin nota: ' + _invEsc(faltan.join(', ')) + '</p>' : '')
                         // Evaluar se hace desde «Fechas Importantes», en la fecha del
@@ -1792,8 +1821,15 @@
                             '<span style="font-size:9px;font-weight:800;color:#64748b;margin-top:2px;">Pág. ' + (f.orden || i + 1) + '</span>' +
                             '</button>';
                     }).join('');
+                    var ids = r.fotos.map(function (f) { return f.id; }).join('|');
                     return '<div style="padding:12px 14px;border-bottom:1px solid #f1f5f9;">' + cab +
-                           '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + pags + '</div></div>';
+                           '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + pags + '</div>' +
+                           '<button type="button" id="dl-' + _invEsc(_slug(r.nombre)) + '" ' +
+                             'onclick="descargarEscritos(' + _invAttr(ids) + ',' + _invAttr(r.nombre) + ',' + _invAttr(anio) + ',' + _invAttr(modulo) + ',this)" ' +
+                             'style="margin-top:7px;padding:4px 10px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;' +
+                             'color:#334155;font-size:10.5px;font-weight:800;cursor:pointer;">⬇ Descargar ' +
+                             (r.fotos.length === 1 ? 'la página' : 'las ' + r.fotos.length + ' páginas') + '</button>' +
+                           '</div>';
                 }).join('') +
                 '<p style="font-size:10px;color:#94a3b8;padding:10px 14px;">' + conFotos + ' de ' + res.length +
                 ' residente' + (res.length !== 1 ? 's' : '') + ' con el examen escaneado.</p>';
@@ -1830,6 +1866,55 @@
                 'Examen escrito · Módulo ' + modulo + ' — ' + anio + ' año';
             document.getElementById('escritosCuerpo').innerHTML = '';
             ov.style.display = 'flex';
+        }
+
+        /** «Fernando Antonio De Jesús Cuadra» → «Fernando-Antonio» */
+        function _slug(s) {
+            return _invNorm(s).replace(/[^a-z0-9 ]/g, '').trim().split(' ').slice(0, 2).join('-');
+        }
+
+        /**
+         * Descarga las páginas del examen escrito de un residente.
+         * Se bajan de una en una porque el navegador bloquea las descargas
+         * simultáneas, y con el nombre puesto: «Examen_ModuloII_IIIaño_Diaz_p1.jpg».
+         * Un archivo llamado «descarga(3).jpg» no le sirve a nadie dentro de un mes.
+         */
+        function descargarEscritos(idsTexto, nombre, anio, modulo, btn) {
+            var ids = String(idsTexto || '').split('|').filter(Boolean);
+            if (!ids.length) return;
+            var original = btn ? btn.textContent : '';
+            if (btn) { btn.disabled = true; }
+
+            var base = 'Examen_Modulo' + modulo + '_' + anio + 'anio_' + _slug(nombre);
+            var i = 0, fallos = 0;
+
+            function siguiente() {
+                if (i >= ids.length) {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = fallos ? '⚠ ' + fallos + ' sin descargar' : '✓ Descargado';
+                        setTimeout(function () { btn.textContent = original; }, 3000);
+                    }
+                    return;
+                }
+                var n = i + 1;
+                if (btn) btn.textContent = 'Descargando ' + n + ' de ' + ids.length + '…';
+                fetch(URL_SCRIPT + '?action=getExamenFoto&id=' + encodeURIComponent(ids[i]), { mode: 'cors' })
+                    .then(function (r) { return r.json(); })
+                    .then(function (res) {
+                        if (!res || res.status !== 'success' || !res.dataUrl) { fallos++; return; }
+                        var ext = (res.dataUrl.indexOf('image/png') !== -1) ? 'png' : 'jpg';
+                        var a = document.createElement('a');
+                        a.href = res.dataUrl;
+                        a.download = base + '_p' + n + '.' + ext;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    })
+                    .catch(function () { fallos++; })
+                    .then(function () { i++; setTimeout(siguiente, 350); });
+            }
+            siguiente();
         }
 
         function abrirFotoEscrito(id) {
@@ -1973,7 +2058,10 @@
                 var claveEx = fi.tipo==='examen' ? (_exAnio(fi.desc) + '||' + _exModulo(fi.desc)) : '';
                 var pend    = claveEx ? _examenesPendientesMapa[claveEx] : null;
                 if (pend) lbl += '<span title="' + _invEsc(pend.faltan.join(', ')) + '" style="background:#fee2e2;color:#991b1b;font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;margin-left:4px;">⚠ ' + pend.faltan.length + ' SIN NOTA</span>';
-                if (fi.reprog) lbl += '<span title="' + _invEsc('Motivo: ' + fi.reprog.razon + (fi.reprog.autor ? ' — ' + fi.reprog.autor : '')) + '" style="background:#dbeafe;color:#1e40af;font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;margin-left:4px;cursor:help;">🗓 REPROGRAMADO</span>';
+                // Solo la fecha nueva y la etiqueta. El motivo del cambio vive en
+                // «Cumplimiento de fechas de exámenes», dentro de las estadísticas
+                // docentes: aquí no aporta y ocupa la línea del título.
+                if (fi.reprog) lbl += '<span style="background:#dbeafe;color:#1e40af;font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;margin-left:4px;">🗓 NUEVA FECHA</span>';
                 var fs = fi.dateObj.getDate()+' '+MESES_ES[fi.dateObj.getMonth()]+' '+fi.dateObj.getFullYear();
                 // Al reprogramar, la fecha del plan se enseña tachada al lado:
                 // la nueva manda, pero nadie tiene que fiarse de la memoria
@@ -1984,7 +2072,6 @@
                     + tri
                     + '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:2px;">'+lbl+'<span style="font-size:10px;color:#94a3b8;font-weight:500;">'+fs+'</span></div>'
                     + '<p style="font-size:12px;font-weight:700;color:#1e293b;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+fi.desc+'</p>'
-                    + (fi.reprog ? '<p style="font-size:10px;color:#1e40af;line-height:1.3;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Motivo: '+_invEsc(fi.reprog.razon)+'</p>' : '')
                     + '</div>'
                     + '<div style="text-align:right;flex-shrink:0;"><p style="font-size:12px;font-weight:800;color:'+dc+';white-space:nowrap;">'+dt+'</p>'+((!past&&diff>0)?'<p style="font-size:9px;color:#94a3b8;margin-top:1px;">restantes</p>':'')
                     // Evaluar el examen, desde la fecha misma
@@ -2056,8 +2143,14 @@
         }
 
         function fetchTemas() {
-            fetch(URL_SCRIPT + '?action=getTemas', { mode: 'cors' })
-                .then(function(r) { return r.json(); })
+            // Los temas llegan dentro de la petición de arranque; solo se piden
+            // por separado si el backend aún no la tiene publicada.
+            pedirArranque()
+                .then(function(res) {
+                    if (Array.isArray(res.temas)) return res.temas;
+                    return fetch(URL_SCRIPT + '?action=getTemas', { mode: 'cors' })
+                             .then(function(r) { return r.json(); });
+                })
                 .then(function(data) {
                     if (!Array.isArray(data)) return;
                     var best = {};
@@ -2090,9 +2183,50 @@
             return t;
         }
 
+        // ══════════════════════════════════════════════════════════════
+        //  UNA SOLA PETICIÓN DE ARRANQUE
+        //  --------------------------------------------------------------
+        //  Esta página pedía las evaluaciones CUATRO veces: para los puntos
+        //  del carrusel, para las estadísticas, para el resumen académico y
+        //  para detectar la versión del backend. Apps Script atiende las
+        //  peticiones de una misma persona de una en una, así que se
+        //  encolaban y cada una pagaba además el redirect de Google. Eso es
+        //  lo que hacía que consultar el resumen tardara, o que hubiera que
+        //  intentarlo varias veces.
+        //
+        //  Ahora se pide una vez y todos comparten la misma promesa. Para
+        //  releer de verdad —tras registrar una nota— está refrescarArranque().
+        // ══════════════════════════════════════════════════════════════
+        var _arranquePromesa = null;
+
+        function pedirArranque() {
+            if (_arranquePromesa) return _arranquePromesa;
+            _arranquePromesa = fetch(URL_SCRIPT + '?action=getArranque', { mode: 'cors' })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res && res.status === 'success' && Array.isArray(res.evaluaciones)) {
+                        _reprogExamenes = res.reprogramaciones || {};
+                        return res;
+                    }
+                    // Backend antiguo (aún sin getArranque): se sigue por el
+                    // camino de siempre en vez de dejar la pantalla en blanco.
+                    return fetch(URL_SCRIPT + '?action=getEvaluations', { mode: 'cors' })
+                        .then(function (r) { return r.json(); })
+                        .then(function (d) {
+                            return { status: 'success', evaluaciones: Array.isArray(d) ? d : [],
+                                     temas: null, reprogramaciones: null, legado: true };
+                        });
+                })
+                .catch(function (err) { _arranquePromesa = null; throw err; });
+            return _arranquePromesa;
+        }
+
+        /** Vuelve a preguntar al servidor la próxima vez que alguien pida datos */
+        function refrescarArranque() { _arranquePromesa = null; }
+
         function fetchEvaluaciones() {
-            fetch(URL_SCRIPT + '?action=getEvaluations', { mode: 'cors' })
-                .then(function(r) { return r.json(); })
+            pedirArranque()
+                .then(function(res) { return res.evaluaciones; })
                 .then(function(datos) {
                     if (!Array.isArray(datos)) return;
                     // 1. Puntos de color
@@ -2377,13 +2511,24 @@
                 var detalle = d.exs.map(function (x) {
                     return '<tr>'
                         + '<td style="padding:5px 10px;border-top:1px solid #f1f5f9;font-size:11px;color:#475569;white-space:nowrap;">' + x.anio + ' año · Mód. ' + _invEsc(x.mod) + '</td>'
-                        + '<td style="padding:5px 10px;border-top:1px solid #f1f5f9;font-size:11px;color:#94a3b8;white-space:nowrap;">' + _invEsc(x.fPlan)
-                        +   (x.reprog ? ' <span title="' + _invEsc('Reprogramado al ' + x.reprog.fechaNueva + ' — ' + x.reprog.razon) + '" style="color:#1d4ed8;cursor:help;">🗓</span>' : '')
-                        + '</td>'
+                        + '<td style="padding:5px 10px;border-top:1px solid #f1f5f9;font-size:11px;color:#94a3b8;white-space:nowrap;">' + _invEsc(x.fPlan) + '</td>'
                         + '<td style="padding:5px 10px;border-top:1px solid #f1f5f9;font-size:11px;color:#64748b;white-space:nowrap;">' + x.marca.getDate() + ' ' + MESES_ES[x.marca.getMonth()] + ' ' + x.marca.getFullYear() + '</td>'
                         + '<td style="padding:5px 10px;border-top:1px solid #f1f5f9;text-align:right;font-size:11px;font-weight:800;color:' + colorDias(x.dias) + ';white-space:nowrap;">' + textoDias(x.dias) + '</td>'
                         + '</tr>';
                 }).join('');
+
+                // El motivo de cada reprogramación se lee AQUÍ y solo aquí: en
+                // «Fechas Importantes» y en los paneles de residentes estorba,
+                // pero al juzgar un retraso es justo lo que hay que saber.
+                var reprogHTML = d.exs.filter(function (x) { return x.reprog; })
+                    .map(function (x) {
+                        return '<p style="margin:0;font-size:10.5px;color:#1e40af;line-height:1.4;">'
+                            + '🗓 <b>Módulo ' + _invEsc(x.mod) + ' (' + x.anio + ' año)</b> movido del '
+                            + _invEsc(x.fPlan) + ' al ' + _invEsc(x.reprog.fechaNueva) + ' — '
+                            + _invEsc(x.reprog.razon)
+                            + (x.reprog.autor ? ' <span style="color:#64748b;">(' + _invEsc(x.reprog.autor) + ')</span>' : '')
+                            + '</p>';
+                    }).join('');
 
                 return '<details style="border:1px solid #e2e8f0;border-radius:11px;margin-bottom:7px;overflow:hidden;">'
                     + '<summary style="padding:10px 12px;cursor:pointer;display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:#fff;">'
@@ -2399,7 +2544,9 @@
                     +   '<th style="padding:5px 10px;text-align:left;font-size:9.5px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.03em;">Fecha del plan</th>'
                     +   '<th style="padding:5px 10px;text-align:left;font-size:9.5px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.03em;">Nota registrada</th>'
                     +   '<th style="padding:5px 10px;text-align:right;font-size:9.5px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.03em;">Retraso</th>'
-                    + '</tr></thead><tbody>' + detalle + '</tbody></table></div>'
+                    + '</tr></thead><tbody>' + detalle + '</tbody></table>'
+                    + (reprogHTML ? '<div style="padding:8px 10px;border-top:1px solid #e2e8f0;background:#eff6ff;">' + reprogHTML + '</div>' : '')
+                    + '</div>'
                     + '</details>';
             }).join('')
             + '<p style="font-size:10px;color:#94a3b8;margin-top:8px;line-height:1.4;">Verde: registrado el mismo día o antes. Hasta 7 días, verde oliva; hasta 21, ámbar; más, rojo. La media no cuenta como negativos los registros adelantados.</p>';
@@ -2855,17 +3002,18 @@
             renderAgenda();
             fetchTemas();
             cargarEstadoAlertas();
-            cargarReprogramaciones();
-            cargarExamenesPendientes();
-            // Cargar evaluaciones en segundo plano para los puntos del carrusel
-            fetch(URL_SCRIPT + '?action=getEvaluations', { mode: 'cors' })
-                .then(function(r) { return r.json(); })
-                .then(function(datos) {
+            cargarExamenesPendientes();   // las reprogramaciones vienen en getArranque
+            // Una sola lectura para el carrusel, las estadísticas y el resumen
+            pedirArranque()
+                .then(function(res) {
+                    var datos = res.evaluaciones;
                     if (!Array.isArray(datos)) return;
                     buildEvalCache(datos);
                     renderCarousel();
-                    _estadisticasDatos = datos; // guardar para estadísticas
+                    _estadisticasDatos = datos;
+                    _resumenDatos = datos;
                     renderExamenesResumen();
+                    if (res.reprogramaciones) renderFechasImportantes(new Date());
                 })
                 .catch(function(){});
         }
@@ -3048,8 +3196,8 @@
         // nuevo incluye el campo "_row". Mientras no lo esté, NO se llaman las
         // funciones que, en la versión vieja, crean filas en blanco.
         function detectarBackendYActivar() {
-            fetch(URL_SCRIPT + '?action=getEvaluations')
-                .then(function (r) { return r.json(); })
+            pedirArranque()
+                .then(function (res) { return res.evaluaciones; })
                 .then(function (d) {
                     window.NEW_BACKEND = Array.isArray(d) && d.some(function (x) { return x && x._row !== undefined; });
                     if (window.NEW_BACKEND) fetchEditLog();
@@ -3640,12 +3788,14 @@ var NOTAS_CANON = (function () {
             if (!_resumenOpen) { panel.classList.add('hidden'); chev.style.transform = ''; return; }
             panel.classList.remove('hidden');
             chev.style.transform = 'rotate(180deg)';
-            if (_resumenDatos) { renderResumenAcademico(); return; }
+            if (_resumenDatos) { renderResumenAcademico(); renderExamenesResumen(); return; }
             document.getElementById('resumenContenido').innerHTML =
                 '<p style="text-align:center;padding:30px;color:#94a3b8;font-size:13px;font-style:italic;">Cargando evaluaciones desde Google Sheets…</p>';
-            fetch(URL_SCRIPT + '?action=getEvaluations', { mode:'cors' })
-                .then(function(r){ return r.json(); })
-                .then(function(d){ _resumenDatos = Array.isArray(d) ? d : []; renderResumenAcademico(); })
+            pedirArranque()
+                .then(function(res){ return res.evaluaciones; })
+                .then(function(d){ _resumenDatos = Array.isArray(d) ? d : [];
+                                   if (!_estadisticasDatos) _estadisticasDatos = _resumenDatos;
+                                   renderResumenAcademico(); renderExamenesResumen(); })
                 .catch(function(){
                     if (Array.isArray(_estadisticasDatos)) { _resumenDatos = _estadisticasDatos; renderResumenAcademico(); return; }
                     document.getElementById('resumenContenido').innerHTML =
