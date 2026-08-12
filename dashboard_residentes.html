@@ -373,8 +373,12 @@ function _normFechaTema(f) {
 
 async function fetchTemas() {
     try {
-        const resp = await fetch(`${URL_SCRIPT}?action=getTemas`, { mode: 'cors' });
-        const data = await resp.json();
+        // Los temas vienen dentro de la petición de arranque; solo se piden
+        // aparte si el backend todavía no la tiene publicada.
+        const arr = await pedirArranque().catch(() => null);
+        const data = (arr && Array.isArray(arr.temas))
+            ? arr.temas
+            : await (await fetch(`${URL_SCRIPT}?action=getTemas`, { mode: 'cors' })).json();
         if (Array.isArray(data)) {
             // Si hay filas duplicadas del mismo día/año se queda con la más
             // reciente (ts, si el backend lo envía; si no, la última en la hoja).
@@ -1111,27 +1115,67 @@ function svgTriangulo(color, borderColor) {
 // La coordinación puede mover la fecha de un examen desde el
 // portal docente. Aquí se lee para que el residente vea la
 // fecha que de verdad le aplica, con la del plan tachada al
-// lado y el motivo del cambio. Solo se lee: desde el panel de
-// residentes no se puede modificar nada.
+// lado. El motivo del cambio NO se muestra aquí: queda para la
+// coordinación, en las estadísticas del portal docente.
+// Solo se lee: desde el panel no se puede modificar nada.
 // ══════════════════════════════════════════════════════════
 let _REPROG = {};
 
 function cargarReprogramaciones() {
+    // Si la petición de arranque ya las trajo, no se vuelve a preguntar
+    if (_arranquePromesa) {
+        return _arranquePromesa
+            .then(res => { if (res && res.reprogramaciones) { _REPROG = res.reprogramaciones; _avisoReprog(''); }
+                           renderFechasImportantes(); })
+            .catch(() => {});
+    }
     return fetch(`${URL_SCRIPT}?action=getReprogramaciones`, { mode: 'cors' })
         .then(r => r.json())
         .then(res => {
             if (res && res.status === 'success') {
                 _REPROG = res.reprogramaciones || {};
-                renderFechasImportantes();
+                _avisoReprog('');
+            } else {
+                // Fallar en silencio aquí es peligroso: el residente vería la
+                // fecha antigua convencido de que es la buena.
+                _avisoReprog((res && res.message) || 'No se pudo comprobar si hay cambios de fecha.');
             }
+            renderFechasImportantes();
         })
-        .catch(() => {});
+        .catch(() => {
+            _avisoReprog('Sin conexión: puede que falten cambios de fecha.');
+            renderFechasImportantes();
+        });
 }
 
-/** Módulo romano escrito en la descripción del examen */
+/** Aviso discreto en la cabecera de Fechas Importantes */
+function _avisoReprog(msg) {
+    let el = document.getElementById('avisoReprog');
+    if (!el) {
+        const lista = document.getElementById('listFechasImportantes');
+        if (!lista || !lista.parentNode) return;
+        el = document.createElement('p');
+        el.id = 'avisoReprog';
+        el.setAttribute('style', 'display:none;margin:0;padding:7px 20px;background:#fef3c7;' +
+            'color:#92400e;font-size:11px;font-weight:600;border-bottom:1px solid #fde68a;');
+        lista.parentNode.insertBefore(el, lista);
+    }
+    el.textContent = msg ? '⚠ ' + msg : '';
+    el.style.display = msg ? 'block' : 'none';
+}
+
+/**
+ * Módulo al que corresponde un examen, tal y como lo nombra el portal docente.
+ * Tiene que coincidir EXACTAMENTE con _exModulo() del index: es la clave con la
+ * que se guarda la reprogramación. Antes esta versión devolvía vacío para
+ * «Examen Final» y «Examen de Grado», mientras el index los guardaba como
+ * «CIERRE», así que mover esas tres fechas no se veía nunca desde aquí.
+ */
 function _modDeDesc(desc) {
     const m = String(desc || '').match(/m[óo]dulo\s+([IVX]+)/i);
-    return m ? m[1].toUpperCase() : '';
+    if (m) return m[1].toUpperCase();
+    if (/final|grado/i.test(desc || '')) return 'CIERRE';
+    return '';
 }
 
 /** «dd/mm/aaaa» → «aaaa-mm-dd» */
@@ -1223,7 +1267,6 @@ function renderFechasImportantes() {
                     <span style="font-size:11px;color:#94a3b8;font-weight:500;margin-left:2px;">${fechaStr}</span>
                 </div>
                 <p style="font-size:13px;font-weight:600;color:#1e293b;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${f.desc}</p>
-                ${f.reprog ? `<p style="font-size:10.5px;color:#1e40af;line-height:1.3;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Reprogramado — ${_esc(f.reprog.razon)}</p>` : ''}
             </div>
             <div style="text-align:right;flex-shrink:0;">
                 <p style="font-size:13px;font-weight:800;color:${diasColor};white-space:nowrap;">${diasTexto}</p>
@@ -1390,12 +1433,46 @@ function hayCoincidencia(planTema, evalTema) {
     return tokenizar(evalTema).some(w => t1.has(w));
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  UNA SOLA PETICIÓN DE ARRANQUE
+//  ----------------------------------------------------------------
+//  Abrir el panel lanzaba tres peticiones a la vez: evaluaciones,
+//  temas y reprogramaciones. Apps Script atiende las peticiones de
+//  una misma persona DE UNA EN UNA, así que se encolaban y cada una
+//  pagaba además el redirect de Google. Por eso consultar las notas
+//  tardaba, o funcionaba «después de varios intentos».
+//
+//  Ahora se piden juntas y todo el mundo comparte la misma promesa.
+// ══════════════════════════════════════════════════════════════════
+let _arranquePromesa = null;
+
+function pedirArranque() {
+    if (_arranquePromesa) return _arranquePromesa;
+    _arranquePromesa = fetch(`${URL_SCRIPT}?action=getArranque`, { mode: 'cors' })
+        .then(r => r.json())
+        .then(res => {
+            if (res && res.status === 'success' && Array.isArray(res.evaluaciones)) {
+                if (res.reprogramaciones) { _REPROG = res.reprogramaciones; _avisoReprog(''); }
+                return res;
+            }
+            // Backend antiguo, todavía sin getArranque: se sigue por el
+            // camino de siempre en vez de dejar el panel en blanco.
+            return fetch(`${URL_SCRIPT}?action=getEvaluations`, { mode: 'cors' })
+                .then(r => r.json())
+                .then(d => ({ status:'success', evaluaciones: Array.isArray(d) ? d : [],
+                              temas: null, reprogramaciones: null, legado: true }));
+        })
+        .catch(err => { _arranquePromesa = null; throw err; });
+    return _arranquePromesa;
+}
+
 let _datosCache = null;
 
 async function fetchEvaluaciones() {
     if (_datosCache) return _datosCache;
-    const resp = await fetch(`${URL_SCRIPT}?action=getEvaluations`, { mode: 'cors' });
-    _datosCache = await resp.json();
+    const res = await pedirArranque();
+    _datosCache = res.evaluaciones;
+    if (res.reprogramaciones) renderFechasImportantes();
     return _datosCache;
 }
 
@@ -1920,7 +1997,9 @@ document.addEventListener('DOMContentLoaded', function() {
     renderClases();
     renderFechasImportantes();
     setTimeout(scrollFechasAHoy, 200);
-    cargarReprogramaciones();
+    // Una sola petición trae evaluaciones, temas y cambios de fecha. Se lanza
+    // ya, no cuando el residente pulsa «ver notas»: así cuando pulsa, ya están.
+    pedirArranque().then(() => renderFechasImportantes()).catch(() => cargarReprogramaciones());
     // Luego actualiza desde Google Sheets y re-renderiza si hay cambios
     fetchTemas().then(() => renderClases());
 });
@@ -1945,8 +2024,9 @@ function _temasPalabras(s) {
 function _cargarTemasGuardados() {
     if (_temasGuardadosLista) return Promise.resolve(_temasGuardadosLista);
     if (_temasGuardadosPromesa) return _temasGuardadosPromesa;
-    _temasGuardadosPromesa = fetch(`${URL_SCRIPT}?action=getTemas`, { mode:'cors' })
-        .then(r => r.json())
+    _temasGuardadosPromesa = pedirArranque()
+        .then(arr => Array.isArray(arr.temas) ? arr.temas
+              : fetch(`${URL_SCRIPT}?action=getTemas`, { mode:'cors' }).then(r => r.json()))
         .then(d => { _temasGuardadosLista = Array.isArray(d) ? d.filter(t => t && t.tema) : []; return _temasGuardadosLista; })
         .catch(() => { _temasGuardadosPromesa = null; return []; });
     return _temasGuardadosPromesa;
