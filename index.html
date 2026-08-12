@@ -1514,13 +1514,17 @@
             window.location.href = 'avances_tesis.html?' + p.toString();
         }
 
-        // ── Reprogramar: solo coordinación ────────────────────────────
+        // ── Reprogramar: cualquier docente, no solo coordinación ──────
+        // Quien se entera de que el examen choca con una rotación o un feriado
+        // es el docente del año, no la coordinación. El cambio queda firmado
+        // con su nombre y su motivo, así que abrirlo no pierde trazabilidad.
         function _puedeReprogramar() {
-            return !!(_authDocente && _authDocente.rol === 'coordinacion');
+            if (!_authDocente) return false;
+            return _authDocente.rol === 'coordinacion' || _authDocente.rol === 'docente';
         }
 
         function abrirReprogramar(anio, modulo, fechaPlan) {
-            if (!_puedeReprogramar()) { alert('Solo la coordinación puede mover la fecha de un examen.'); return; }
+            if (!_puedeReprogramar()) { alert('Su perfil no puede mover la fecha de un examen.'); return; }
             var actual = _reprogDe(anio, modulo);
 
             var ov = document.getElementById('panelReprog');
@@ -1533,7 +1537,7 @@
                     '<div style="background:#fff;border-radius:16px;max-width:440px;width:100%;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35);">' +
                       '<div style="padding:14px 16px;border-bottom:1px solid #e2e8f0;">' +
                         '<p id="reprogTitulo" style="font-size:13px;font-weight:800;color:#1e293b;"></p>' +
-                        '<p style="font-size:10px;color:#94a3b8;margin-top:2px;">La fecha del plan docente no se modifica. Esto solo registra cuándo se aplicará y por qué.</p>' +
+                        '<p style="font-size:10px;color:#94a3b8;margin-top:2px;">La fecha del plan docente no se modifica. Esto solo registra cuándo se aplicará y por qué. El cambio queda a su nombre.</p>' +
                       '</div>' +
                       '<div style="padding:16px;">' +
                         '<p id="reprogPlan" style="font-size:11px;color:#64748b;margin-bottom:10px;"></p>' +
