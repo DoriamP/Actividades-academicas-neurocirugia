@@ -17,6 +17,40 @@
         .scroll-snap-start { scroll-snap-align: start; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* ── CARRUSEL DE CLASES PROGRAMADAS ──────────────────────────────
+           En un móvil en vertical tienen que caber TRES tarjetas, así que el
+           ancho se calcula sobre el de la pantalla en vez de fijarse en píxeles.
+           Con tres tarjetas en 390 px cada una queda en unos 115 px: por eso el
+           texto crece a lo alto —el título se parte en varias líneas y la
+           tarjeta se estira— en lugar de a lo ancho, que no lo hay.
+           A partir de 640 px se vuelve a un ancho cómodo de escritorio. */
+        .carrusel-clases { gap: 8px; padding-left: 12px; padding-right: 12px; }
+        .carrusel-clases > .tarjeta-clase {
+            flex: 0 0 auto;
+            width: calc((100vw - 24px - 16px) / 3);   /* 3 tarjetas + 2 huecos */
+            min-width: 104px;
+        }
+        /* La fecha es lo que se busca de un vistazo, así que se lleva el mayor
+           salto: de 14 px a 21 px, la mitad más grande. El tema no puede crecer
+           tanto —a 24 px entrarían cuatro letras por línea en 116 px—, pero
+           sube de 12 a 13,5 px y se parte en las líneas que haga falta. */
+        .tarjeta-clase .tc-fecha  { font-size: 21px; line-height: 1.1; letter-spacing: -0.3px; }
+        .tarjeta-clase .tc-anio   { font-size: 13px; }
+        .tarjeta-clase .tc-tema   { font-size: 13.5px; line-height: 1.3; }
+        .tarjeta-clase .tc-dr     { font-size: 12.5px; }
+        .tarjeta-clase .tc-etiq   { font-size: 11px; }
+        .tarjeta-clase .tc-boton  { font-size: 12px; padding: 4px 8px; }
+        .tarjeta-clase .tc-vacio  { font-size: 13px; line-height: 1.35; }
+
+        @media (min-width: 640px) {
+            .carrusel-clases { gap: 12px; padding-left: 20px; padding-right: 20px; }
+            .carrusel-clases > .tarjeta-clase { width: 232px; }
+            .tarjeta-clase .tc-fecha { font-size: 24px; }
+            .tarjeta-clase .tc-anio  { font-size: 14px; }
+            .tarjeta-clase .tc-tema  { font-size: 15px; }
+            .tarjeta-clase .tc-dr    { font-size: 14px; }
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
@@ -80,6 +114,10 @@
                             <h3 class="font-bold text-sm">Clases Programadas</h3>
                         </div>
                         <div class="flex gap-1">
+                            <button id="btnCalendarioClases" onclick="abrirCalendarioClases()" title="Ver todas las clases en un calendario"
+                                class="bg-indigo-800 hover:bg-indigo-700 text-white rounded-lg p-1.5 transition border border-indigo-700">
+                                <i data-lucide="calendar-days" class="w-4 h-4"></i>
+                            </button>
                             <button id="btnPrev" onclick="scrollClases(-1)" class="bg-indigo-800 hover:bg-indigo-700 text-white rounded-lg p-1.5 transition border border-indigo-700">
                                 <i data-lucide="chevron-left" class="w-4 h-4"></i>
                             </button>
@@ -118,7 +156,7 @@
                     <div class="px-5 pb-1">
                         <p id="rangoClases" class="text-xs text-indigo-600 font-semibold bg-indigo-50 border border-indigo-100 px-2 py-1 rounded-lg inline-block"></p>
                     </div>
-                    <div id="clasesCarousel" class="flex overflow-x-auto scroll-snap-x hide-scrollbar gap-3 px-5 pb-5 pt-3" style="scroll-behavior: smooth; touch-action: pan-x;"></div>
+                    <div id="clasesCarousel" class="carrusel-clases flex overflow-x-auto scroll-snap-x hide-scrollbar pb-5 pt-3" style="scroll-behavior: smooth; touch-action: pan-x;"></div>
                     <div class="px-5 pb-4">
                         <p class="text-xs text-slate-400 italic">← Deslice o use las flechas para navegar →</p>
                     </div>
@@ -1100,12 +1138,13 @@
 
         var DIAS_ES  = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
         var MESES_ES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+        // hex: el mismo color, para el calendario emergente, que no usa Tailwind
         var ANIO_COLORES = {
-            "I":   { bg: "bg-blue-100",   text: "text-blue-800",   border: "border-blue-200"   },
-            "II":  { bg: "bg-violet-100",  text: "text-violet-800",  border: "border-violet-200"  },
-            "III": { bg: "bg-teal-100",    text: "text-teal-800",    border: "border-teal-200"    },
-            "IV":  { bg: "bg-amber-100",   text: "text-amber-800",   border: "border-amber-200"   },
-            "V":   { bg: "bg-rose-100",    text: "text-rose-800",    border: "border-rose-200"    },
+            "I":   { bg: "bg-blue-100",   text: "text-blue-800",   border: "border-blue-200",   hex: "#dbeafe" },
+            "II":  { bg: "bg-violet-100",  text: "text-violet-800",  border: "border-violet-200",  hex: "#ede9fe" },
+            "III": { bg: "bg-teal-100",    text: "text-teal-800",    border: "border-teal-200",    hex: "#ccfbf1" },
+            "IV":  { bg: "bg-amber-100",   text: "text-amber-800",   border: "border-amber-200",   hex: "#fef3c7" },
+            "V":   { bg: "bg-rose-100",    text: "text-rose-800",    border: "border-rose-200",    hex: "#ffe4e6" },
         };
 
         var clasesOrdenadas = [];
@@ -1221,6 +1260,141 @@
             renderFechasImportantes(hoy);
         }
 
+        /**
+         * Los días del curso, de lunes a viernes, con sus clases.
+         *
+         * Se incluyen también los días hábiles SIN clase, con la lista vacía.
+         * Antes el carrusel saltaba del 3 al 17 de agosto sin decir qué pasaba
+         * en medio, y para programar hay que ver tanto los días ocupados como
+         * los libres. Los fines de semana no aparecen: no hay actividad docente.
+         */
+        // ══════════════════════════════════════════════════════════════
+        //  CALENDARIO DE CLASES PROGRAMADAS
+        //  --------------------------------------------------------------
+        //  El carrusel enseña una semana; para programar hace falta ver el
+        //  mes entero: qué días están ocupados y cuáles libres. Se abre con
+        //  el icono de calendario y respeta el filtro de año que esté puesto.
+        //
+        //  El ancho es el de un móvil en vertical, con siete columnas
+        //  estrechas. Cabe el número del día y el tema en letra pequeña.
+        // ══════════════════════════════════════════════════════════════
+        var _calMes = null;   // primer día del mes que se está viendo
+
+        function abrirCalendarioClases() {
+            var ov = document.getElementById('panelCalClases');
+            if (!ov) {
+                ov = document.createElement('div');
+                ov.id = 'panelCalClases';
+                ov.setAttribute('style', 'display:none;position:fixed;inset:0;background:rgba(15,23,42,.65);' +
+                    'z-index:300;align-items:center;justify-content:center;padding:10px;');
+                ov.innerHTML =
+                    '<div style="background:#fff;border-radius:16px;width:100%;max-width:420px;max-height:92vh;' +
+                    'display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4);">' +
+                      '<div style="padding:11px 12px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:8px;">' +
+                        '<button type="button" onclick="calMoverMes(-1)" style="border:1px solid #e2e8f0;background:#fff;border-radius:8px;width:30px;height:30px;font-size:15px;cursor:pointer;color:#475569;">‹</button>' +
+                        '<div style="flex:1;text-align:center;min-width:0;">' +
+                          '<p id="calTitulo" style="font-size:14px;font-weight:900;color:#1e293b;"></p>' +
+                          '<p id="calSub" style="font-size:10px;color:#94a3b8;"></p>' +
+                        '</div>' +
+                        '<button type="button" onclick="calMoverMes(1)" style="border:1px solid #e2e8f0;background:#fff;border-radius:8px;width:30px;height:30px;font-size:15px;cursor:pointer;color:#475569;">›</button>' +
+                        '<button type="button" onclick="document.getElementById(\'panelCalClases\').style.display=\'none\'" ' +
+                          'style="border:0;background:#f1f5f9;border-radius:8px;width:30px;height:30px;font-size:16px;cursor:pointer;color:#475569;">×</button>' +
+                      '</div>' +
+                      '<div id="calCuerpo" style="overflow-y:auto;padding:8px;"></div>' +
+                      '<div style="padding:8px 12px;border-top:1px solid #e2e8f0;display:flex;gap:12px;flex-wrap:wrap;align-items:center;">' +
+                        '<span style="font-size:10px;color:#64748b;"><span style="display:inline-block;width:9px;height:9px;background:#e0e7ff;border:1px solid #c7d2fe;border-radius:2px;vertical-align:-1px;"></span> con clase</span>' +
+                        '<span style="font-size:10px;color:#64748b;"><span style="display:inline-block;width:9px;height:9px;background:#fff;border:1px dashed #cbd5e1;border-radius:2px;vertical-align:-1px;"></span> libre</span>' +
+                        '<button type="button" onclick="calIrAHoy()" style="margin-left:auto;border:1px solid #c7d2fe;background:#eef2ff;color:#4338ca;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:800;cursor:pointer;">Hoy</button>' +
+                      '</div>' +
+                    '</div>';
+                ov.addEventListener('click', function (ev) { if (ev.target === ov) ov.style.display = 'none'; });
+                document.body.appendChild(ov);
+            }
+            if (!_calMes) calIrAHoy(true);
+            ov.style.display = 'flex';
+            _pintarCalendario();
+        }
+
+        function calIrAHoy(silencioso) {
+            var h = new Date();
+            _calMes = new Date(h.getFullYear(), h.getMonth(), 1);
+            if (!silencioso) _pintarCalendario();
+        }
+
+        function calMoverMes(d) {
+            if (!_calMes) calIrAHoy(true);
+            _calMes = new Date(_calMes.getFullYear(), _calMes.getMonth() + d, 1);
+            _pintarCalendario();
+        }
+
+        function _pintarCalendario() {
+            var cuerpo = document.getElementById('calCuerpo');
+            if (!cuerpo || !_calMes) return;
+
+            // Clases del mes, respetando el filtro de año activo
+            var porDia = {};
+            var fuente = filtroAnio === 'ALL'
+                ? clasesOrdenadas
+                : clasesOrdenadas.filter(function (c) { return c.anio === filtroAnio; });
+            fuente.forEach(function (c) {
+                var d = parseDate(c.f);
+                if (!d || d.getFullYear() !== _calMes.getFullYear() || d.getMonth() !== _calMes.getMonth()) return;
+                (porDia[d.getDate()] = porDia[d.getDate()] || []).push(c);
+            });
+
+            var MESES_LARGO = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                               'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+            document.getElementById('calTitulo').textContent =
+                MESES_LARGO[_calMes.getMonth()] + ' ' + _calMes.getFullYear();
+
+            var nClases = Object.keys(porDia).reduce(function (a, k) { return a + porDia[k].length; }, 0);
+            document.getElementById('calSub').textContent =
+                nClases + ' clase' + (nClases !== 1 ? 's' : '') +
+                (filtroAnio === 'ALL' ? ' · todos los años' : ' · ' + filtroAnio + ' año');
+
+            var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+            var primero = new Date(_calMes.getFullYear(), _calMes.getMonth(), 1);
+            var diasMes = new Date(_calMes.getFullYear(), _calMes.getMonth() + 1, 0).getDate();
+            // La semana empieza en lunes
+            var hueco = (primero.getDay() + 6) % 7;
+
+            var celdas = '';
+            for (var v = 0; v < hueco; v++) celdas += '<div></div>';
+
+            for (var dia = 1; dia <= diasMes; dia++) {
+                var f = new Date(_calMes.getFullYear(), _calMes.getMonth(), dia);
+                var finde = (f.getDay() === 0 || f.getDay() === 6);
+                var esHoyC = f.getTime() === hoy.getTime();
+                var lista = porDia[dia] || [];
+
+                var fondo = lista.length ? '#e0e7ff' : (finde ? '#f8fafc' : '#fff');
+                var borde = lista.length ? '1px solid #c7d2fe' : (finde ? '1px solid #f1f5f9' : '1px dashed #cbd5e1');
+
+                var temas = lista.map(function (c) {
+                    var col = ANIO_COLORES[c.anio] || ANIO_COLORES['I'];
+                    var ov2 = getPlanEdit(c.anio, c.f);
+                    var t = (ov2 && ov2.tema) ? ov2.tema : c.tema;
+                    return '<div style="margin-top:2px;line-height:1.15;">'
+                        + '<span style="font-size:7.5px;font-weight:900;padding:0 2px;border-radius:2px;background:' + (col.hex || '#e0e7ff') + ';color:#1e293b;">' + _invEsc(c.anio) + '</span>'
+                        + '<span style="font-size:7.5px;color:#334155;display:block;overflow:hidden;text-overflow:ellipsis;">' + _invEsc(t) + '</span>'
+                        + '</div>';
+                }).join('');
+
+                celdas += '<div style="background:' + fondo + ';border:' + borde + ';border-radius:6px;padding:3px;min-height:52px;overflow:hidden;'
+                    + (esHoyC ? 'box-shadow:0 0 0 2px #4338ca;' : '') + '">'
+                    + '<div style="font-size:10px;font-weight:900;color:' + (esHoyC ? '#4338ca' : finde ? '#cbd5e1' : '#475569') + ';">' + dia + '</div>'
+                    + temas + '</div>';
+            }
+
+            cuerpo.innerHTML =
+                '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:4px;">'
+                + ['L','M','X','J','V','S','D'].map(function (d) {
+                    return '<div style="text-align:center;font-size:9px;font-weight:900;color:#94a3b8;">' + d + '</div>';
+                  }).join('')
+                + '</div>'
+                + '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">' + celdas + '</div>';
+        }
+
         function getGruposPorFecha() {
             var grupos = {};
             var fuente = filtroAnio === 'ALL'
@@ -1230,7 +1404,31 @@
                 if (!grupos[c.f]) grupos[c.f] = [];
                 grupos[c.f].push(c);
             });
-            return Object.entries(grupos).sort(function(a,b) { return parseDate(a[0]) - parseDate(b[0]); });
+
+            var conClase = Object.keys(grupos).map(parseDate).filter(Boolean)
+                                 .sort(function (a, b) { return a - b; });
+            if (!conClase.length) return [];
+
+            // Se recorre desde el primer día del curso hasta el último, o hasta
+            // hoy si el curso ya avanzó más de lo programado.
+            var ini = new Date(conClase[0]);
+            var fin = new Date(conClase[conClase.length - 1]);
+            var hoyR = new Date(); hoyR.setHours(0, 0, 0, 0);
+            if (hoyR > fin) fin = hoyR;
+            if (hoyR < ini) ini = hoyR;
+
+            var salida = [];
+            var d = new Date(ini);
+            while (d <= fin) {
+                var dia = d.getDay();
+                if (dia !== 0 && dia !== 6) {                       // lunes a viernes
+                    var clave = String(d.getDate()).padStart(2, '0') + '/' +
+                                String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+                    salida.push([clave, grupos[clave] || []]);
+                }
+                d.setDate(d.getDate() + 1);
+            }
+            return salida;
         }
 
         function renderCarousel() {
@@ -1263,15 +1461,21 @@
                 var esEvaluable = true;   // todas las clases son evaluables
                 var esFutura    = !esPasada && !esHoy;
 
-                var card = document.createElement('div');
-                card.className = 'scroll-snap-start flex-shrink-0 w-56 rounded-xl border shadow-sm overflow-hidden ' + (esHoy ? 'border-indigo-400 ring-2 ring-indigo-300' : 'border-slate-200');
-                if (esPasada) card.style.opacity = '0.65';
+                var sinClase = clases.length === 0;
 
-                var hdrColor = esHoy ? 'bg-indigo-700 text-white' : esPasada ? 'bg-slate-200 text-slate-500' : enProx3 ? 'bg-indigo-100 text-indigo-900' : 'bg-slate-100 text-slate-700';
+                var card = document.createElement('div');
+                card.className = 'tarjeta-clase scroll-snap-start rounded-xl border shadow-sm overflow-hidden ' +
+                    (esHoy ? 'border-indigo-400 ring-2 ring-indigo-300' : sinClase ? 'border-dashed border-slate-300' : 'border-slate-200');
+                if (esPasada) card.style.opacity = sinClase ? '0.45' : '0.65';
+
+                var hdrColor = esHoy ? 'bg-indigo-700 text-white'
+                             : sinClase ? 'bg-slate-50 text-slate-400'
+                             : esPasada ? 'bg-slate-200 text-slate-500'
+                             : enProx3 ? 'bg-indigo-100 text-indigo-900' : 'bg-slate-100 text-slate-700';
                 var etiqueta = '';
-                if (esHoy)        etiqueta = '<span class="text-xs bg-white text-indigo-700 font-bold px-1.5 py-0.5 rounded-full ml-1">HOY</span>';
-                else if (esPasada)  etiqueta = '<span class="text-xs bg-slate-400 text-white font-bold px-1.5 py-0.5 rounded-full ml-1">Pasada</span>';
-                else if (esMañana)  etiqueta = '<span class="text-xs bg-indigo-200 text-indigo-800 font-bold px-1.5 py-0.5 rounded-full ml-1">Mañana</span>';
+                if (esHoy)        etiqueta = '<span class="tc-etiq bg-white text-indigo-700 font-bold px-1.5 py-0.5 rounded-full">HOY</span>';
+                else if (esPasada)  etiqueta = '<span class="tc-etiq bg-slate-400 text-white font-bold px-1.5 py-0.5 rounded-full">Pasada</span>';
+                else if (esMañana)  etiqueta = '<span class="tc-etiq bg-indigo-200 text-indigo-800 font-bold px-1.5 py-0.5 rounded-full">Mañana</span>';
 
                 var temasHTML = clases.map(function(c) {
                     var col = ANIO_COLORES[c.anio] || ANIO_COLORES["I"];
@@ -1315,26 +1519,38 @@
 
                     return '<div class="p-2 rounded-lg border ' + col.border + ' ' + col.bg + '">'
                         + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'
-                        +   '<span class="text-xs font-black ' + col.text + ' uppercase tracking-wide">' + c.anio + ' año</span>'
+                        +   '<span class="tc-anio font-black ' + col.text + ' uppercase tracking-wide">' + c.anio + ' año</span>'
                         +   '<span title="' + dotTip + '" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + dotClr + ';border:1.5px solid rgba(0,0,0,.15);flex-shrink:0;"></span>'
                         + '</div>'
-                        + '<p class="text-xs font-semibold text-slate-800 leading-snug">' + temaDisplay + modBadge + '</p>'
-                        + (drDisplay ? '<p class="text-xs text-slate-500 mt-0.5">' + drDisplay + '</p>' : '')
-                        + (esCasoRev && temaGuardado ? '<div class="mt-1.5 pt-1.5 border-t ' + col.border + ' flex items-start gap-1"><span class="text-indigo-500 text-xs">📌</span><p class="text-xs font-semibold text-indigo-800 leading-snug">' + temaGuardado + '</p></div>' : '')
-                        + (esCasoRev && !temaGuardado ? '<p class="text-xs text-slate-400 italic mt-1">— tema por asignar —</p>' : '')
+                        + '<p class="tc-tema font-semibold text-slate-800">' + temaDisplay + modBadge + '</p>'
+                        + (drDisplay ? '<p class="tc-dr text-slate-500 mt-0.5">' + drDisplay + '</p>' : '')
+                        + (esCasoRev && temaGuardado ? '<div class="mt-1.5 pt-1.5 border-t ' + col.border + ' flex items-start gap-1"><span class="text-indigo-500 text-xs">📌</span><p class="tc-tema font-semibold text-indigo-800">' + temaGuardado + '</p></div>' : '')
+                        + (esCasoRev && !temaGuardado ? '<p class="tc-dr text-slate-400 italic mt-1">— tema por asignar —</p>' : '')
                         + '<div class="mt-2 pt-1.5" style="border-top:1px solid rgba(0,0,0,.08);">'
                         + (esFutura
-                            ? '<a href="' + formUrl + params + '&aviso=futura" style="display:inline-block;font-size:9px;font-weight:700;background:#b45309;color:#fff;padding:2px 8px;border-radius:5px;text-decoration:none;">▶ Evaluar ⚠</a>'
-                            : '<a href="' + formUrl + params + '" style="display:inline-block;font-size:9px;font-weight:700;background:#4338ca;color:#fff;padding:2px 8px;border-radius:5px;text-decoration:none;">▶ Evaluar</a>')
+                            ? '<a href="' + formUrl + params + '&aviso=futura" class="tc-boton" style="display:inline-block;font-weight:800;background:#b45309;color:#fff;border-radius:6px;text-decoration:none;">▶ Evaluar ⚠</a>'
+                            : '<a href="' + formUrl + params + '" class="tc-boton" style="display:inline-block;font-weight:800;background:#4338ca;color:#fff;border-radius:6px;text-decoration:none;">▶ Evaluar</a>')
                         + '</div>'
                         + '</div>';
                 }).join('');
 
-                card.innerHTML = '<div class="' + hdrColor + ' px-3 py-2 flex items-center justify-between">'
-                    + '<div class="flex items-center gap-1 font-bold text-sm">'
-                    + '<span>' + DIAS_ES[fechaObj.getDay()] + ' ' + fechaObj.getDate() + ' ' + MESES_ES[fechaObj.getMonth()] + ' ' + fechaObj.getFullYear() + '</span>'
-                    + etiqueta + '</div></div>'
-                    + '<div class="bg-white p-2 space-y-2">' + temasHTML + '</div>';
+                // El año no cabe en una tarjeta de 115 px y tampoco hace falta:
+                // el curso entero transcurre entre 2026 y 2027.
+                var cabecera = '<div class="' + hdrColor + ' px-2 py-2">'
+                    + '<div class="tc-fecha font-black">' + DIAS_ES[fechaObj.getDay()] + ' ' + fechaObj.getDate() + '</div>'
+                    + '<div class="tc-anio font-bold opacity-80">' + MESES_ES[fechaObj.getMonth()] + '</div>'
+                    + (etiqueta ? '<div class="mt-1">' + etiqueta + '</div>' : '')
+                    + '</div>';
+
+                // Día hábil sin clase: se dice explícitamente, para que al
+                // programar se vea de un vistazo qué días están libres.
+                var cuerpo = sinClase
+                    ? '<div class="bg-white p-2 flex items-center justify-center" style="min-height:74px;">'
+                        + '<p class="tc-vacio text-slate-400 italic text-center">'
+                        + (esHoy ? 'Hoy no hay clase programada' : 'No hay clase programada') + '</p></div>'
+                    : '<div class="bg-white p-2 space-y-2">' + temasHTML + '</div>';
+
+                card.innerHTML = cabecera + cuerpo;
                 carousel.appendChild(card);
             });
 
@@ -1708,11 +1924,13 @@
                     else if (pasado)                    { estado = 'Sin evaluar'; colorEstado = '#dc2626'; }
                     else                                { estado = 'Pendiente';  colorEstado = '#94a3b8'; }
 
-                    var _nota = function (r) {
-                        var v = parseFloat(String(r.porcentaje == null ? '' : r.porcentaje).replace('%', '').replace(',', '.'));
-                        if (isNaN(v)) v = parseFloat(r.total);
-                        return isNaN(v) ? null : Math.round(v);
-                    };
+                    // Se usa el cálculo canónico, no uno propio. El mío leía
+                    // «88%» y devolvía 1: al guardar el texto «88%», Sheets lo
+                    // convierte en el NÚMERO 0,88 con formato de porcentaje, y
+                    // redondear 0,88 da 1. NOTAS_CANON.pct ya contempla ese
+                    // caso —si el valor está entre 0 y 1, lo multiplica por
+                    // 100— y además es el mismo número que ven los residentes.
+                    var _nota = function (r) { return NOTAS_CANON.pct(r); };
 
                     var promedio = null;
                     if (regs.length) {
@@ -1798,6 +2016,10 @@
         //  Las fotos se piden al abrir, no al cargar la página: son las
         //  peticiones más pesadas de la plataforma y casi nunca se miran.
         // ══════════════════════════════════════════════════════════════
+        // Se guarda lo ya consultado: volver a abrir el mismo módulo no debe
+        // costar otra espera.
+        var _cacheEscritos = {};
+
         function verEscritosExamen(anio, modulo) {
             var residentes = RESIDENTES_POR_ANIO[anio] || [];
             _abrirPanelEscritos(anio, modulo);
@@ -1810,15 +2032,40 @@
 
             cuerpo.innerHTML = '<p style="font-size:12px;color:#94a3b8;font-style:italic;padding:14px;">Buscando los exámenes escritos…</p>';
 
-            Promise.all(residentes.map(function (nombre) {
-                var u = URL_SCRIPT + '?action=getExamenFotos' +
-                        '&nombreResidente=' + encodeURIComponent(nombre) +
-                        '&modulo=' + encodeURIComponent(modulo);
-                return fetch(u, { mode: 'cors' })
+            var clave = anio + '||' + modulo;
+            var promesa = _cacheEscritos[clave];
+            if (!promesa) {
+                // UNA sola petición para todo el módulo. Antes se pedía el
+                // examen de cada residente por separado y se esperaba a que
+                // llegaran todos; como Apps Script los atiende en fila, casi
+                // nunca llegaban todos y aparecía el de uno solo.
+                promesa = fetch(URL_SCRIPT + '?action=getExamenFotosModulo' +
+                                '&anio=' + encodeURIComponent(anio) +
+                                '&modulo=' + encodeURIComponent(modulo), { mode: 'cors' })
                     .then(function (r) { return r.json(); })
-                    .then(function (l) { return { nombre: nombre, fotos: Array.isArray(l) ? l : [] }; })
-                    .catch(function () { return { nombre: nombre, fotos: [], error: true }; });
-            })).then(function (res) {
+                    .then(function (res) {
+                        if (!res || res.status !== 'success') throw new Error((res && res.message) || 'sin respuesta');
+                        var porNombre = {};
+                        (res.residentes || []).forEach(function (x) { porNombre[x.residente] = x.fotos || []; });
+                        return porNombre;
+                    });
+                _cacheEscritos[clave] = promesa;
+            }
+
+            promesa.then(function (porNombre) {
+                // Se listan los residentes del año, tengan examen o no: así se
+                // ve de quién falta, que es la mitad de la información.
+                var res = residentes.map(function (nombre) {
+                    var fotos = porNombre[nombre];
+                    if (!fotos) {
+                        // Por si el nombre en la hoja difiere en tildes o espacios
+                        var k = Object.keys(porNombre).find(function (n) {
+                            return _invNorm(n) === _invNorm(nombre);
+                        });
+                        fotos = k ? porNombre[k] : [];
+                    }
+                    return { nombre: nombre, fotos: fotos };
+                });
                 var conFotos = res.filter(function (r) { return r.fotos.length; }).length;
 
                 cuerpo.innerHTML = res.map(function (r) {
@@ -1851,6 +2098,16 @@
                 }).join('') +
                 '<p style="font-size:10px;color:#94a3b8;padding:10px 14px;">' + conFotos + ' de ' + res.length +
                 ' residente' + (res.length !== 1 ? 's' : '') + ' con el examen escaneado.</p>';
+            })
+            .catch(function (err) {
+                // Se olvida el intento fallido para que volver a pulsar reintente
+                delete _cacheEscritos[clave];
+                cuerpo.innerHTML = '<div style="padding:14px;">' +
+                    '<p style="font-size:12px;color:#dc2626;">No se pudieron cargar los exámenes escritos.</p>' +
+                    '<p style="font-size:11px;color:#94a3b8;margin-top:4px;">' + _invEsc(String(err && err.message || err)) + '</p>' +
+                    '<button type="button" onclick="verEscritosExamen(\'' + anio + '\',\'' + modulo + '\')" ' +
+                    'style="margin-top:9px;padding:5px 12px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;' +
+                    'font-size:11px;font-weight:800;color:#334155;cursor:pointer;">Reintentar</button></div>';
             });
         }
 
