@@ -91,8 +91,10 @@
                     <option value="3">Abril</option>
                 </select>
             </div>
+            <button type="button" onclick="irACarruselHoy()" title="Ir a la clase de hoy"
+                class="ml-auto self-center bg-white hover:bg-indigo-50 border border-indigo-300 text-indigo-800 rounded-lg px-2.5 py-1.5 text-xs font-black transition">Hoy</button>
             <button type="button" onclick="abrirCalendarioClases()" title="Ver todas las clases en un calendario"
-                class="ml-auto self-center bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-lg px-2.5 py-1.5 text-sm font-bold transition">🗓</button>
+                class="self-center bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-lg px-2.5 py-1.5 text-sm font-bold transition">🗓</button>
             <div id="claseContador" class="text-xs text-slate-400 font-medium self-center"></div>
         </div>
 
@@ -690,37 +692,52 @@
 #listFechasImportantes::-webkit-scrollbar { width:5px; }
 #listFechasImportantes::-webkit-scrollbar-thumb { background:#e2e8f0; border-radius:99px; }
 /* ── CARRUSEL DE CLASES ───────────────────────────────────────────────
-   En un móvil en vertical tienen que caber TRES tarjetas, así que el ancho
-   se calcula sobre el de la pantalla en lugar de fijarse en píxeles. Las
-   flechas laterales se ocultan en móvil: ocupaban 80 px de los 390 y el
-   carrusel se recorre con el dedo. A partir de 640 px vuelve todo. */
+   Con tres tarjetas exactas en 390 px cada una quedaba en 117 px, y un tema
+   largo la estiraba a más de 300 px de alto: una columna estrecha y larguísima.
+   Ahora la tarjeta es algo más ancha —se ve la tercera empezada, que además
+   deja claro que hay más a la derecha— y tiene ALTURA FIJA: el tema se corta
+   a tres líneas con puntos suspensivos. Así todas miden igual y la fila se lee
+   como una fila, no como un peine.
+   Las flechas laterales se ocultan en móvil: ocupaban 80 px de los 390. */
 .clase-card { scroll-snap-align:start; flex-shrink:0;
-              width:calc((100vw - 16px - 16px) / 3); min-width:104px;
+              width:calc((100vw - 16px - 12px) / 2.75); min-width:118px; max-width:190px;
+              height:172px; box-sizing:border-box; overflow:hidden;
+              display:flex; flex-direction:column;
               border-radius:12px; border-width:2px; border-style:solid;
-              padding:8px; position:relative; transition:box-shadow .2s; }
+              padding:9px; position:relative; transition:box-shadow .2s; }
 .clase-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.10); }
 .clase-card-hoy { box-shadow:0 0 0 3px #6366f1, 0 4px 18px rgba(99,102,241,.25); }
 .clase-card-pasada { opacity:.55; }
-.clase-card-vacia { border-style:dashed; background:#fff !important; display:flex;
-                    flex-direction:column; justify-content:center; }
+.clase-card-vacia { border-style:dashed; background:#fff !important; justify-content:center; }
 
-/* Letra más grande: la fecha es lo que se busca de un vistazo */
-.cc-dia   { font-size:26px; font-weight:900; color:#1e293b; line-height:1; }
-.cc-mes   { font-size:13px; font-weight:700; color:#64748b; }
-.cc-anio  { font-size:12px; font-weight:800; }
-.cc-tema  { font-size:13.5px; font-weight:600; color:#334155; line-height:1.3; }
-.cc-dr    { font-size:12.5px; color:#6366f1; font-weight:600; }
+/* La tarjeta con editor de tema necesita sitio para el campo y el botón */
+.clase-card-editable { height:250px; }
+
+.cc-dia   { font-size:25px; font-weight:900; color:#1e293b; line-height:1; }
+.cc-mes   { font-size:12.5px; font-weight:700; color:#64748b; }
+.cc-anio  { font-size:11.5px; font-weight:800; }
+.cc-dr    { font-size:12px; color:#6366f1; font-weight:600;
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .cc-vacio { font-size:13px; color:#94a3b8; font-style:italic; text-align:center; line-height:1.35; }
+
+/* El tema se corta a tres líneas: es lo que impedía que la altura fuera fija.
+   El texto completo sigue disponible en el title y en el calendario. */
+.cc-tema  { font-size:13px; font-weight:600; color:#334155; line-height:1.3;
+            display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;
+            overflow:hidden; }
+.cc-tema-corto { -webkit-line-clamp:2; }
 
 .carrusel-envoltorio { padding-left:8px; padding-right:8px; }
 .carrusel-flecha { display:none; }
 
 @media (min-width: 640px) {
-    .clase-card { width:236px; padding:14px; border-radius:14px; }
+    .clase-card { width:228px; max-width:none; height:196px; padding:14px; border-radius:14px; }
+    .clase-card-editable { height:274px; }
     .cc-dia  { font-size:30px; }
     .cc-mes  { font-size:14px; }
-    .cc-tema { font-size:15px; }
-    .cc-dr   { font-size:13.5px; }
+    .cc-anio { font-size:12px; }
+    .cc-tema { font-size:14.5px; -webkit-line-clamp:4; }
+    .cc-dr   { font-size:13px; }
     .carrusel-envoltorio { padding-left:40px; padding-right:40px; }
     .carrusel-flecha { display:flex; }
 }
@@ -1512,7 +1529,7 @@ function editarTema(containerIdx) {
     container.innerHTML = `
         <div style="font-size:10px;color:#6366f1;font-weight:700;margin-bottom:4px;">✏️ Tema a desarrollar:</div>
         <input type="text" id="inp-${containerIdx}" placeholder="Escribe el tema específico…" value="${currentVal}"
-            style="width:100%;font-size:11px;padding:5px 8px;border:1.5px solid #c7d2fe;border-radius:7px;outline:none;background:#fff;color:#334155;box-sizing:border-box;margin-bottom:5px;">
+            style="width:100%;font-size:12px;padding:5px 7px;border:1.5px solid #c7d2fe;border-radius:7px;outline:none;background:#fff;color:#334155;box-sizing:border-box;margin-bottom:5px;">
         <div style="display:flex;align-items:center;gap:6px;">
             <button onclick="guardarTemaDesdeBoton('inp-${containerIdx}','${key}','${fecha}','${anio}','${tipo}','estado-${containerIdx}',${containerIdx})"
                 style="font-size:10px;font-weight:700;background:#4f46e5;color:#fff;border:none;border-radius:6px;padding:4px 11px;cursor:pointer;flex-shrink:0;letter-spacing:.02em;">
@@ -1696,15 +1713,29 @@ function renderClases() {
     const tarjetas = lista.map((c, i) => ({ fecha: parseFecha(c.f), html: _tarjetaClase(c, i, hoy) }));
     carousel.innerHTML = _conDiasSinClase(tarjetas, hoy, filtroMes);
 
-    // Scroll centrado a la clase de hoy / próxima
-    setTimeout(() => {
-        const carousel = document.getElementById('claseCarousel');
-        const card = document.getElementById('clase-card-' + inicialIdx);
-        if (carousel && card) {
-            const targetScroll = card.offsetLeft - (carousel.offsetWidth / 2) + (card.offsetWidth / 2);
-            carousel.scrollTo({ left: Math.max(0, targetScroll), behavior: 'smooth' });
-        }
-    }, 120);
+    setTimeout(() => irACarruselHoy(inicialIdx, false), 120);
+}
+
+/**
+ * Lleva el carrusel al día de hoy.
+ * Primero busca el ancla de hoy —exista clase o no—; si hoy cae en fin de
+ * semana o fuera del curso, se queda en la primera clase que no haya pasado.
+ */
+function irACarruselHoy(inicialIdx, suave) {
+    const carousel = document.getElementById('claseCarousel');
+    if (!carousel) return;
+    let card = document.getElementById('carrusel-ancla-hoy');
+    if (!card && inicialIdx !== undefined) card = document.getElementById('clase-card-' + inicialIdx);
+    if (!card) card = carousel.querySelector('.clase-card');
+    if (!card) return;
+    const destino = Math.max(0, card.offsetLeft - (carousel.offsetWidth / 2) + (card.offsetWidth / 2));
+    // scrollTo con animación no existe en todos los navegadores; si falta, se
+    // salta directo. Peor es que el botón no haga nada.
+    if (typeof carousel.scrollTo === 'function') {
+        carousel.scrollTo({ left: destino, behavior: 'smooth' });
+    } else {
+        carousel.scrollLeft = destino;
+    }
 }
 
 /**
@@ -1737,12 +1768,20 @@ function _conDiasSinClase(tarjetas, hoy, filtroMes) {
         const dia = d.getDay();
         if (dia !== 0 && dia !== 6) {
             const k = clave(d);
+            const esHoyDia = d.getTime() === hoy.getTime();
             if (porDia[k]) {
-                salida.push(porDia[k].join(''));
+                let bloque = porDia[k].join('');
+                // La primera tarjeta de hoy lleva un ancla fija: es a la que se
+                // desplaza el carrusel al abrir y al pulsar «Hoy». Antes se
+                // buscaba la primera CLASE, así que en un día sin clase el
+                // carrusel se iba al día siguiente que sí la tuviera.
+                if (esHoyDia) bloque = bloque.replace('<div class="clase-card', '<div id="carrusel-ancla-hoy" class="clase-card');
+                salida.push(bloque);
             } else {
-                const esHoy = d.getTime() === hoy.getTime();
+                const esHoy = esHoyDia;
                 salida.push(
-                    '<div class="clase-card clase-card-vacia ' + (esHoy ? 'clase-card-hoy' : '') + ' ' +
+                    '<div ' + (esHoy ? 'id="carrusel-ancla-hoy" ' : '') +
+                    'class="clase-card clase-card-vacia ' + (esHoy ? 'clase-card-hoy' : '') + ' ' +
                         (d < hoy && !esHoy ? 'clase-card-pasada' : '') + '" style="border-color:#cbd5e1;">' +
                     (esHoy ? '<div style="position:absolute;top:6px;right:6px;background:#4f46e5;color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:99px;">HOY</div>' : '') +
                     '<div style="margin-bottom:6px;">' +
@@ -1768,17 +1807,17 @@ function _tarjetaClase(c, i, hoy) {
         const guardado = getTemaGuardado(localKey);
         const col = ANIO_COLORS[c.anio] || ANIO_COLORS['I'];
 
-        return `<div class="clase-card ${esHoy ? 'clase-card-hoy' : ''} ${pasada && !esHoy ? 'clase-card-pasada' : ''}"
+        return `<div class="clase-card ${editable ? 'clase-card-editable' : ''} ${esHoy ? 'clase-card-hoy' : ''} ${pasada && !esHoy ? 'clase-card-pasada' : ''}"
                      id="clase-card-${i}"
                      style="border-color:${col.border};background:${esHoy ? '#fff' : col.bg};">
             ${esHoy ? '<div style="position:absolute;top:8px;right:8px;background:#4f46e5;color:#fff;font-size:9px;font-weight:800;padding:2px 8px;border-radius:99px;letter-spacing:.05em;">HOY</div>' : ''}
             ${pasada && !esHoy ? '<div style="position:absolute;top:8px;right:8px;background:#94a3b8;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;">Pasada</div>' : ''}
-            <div style="margin-bottom:5px;display:flex;align-items:baseline;gap:4px;">
+            <div style="margin-bottom:4px;display:flex;align-items:baseline;gap:4px;flex-shrink:0;">
                 <span class="cc-dia">${f.getDate()}</span>
                 <span class="cc-mes">${MESES[f.getMonth()]}</span>
             </div>
             <div class="cc-anio" style="color:${col.text};text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;${col.badge}padding:2px 6px;border-radius:6px;display:inline-block;">${c.anio} Año</div>
-            ${(() => { const ov=getPlanEdit(c.anio,c.f); const td=(ov&&ov.tema)?ov.tema:c.tema; const dd=(ov&&ov.dr!==undefined)?ov.dr:c.dr; const mod=ov?'<span style="font-size:8px;background:#fef3c7;color:#92400e;padding:1px 4px;border-radius:4px;font-weight:700;margin-left:3px;">editado</span>':''; return `<p class="cc-tema" style="margin-top:5px;margin-bottom:4px;">${td}${mod}</p>${dd?`<p class="cc-dr" style="margin-bottom:${editable?'6px':'0'};display:flex;align-items:flex-start;gap:3px;"><span style="opacity:.7;">👨‍⚕️</span>${dd}</p>`:''}`; })()}
+            ${(() => { const ov=getPlanEdit(c.anio,c.f); const td=(ov&&ov.tema)?ov.tema:c.tema; const dd=(ov&&ov.dr!==undefined)?ov.dr:c.dr; const mod=ov?'<span style="font-size:8px;background:#fef3c7;color:#92400e;padding:1px 4px;border-radius:4px;font-weight:700;margin-left:3px;">editado</span>':''; return `<p class="cc-tema${editable ? ' cc-tema-corto' : ''}" title="${td.replace(/"/g,'&quot;')}" style="margin-top:5px;margin-bottom:4px;">${td}${mod}</p>${dd?`<p class="cc-dr" style="margin-bottom:${editable?'6px':'0'};display:flex;align-items:flex-start;gap:3px;"><span style="opacity:.7;">👨‍⚕️</span>${dd}</p>`:''}`; })()}
             ${editable ? `<div id="tema-container-${i}"
                 data-key="${localKey}"
                 data-fecha="${c.f}"
@@ -1787,7 +1826,7 @@ function _tarjetaClase(c, i, hoy) {
                 data-bg="${col.bg}"
                 data-text="${col.text}"
                 data-border="${col.border}"
-                style="margin-top:6px;padding-top:6px;border-top:1px solid ${col.border};">
+                style="margin-top:auto;padding-top:6px;border-top:1px solid ${col.border};flex-shrink:0;">
                 ${guardado
                     ? `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px;">
                            <div style="flex:1;min-width:0;">
@@ -1801,7 +1840,7 @@ function _tarjetaClase(c, i, hoy) {
                        </div>`
                     : `<div style="font-size:10px;color:#6366f1;font-weight:700;margin-bottom:4px;">✏️ Tema a desarrollar:</div>
                        <input type="text" id="inp-${i}" placeholder="Escribe el tema específico…" value=""
-                           style="width:100%;font-size:11px;padding:5px 8px;border:1.5px solid #c7d2fe;border-radius:7px;outline:none;background:#fff;color:#334155;box-sizing:border-box;margin-bottom:5px;">
+                           style="width:100%;font-size:12px;padding:5px 7px;border:1.5px solid #c7d2fe;border-radius:7px;outline:none;background:#fff;color:#334155;box-sizing:border-box;margin-bottom:5px;">
                        <div style="display:flex;align-items:center;gap:6px;">
                            <button onclick="guardarTemaDesdeBoton('inp-${i}','${localKey}','${c.f}','${c.anio}','${c.tema.toLowerCase().includes('caso') ? 'caso' : 'revision'}','estado-${i}',${i})"
                                style="font-size:10px;font-weight:700;background:#4f46e5;color:#fff;border:none;border-radius:6px;padding:4px 11px;cursor:pointer;flex-shrink:0;letter-spacing:.02em;">
