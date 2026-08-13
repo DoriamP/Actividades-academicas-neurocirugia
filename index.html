@@ -25,31 +25,48 @@
            texto crece a lo alto —el título se parte en varias líneas y la
            tarjeta se estira— en lugar de a lo ancho, que no lo hay.
            A partir de 640 px se vuelve a un ancho cómodo de escritorio. */
-        .carrusel-clases { gap: 8px; padding-left: 12px; padding-right: 12px; }
+        /* El ancho va en PORCENTAJE del propio carrusel, no en 100vw.
+           Con 100vw la tarjeta se medía contra la ventana entera —incluida la
+           barra de desplazamiento y sin descontar los márgenes de la página—,
+           así que la fila salía más ancha que su hueco y el navegador
+           empequeñecía la página para que cupiera: de ahí el efecto de zoom.
+           En porcentaje se mide contra el espacio que hay de verdad. */
+        .carrusel-clases {
+            gap: 8px; padding-left: 12px; padding-right: 12px;
+            -webkit-overflow-scrolling: touch;      /* inercia al deslizar en iOS */
+            overscroll-behavior-x: contain;         /* no arrastra la página */
+            cursor: grab;
+        }
+        .carrusel-clases.arrastrando { cursor: grabbing; scroll-behavior: auto; }
         .carrusel-clases > .tarjeta-clase {
             flex: 0 0 auto;
-            width: calc((100vw - 24px - 16px) / 3);   /* 3 tarjetas + 2 huecos */
-            min-width: 104px;
+            width: calc((100% - 16px) / 2.75);      /* la tercera se ve empezada */
+            min-width: 118px; max-width: 200px;
+            /* Altura fija: antes un tema largo estiraba la tarjeta a 300 px y
+               quedaba una columna, no una tarjeta. Ahora todas miden igual. */
+            height: 178px; box-sizing: border-box; overflow: hidden;
+            display: flex; flex-direction: column;
         }
-        /* La fecha es lo que se busca de un vistazo, así que se lleva el mayor
-           salto: de 14 px a 21 px, la mitad más grande. El tema no puede crecer
-           tanto —a 24 px entrarían cuatro letras por línea en 116 px—, pero
-           sube de 12 a 13,5 px y se parte en las líneas que haga falta. */
-        .tarjeta-clase .tc-fecha  { font-size: 21px; line-height: 1.1; letter-spacing: -0.3px; }
-        .tarjeta-clase .tc-anio   { font-size: 13px; }
-        .tarjeta-clase .tc-tema   { font-size: 13.5px; line-height: 1.3; }
-        .tarjeta-clase .tc-dr     { font-size: 12.5px; }
+        .tarjeta-clase > .tc-cuerpo { flex: 1; min-height: 0; overflow-y: auto; }
+
+        .tarjeta-clase .tc-fecha  { font-size: 20px; line-height: 1.1; letter-spacing: -0.3px; }
+        .tarjeta-clase .tc-anio   { font-size: 12px; }
+        .tarjeta-clase .tc-dr     { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .tarjeta-clase .tc-etiq   { font-size: 11px; }
-        .tarjeta-clase .tc-boton  { font-size: 12px; padding: 4px 8px; }
+        .tarjeta-clase .tc-boton  { font-size: 11.5px; padding: 3px 8px; }
         .tarjeta-clase .tc-vacio  { font-size: 13px; line-height: 1.35; }
+        /* El tema se corta a dos líneas; el texto entero queda en el title */
+        .tarjeta-clase .tc-tema   { font-size: 13px; line-height: 1.3;
+                                    display: -webkit-box; -webkit-line-clamp: 2;
+                                    -webkit-box-orient: vertical; overflow: hidden; }
 
         @media (min-width: 640px) {
             .carrusel-clases { gap: 12px; padding-left: 20px; padding-right: 20px; }
-            .carrusel-clases > .tarjeta-clase { width: 232px; }
+            .carrusel-clases > .tarjeta-clase { width: 232px; max-width: none; height: 200px; }
             .tarjeta-clase .tc-fecha { font-size: 24px; }
-            .tarjeta-clase .tc-anio  { font-size: 14px; }
-            .tarjeta-clase .tc-tema  { font-size: 15px; }
-            .tarjeta-clase .tc-dr    { font-size: 14px; }
+            .tarjeta-clase .tc-anio  { font-size: 13px; }
+            .tarjeta-clase .tc-tema  { font-size: 14px; -webkit-line-clamp: 3; }
+            .tarjeta-clase .tc-dr    { font-size: 13px; }
         }
     </style>
 </head>
@@ -92,16 +109,16 @@
         </div>
     </header>
 
-    <main class="flex-grow max-w-6xl w-full mx-auto px-4 py-8 md:py-10">
+    <main class="flex-grow max-w-6xl w-full mx-auto px-4 py-3 md:py-10">
 
         <!-- SECCIÓN AGENDA DOCENTE -->
         <section class="mb-10">
-            <div class="flex items-center gap-3 mb-5">
+            <div class="flex items-center gap-3 mb-3 md:mb-5">
                 <div class="bg-indigo-900 p-2 rounded-lg text-indigo-200">
                     <i data-lucide="calendar-days" class="w-5 h-5"></i>
                 </div>
-                <h2 class="text-xl font-bold text-slate-900">Agenda Académica 2026 - 2027</h2>
-                <span class="text-xs text-slate-500 font-medium bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">Plan Docente Activo</span>
+                <h2 class="text-base md:text-xl font-bold text-slate-900">Agenda Académica 2026 - 2027</h2>
+                <span class="hidden sm:inline text-xs text-slate-500 font-medium bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">Plan Docente Activo</span>
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-5 gap-5">
@@ -1455,7 +1472,7 @@
                 document.getElementById('btnNext').classList.add('opacity-40');
                 return;
             }
-            var visibles = grupos.slice(claseOffset, claseOffset + 10);
+            var visibles = grupos;
             var pf = parseDate(visibles[0][0]), uf = parseDate(visibles[visibles.length-1][0]);
             rangoEl.textContent = DIAS_ES[pf.getDay()]+' '+pf.getDate()+' '+MESES_ES[pf.getMonth()]+'  →  '+DIAS_ES[uf.getDay()]+' '+uf.getDate()+' '+MESES_ES[uf.getMonth()];
 
@@ -1472,6 +1489,7 @@
                 var sinClase = clases.length === 0;
 
                 var card = document.createElement('div');
+                if (esHoy) card.id = 'carrusel-ancla-hoy';
                 card.className = 'tarjeta-clase scroll-snap-start rounded-xl border shadow-sm overflow-hidden ' +
                     (esHoy ? 'border-indigo-400 ring-2 ring-indigo-300' : sinClase ? 'border-dashed border-slate-300' : 'border-slate-200');
                 if (esPasada) card.style.opacity = sinClase ? '0.45' : '0.65';
@@ -1530,7 +1548,7 @@
                         +   '<span class="tc-anio font-black ' + col.text + ' uppercase tracking-wide">' + c.anio + ' año</span>'
                         +   '<span title="' + dotTip + '" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + dotClr + ';border:1.5px solid rgba(0,0,0,.15);flex-shrink:0;"></span>'
                         + '</div>'
-                        + '<p class="tc-tema font-semibold text-slate-800">' + temaDisplay + modBadge + '</p>'
+                        + '<p class="tc-tema font-semibold text-slate-800" title="' + _invEsc(temaDisplay) + '">' + temaDisplay + modBadge + '</p>'
                         + (drDisplay ? '<p class="tc-dr text-slate-500 mt-0.5">' + drDisplay + '</p>' : '')
                         + (esCasoRev && temaGuardado ? '<div class="mt-1.5 pt-1.5 border-t ' + col.border + ' flex items-start gap-1"><span class="text-indigo-500 text-xs">📌</span><p class="tc-tema font-semibold text-indigo-800">' + temaGuardado + '</p></div>' : '')
                         + (esCasoRev && !temaGuardado ? '<p class="tc-dr text-slate-400 italic mt-1">— tema por asignar —</p>' : '')
@@ -1552,26 +1570,75 @@
 
                 // Día hábil sin clase: se dice explícitamente, para que al
                 // programar se vea de un vistazo qué días están libres.
+                // Un mismo día puede tener clase de varios años. En vez de estirar
+                // la tarjeta, el cuerpo se desplaza por dentro: todas miden igual.
                 var cuerpo = sinClase
-                    ? '<div class="bg-white p-2 flex items-center justify-center" style="min-height:74px;">'
+                    ? '<div class="tc-cuerpo bg-white p-2 flex items-center justify-center">'
                         + '<p class="tc-vacio text-slate-400 italic text-center">'
                         + (esHoy ? 'Hoy no hay clase programada' : 'No hay clase programada') + '</p></div>'
-                    : '<div class="bg-white p-2 space-y-2">' + temasHTML + '</div>';
+                    : '<div class="tc-cuerpo bg-white p-2 space-y-2">' + temasHTML + '</div>';
 
                 card.innerHTML = cabecera + cuerpo;
                 carousel.appendChild(card);
             });
 
-            document.getElementById('btnPrev').disabled = claseOffset === 0;
-            document.getElementById('btnPrev').classList.toggle('opacity-40', claseOffset === 0);
-            document.getElementById('btnNext').disabled = claseOffset + 10 >= grupos.length;
-            document.getElementById('btnNext').classList.toggle('opacity-40', claseOffset + 10 >= grupos.length);
+            _activarArrastreCarrusel();
+            // Las flechas ya no paginan: siempre hay hacia dónde desplazarse
+            ['btnPrev','btnNext'].forEach(function (id) {
+                var b = document.getElementById(id);
+                if (b) { b.disabled = false; b.classList.remove('opacity-40'); }
+            });
+            setTimeout(irAClasesHoy, 60);
         }
 
+        /** Desplaza el carrusel una pantalla en la dirección indicada */
         function scrollClases(dir) {
-            var grupos = getGruposPorFecha();
-            claseOffset = Math.max(0, Math.min(grupos.length - 1, claseOffset + dir * 5));
-            renderCarousel();
+            var car = document.getElementById('clasesCarousel');
+            if (!car) return;
+            var paso = Math.max(120, car.clientWidth * 0.8);
+            _desplazarCarrusel(car, car.scrollLeft + dir * paso);
+        }
+
+        function _desplazarCarrusel(car, destino) {
+            destino = Math.max(0, Math.min(destino, car.scrollWidth - car.clientWidth));
+            if (typeof car.scrollTo === 'function') car.scrollTo({ left: destino, behavior: 'smooth' });
+            else car.scrollLeft = destino;
+        }
+
+        /**
+         * Arrastre con el ratón. En móvil el dedo ya desplaza solo —para eso
+         * está overflow-x— pero en escritorio hacía falta usar las flechas.
+         * Se ignora si el gesto empieza sobre un enlace o un botón, para no
+         * romper el «Evaluar».
+         */
+        function _activarArrastreCarrusel() {
+            var car = document.getElementById('clasesCarousel');
+            if (!car || car._arrastreListo) return;
+            car._arrastreListo = true;
+            var pulsando = false, x0 = 0, s0 = 0, movido = 0;
+
+            car.addEventListener('mousedown', function (e) {
+                if (e.button !== 0 || e.target.closest('a,button,input,select,textarea')) return;
+                pulsando = true; movido = 0;
+                x0 = e.pageX; s0 = car.scrollLeft;
+                car.classList.add('arrastrando');
+            });
+            window.addEventListener('mousemove', function (e) {
+                if (!pulsando) return;
+                var d = e.pageX - x0;
+                movido = Math.abs(d);
+                if (movido > 3) e.preventDefault();
+                car.scrollLeft = s0 - d;
+            });
+            window.addEventListener('mouseup', function () {
+                if (!pulsando) return;
+                pulsando = false;
+                car.classList.remove('arrastrando');
+            });
+            // Un clic accidental al soltar tras arrastrar no debe abrir el formulario
+            car.addEventListener('click', function (e) {
+                if (movido > 5) { e.preventDefault(); e.stopPropagation(); movido = 0; }
+            }, true);
         }
 
         /**
@@ -1590,8 +1657,16 @@
 
         /** Devuelve el carrusel al día de hoy */
         function irAClasesHoy() {
-            claseOffset = _idxClasesHoy();
-            renderCarousel();
+            var car = document.getElementById('clasesCarousel');
+            if (!car) return;
+            var card = document.getElementById('carrusel-ancla-hoy');
+            if (!card) {
+                // Hoy cae en fin de semana o fuera del curso: al primer día que queda
+                var todas = car.querySelectorAll('.tarjeta-clase');
+                card = todas[Math.min(_idxClasesHoy(), Math.max(0, todas.length - 1))];
+            }
+            if (!card) return;
+            _desplazarCarrusel(car, card.offsetLeft - car.offsetLeft - 4);
         }
 
         // ══════════════════════════════════════════════════════════════
