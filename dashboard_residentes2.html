@@ -91,19 +91,21 @@
                     <option value="3">Abril</option>
                 </select>
             </div>
-            <div id="claseContador" class="ml-auto text-xs text-slate-400 font-medium self-center"></div>
+            <button type="button" onclick="abrirCalendarioClases()" title="Ver todas las clases en un calendario"
+                class="ml-auto self-center bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-lg px-2.5 py-1.5 text-sm font-bold transition">🗓</button>
+            <div id="claseContador" class="text-xs text-slate-400 font-medium self-center"></div>
         </div>
 
         <!-- Carrusel -->
-        <div class="relative py-4" style="padding-left:40px;padding-right:40px;">
+        <div class="relative py-4 carrusel-envoltorio">
             <button onclick="scrollClaseCarousel(-1)"
-                class="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full shadow-md border border-slate-200 w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 transition text-lg font-bold">‹</button>
+                class="carrusel-flecha absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full shadow-md border border-slate-200 w-8 h-8 items-center justify-center text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 transition text-lg font-bold">‹</button>
             <div id="claseCarousel"
                 class="flex gap-3 overflow-x-auto scroll-smooth"
                 style="scrollbar-width:none;-ms-overflow-style:none;scroll-snap-type:x mandatory;">
             </div>
             <button onclick="scrollClaseCarousel(1)"
-                class="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full shadow-md border border-slate-200 w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 transition text-lg font-bold">›</button>
+                class="carrusel-flecha absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full shadow-md border border-slate-200 w-8 h-8 items-center justify-center text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 transition text-lg font-bold">›</button>
         </div>
         <p id="claseVacio" class="hidden text-slate-400 text-sm text-center py-6">No hay clases para los filtros seleccionados.</p>
     </div>
@@ -687,10 +689,41 @@
 #claseCarousel::-webkit-scrollbar { display:none; }
 #listFechasImportantes::-webkit-scrollbar { width:5px; }
 #listFechasImportantes::-webkit-scrollbar-thumb { background:#e2e8f0; border-radius:99px; }
-.clase-card { scroll-snap-align:start; flex-shrink:0; width:210px; border-radius:14px; border-width:2px; border-style:solid; padding:14px; position:relative; transition:box-shadow .2s; }
+/* ── CARRUSEL DE CLASES ───────────────────────────────────────────────
+   En un móvil en vertical tienen que caber TRES tarjetas, así que el ancho
+   se calcula sobre el de la pantalla en lugar de fijarse en píxeles. Las
+   flechas laterales se ocultan en móvil: ocupaban 80 px de los 390 y el
+   carrusel se recorre con el dedo. A partir de 640 px vuelve todo. */
+.clase-card { scroll-snap-align:start; flex-shrink:0;
+              width:calc((100vw - 16px - 16px) / 3); min-width:104px;
+              border-radius:12px; border-width:2px; border-style:solid;
+              padding:8px; position:relative; transition:box-shadow .2s; }
 .clase-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.10); }
 .clase-card-hoy { box-shadow:0 0 0 3px #6366f1, 0 4px 18px rgba(99,102,241,.25); }
 .clase-card-pasada { opacity:.55; }
+.clase-card-vacia { border-style:dashed; background:#fff !important; display:flex;
+                    flex-direction:column; justify-content:center; }
+
+/* Letra más grande: la fecha es lo que se busca de un vistazo */
+.cc-dia   { font-size:26px; font-weight:900; color:#1e293b; line-height:1; }
+.cc-mes   { font-size:13px; font-weight:700; color:#64748b; }
+.cc-anio  { font-size:12px; font-weight:800; }
+.cc-tema  { font-size:13.5px; font-weight:600; color:#334155; line-height:1.3; }
+.cc-dr    { font-size:12.5px; color:#6366f1; font-weight:600; }
+.cc-vacio { font-size:13px; color:#94a3b8; font-style:italic; text-align:center; line-height:1.35; }
+
+.carrusel-envoltorio { padding-left:8px; padding-right:8px; }
+.carrusel-flecha { display:none; }
+
+@media (min-width: 640px) {
+    .clase-card { width:236px; padding:14px; border-radius:14px; }
+    .cc-dia  { font-size:30px; }
+    .cc-mes  { font-size:14px; }
+    .cc-tema { font-size:15px; }
+    .cc-dr   { font-size:13.5px; }
+    .carrusel-envoltorio { padding-left:40px; padding-right:40px; }
+    .carrusel-flecha { display:flex; }
+}
 </style>
 
 <script>
@@ -1497,6 +1530,132 @@ function scrollClaseCarousel(dir) {
     c.scrollBy({ left: dir * 230, behavior:'smooth' });
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  CALENDARIO DE CLASES PROGRAMADAS
+//  ----------------------------------------------------------------
+//  El carrusel enseña unos días; para ver el mes entero —qué está
+//  ocupado y qué libre— está este calendario. Cinco columnas: sábado
+//  y domingo no aparecen, no hay actividad docente y quitarlos deja
+//  un 40 % más de ancho para cada día laborable.
+//  El ancho total es el de un móvil en vertical.
+// ══════════════════════════════════════════════════════════════════
+let _calMes = null;
+// MESES_LARGO ya está declarado más arriba; se reutiliza
+
+function abrirCalendarioClases() {
+    let ov = document.getElementById('panelCalClases');
+    if (!ov) {
+        ov = document.createElement('div');
+        ov.id = 'panelCalClases';
+        ov.setAttribute('style', 'display:none;position:fixed;inset:0;background:rgba(15,23,42,.65);' +
+            'z-index:300;align-items:center;justify-content:center;padding:10px;');
+        ov.innerHTML =
+            '<div style="background:#fff;border-radius:16px;width:100%;max-width:420px;max-height:92vh;' +
+            'display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4);">' +
+              '<div style="padding:11px 12px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:8px;">' +
+                '<button type="button" onclick="calMoverMes(-1)" style="border:1px solid #e2e8f0;background:#fff;border-radius:8px;width:30px;height:30px;font-size:15px;cursor:pointer;color:#475569;">‹</button>' +
+                '<div style="flex:1;text-align:center;min-width:0;">' +
+                  '<p id="calTitulo" style="font-size:14px;font-weight:900;color:#1e293b;"></p>' +
+                  '<p id="calSub" style="font-size:10px;color:#94a3b8;"></p>' +
+                '</div>' +
+                '<button type="button" onclick="calMoverMes(1)" style="border:1px solid #e2e8f0;background:#fff;border-radius:8px;width:30px;height:30px;font-size:15px;cursor:pointer;color:#475569;">›</button>' +
+                '<button type="button" onclick="document.getElementById(\'panelCalClases\').style.display=\'none\'" ' +
+                  'style="border:0;background:#f1f5f9;border-radius:8px;width:30px;height:30px;font-size:16px;cursor:pointer;color:#475569;">×</button>' +
+              '</div>' +
+              '<div id="calCuerpo" style="overflow-y:auto;padding:8px;"></div>' +
+              '<div style="padding:8px 12px;border-top:1px solid #e2e8f0;display:flex;gap:12px;flex-wrap:wrap;align-items:center;">' +
+                '<span style="font-size:10px;color:#64748b;"><span style="display:inline-block;width:9px;height:9px;background:#e0e7ff;border:1px solid #c7d2fe;border-radius:2px;vertical-align:-1px;"></span> con clase</span>' +
+                '<span style="font-size:10px;color:#64748b;"><span style="display:inline-block;width:9px;height:9px;background:#fff;border:1px dashed #cbd5e1;border-radius:2px;vertical-align:-1px;"></span> libre</span>' +
+                '<span style="font-size:10px;color:#cbd5e1;">lun–vie</span>' +
+                '<button type="button" onclick="calIrAHoy()" style="margin-left:auto;border:1px solid #c7d2fe;background:#eef2ff;color:#4338ca;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:800;cursor:pointer;">Hoy</button>' +
+              '</div>' +
+            '</div>';
+        ov.addEventListener('click', ev => { if (ev.target === ov) ov.style.display = 'none'; });
+        document.body.appendChild(ov);
+    }
+    if (!_calMes) calIrAHoy(true);
+    ov.style.display = 'flex';
+    _pintarCalendario();
+}
+
+function calIrAHoy(silencioso) {
+    const h = new Date();
+    _calMes = new Date(h.getFullYear(), h.getMonth(), 1);
+    if (!silencioso) _pintarCalendario();
+}
+
+function calMoverMes(d) {
+    if (!_calMes) calIrAHoy(true);
+    _calMes = new Date(_calMes.getFullYear(), _calMes.getMonth() + d, 1);
+    _pintarCalendario();
+}
+
+function _calEsc(v) {
+    return String(v == null ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function _pintarCalendario() {
+    const cuerpo = document.getElementById('calCuerpo');
+    if (!cuerpo || !_calMes) return;
+
+    const filtroAnio = (document.getElementById('filtroClaseAnio') || {}).value || '';
+    const porDia = {};
+    CLASES.filter(c => !filtroAnio || c.anio === filtroAnio).forEach(c => {
+        const d = parseFecha(c.f);
+        if (!d || d.getFullYear() !== _calMes.getFullYear() || d.getMonth() !== _calMes.getMonth()) return;
+        (porDia[d.getDate()] = porDia[d.getDate()] || []).push(c);
+    });
+
+    document.getElementById('calTitulo').textContent =
+        MESES_LARGO[_calMes.getMonth()] + ' ' + _calMes.getFullYear();
+    const nClases = Object.keys(porDia).reduce((a, k) => a + porDia[k].length, 0);
+    document.getElementById('calSub').textContent =
+        nClases + ' clase' + (nClases !== 1 ? 's' : '') +
+        (filtroAnio ? ' · ' + filtroAnio + ' año' : ' · todos los años');
+
+    const hoy = hoyMedianoche();
+    const primero = new Date(_calMes.getFullYear(), _calMes.getMonth(), 1);
+    const diasMes = new Date(_calMes.getFullYear(), _calMes.getMonth() + 1, 0).getDate();
+    let hueco = (primero.getDay() + 6) % 7;
+    if (hueco > 4) hueco = 0;                  // si el 1 cae en fin de semana
+
+    let celdas = '';
+    for (let v = 0; v < hueco; v++) celdas += '<div></div>';
+
+    for (let dia = 1; dia <= diasMes; dia++) {
+        const f = new Date(_calMes.getFullYear(), _calMes.getMonth(), dia);
+        if (f.getDay() === 0 || f.getDay() === 6) continue;
+        const esHoyC = f.getTime() === hoy.getTime();
+        const lista = porDia[dia] || [];
+        const fondo = lista.length ? '#e0e7ff' : '#fff';
+        const borde = lista.length ? '1px solid #c7d2fe' : '1px dashed #cbd5e1';
+
+        const temas = lista.map(c => {
+            const col = ANIO_COLORS[c.anio] || ANIO_COLORS['I'];
+            const ov2 = (typeof getPlanEdit === 'function') ? getPlanEdit(c.anio, c.f) : null;
+            const t = (ov2 && ov2.tema) ? ov2.tema : c.tema;
+            return '<div style="margin-top:3px;line-height:1.2;">' +
+                '<span style="font-size:9px;font-weight:900;padding:0 3px;border-radius:3px;' + (col.badge || '') + '">' + _calEsc(c.anio) + '</span>' +
+                '<span style="font-size:9px;color:#334155;display:block;overflow:hidden;">' + _calEsc(t) + '</span>' +
+                '</div>';
+        }).join('');
+
+        celdas += '<div style="background:' + fondo + ';border:' + borde + ';border-radius:6px;padding:4px;min-height:58px;overflow:hidden;' +
+            (esHoyC ? 'box-shadow:0 0 0 2px #4338ca;' : '') + '">' +
+            '<div style="font-size:12px;font-weight:900;color:' + (esHoyC ? '#4338ca' : '#475569') + ';">' + dia + '</div>' +
+            temas + '</div>';
+    }
+
+    cuerpo.innerHTML =
+        '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-bottom:4px;">' +
+        ['Lun','Mar','Mié','Jue','Vie'].map(d =>
+            '<div style="text-align:center;font-size:10px;font-weight:900;color:#94a3b8;">' + d + '</div>').join('') +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px;">' + celdas + '</div>';
+}
+
 function renderClases() {
     const filtroAnio = document.getElementById('filtroClaseAnio').value;
     const filtroMes  = document.getElementById('filtroClaseMes').value;
@@ -1532,7 +1691,75 @@ function renderClases() {
     }
     if (nearFuture !== -1 && parseFecha(lista[inicialIdx].f).getTime() !== hoy.getTime()) inicialIdx = nearFuture;
 
-    carousel.innerHTML = lista.map((c, i) => {
+    // Las tarjetas se generan primero con su índice intacto —los editores de
+    // tema dependen de él— y luego se intercalan los días hábiles sin clase.
+    const tarjetas = lista.map((c, i) => ({ fecha: parseFecha(c.f), html: _tarjetaClase(c, i, hoy) }));
+    carousel.innerHTML = _conDiasSinClase(tarjetas, hoy, filtroMes);
+
+    // Scroll centrado a la clase de hoy / próxima
+    setTimeout(() => {
+        const carousel = document.getElementById('claseCarousel');
+        const card = document.getElementById('clase-card-' + inicialIdx);
+        if (carousel && card) {
+            const targetScroll = card.offsetLeft - (carousel.offsetWidth / 2) + (card.offsetWidth / 2);
+            carousel.scrollTo({ left: Math.max(0, targetScroll), behavior: 'smooth' });
+        }
+    }, 120);
+}
+
+/**
+ * Intercala una tarjeta por cada día hábil sin clase.
+ *
+ * Antes el carrusel saltaba del 3 al 17 de agosto sin decir qué pasaba en
+ * medio. Ver los días libres es la mitad de la información cuando se está
+ * programando. Sábados y domingos no aparecen: no hay actividad docente.
+ */
+function _conDiasSinClase(tarjetas, hoy, filtroMes) {
+    if (!tarjetas.length) return '';
+    const clave = d => d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
+    const porDia = {};
+    tarjetas.forEach(t => { (porDia[clave(t.fecha)] = porDia[clave(t.fecha)] || []).push(t.html); });
+
+    let ini = new Date(Math.min.apply(null, tarjetas.map(t => t.fecha.getTime())));
+    let fin = new Date(Math.max.apply(null, tarjetas.map(t => t.fecha.getTime())));
+    // Con un mes filtrado se recorre el mes entero, aunque solo tenga dos clases
+    if (filtroMes !== '' && filtroMes !== undefined && filtroMes !== null) {
+        const m = parseInt(filtroMes, 10);
+        const anioBase = ini.getFullYear();
+        ini = new Date(anioBase, m, 1);
+        fin = new Date(anioBase, m + 1, 0);
+    }
+
+    const salida = [];
+    const d = new Date(ini);
+    let guarda = 0;
+    while (d <= fin && guarda++ < 800) {
+        const dia = d.getDay();
+        if (dia !== 0 && dia !== 6) {
+            const k = clave(d);
+            if (porDia[k]) {
+                salida.push(porDia[k].join(''));
+            } else {
+                const esHoy = d.getTime() === hoy.getTime();
+                salida.push(
+                    '<div class="clase-card clase-card-vacia ' + (esHoy ? 'clase-card-hoy' : '') + ' ' +
+                        (d < hoy && !esHoy ? 'clase-card-pasada' : '') + '" style="border-color:#cbd5e1;">' +
+                    (esHoy ? '<div style="position:absolute;top:6px;right:6px;background:#4f46e5;color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:99px;">HOY</div>' : '') +
+                    '<div style="margin-bottom:6px;">' +
+                        '<div class="cc-dia" style="color:#94a3b8;">' + d.getDate() + '</div>' +
+                        '<div class="cc-mes">' + MESES[d.getMonth()] + '</div>' +
+                    '</div>' +
+                    '<p class="cc-vacio">' + (esHoy ? 'Hoy no hay clase programada' : 'No hay clase programada') + '</p>' +
+                    '</div>');
+            }
+        }
+        d.setDate(d.getDate() + 1);
+    }
+    return salida.join('');
+}
+
+function _tarjetaClase(c, i, hoy) {
+    return ((c, i) => {
         const f = parseFecha(c.f);
         const esHoy   = f.getTime() === hoy.getTime();
         const pasada  = f < hoy;
@@ -1547,11 +1774,11 @@ function renderClases() {
             ${esHoy ? '<div style="position:absolute;top:8px;right:8px;background:#4f46e5;color:#fff;font-size:9px;font-weight:800;padding:2px 8px;border-radius:99px;letter-spacing:.05em;">HOY</div>' : ''}
             ${pasada && !esHoy ? '<div style="position:absolute;top:8px;right:8px;background:#94a3b8;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;">Pasada</div>' : ''}
             <div style="margin-bottom:5px;display:flex;align-items:baseline;gap:4px;">
-                <span style="font-size:24px;font-weight:900;color:#1e293b;line-height:1;">${f.getDate()}</span>
-                <span style="font-size:12px;font-weight:700;color:#64748b;">${MESES[f.getMonth()]} ${f.getFullYear()}</span>
+                <span class="cc-dia">${f.getDate()}</span>
+                <span class="cc-mes">${MESES[f.getMonth()]}</span>
             </div>
-            <div style="font-size:10px;font-weight:800;color:${col.text};text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;${col.badge}padding:2px 7px;border-radius:6px;display:inline-block;">${c.anio} Año</div>
-            ${(() => { const ov=getPlanEdit(c.anio,c.f); const td=(ov&&ov.tema)?ov.tema:c.tema; const dd=(ov&&ov.dr!==undefined)?ov.dr:c.dr; const mod=ov?'<span style="font-size:8px;background:#fef3c7;color:#92400e;padding:1px 4px;border-radius:4px;font-weight:700;margin-left:3px;">editado</span>':''; return `<p style="font-size:12px;font-weight:600;color:#334155;line-height:1.4;margin-top:5px;margin-bottom:4px;">${td}${mod}</p>${dd?`<p style="font-size:10px;color:#6366f1;font-weight:600;margin-bottom:${editable?'6px':'0'};display:flex;align-items:center;gap:3px;"><span style="opacity:.7;">👨‍⚕️</span>${dd}</p>`:''}`; })()}
+            <div class="cc-anio" style="color:${col.text};text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;${col.badge}padding:2px 6px;border-radius:6px;display:inline-block;">${c.anio} Año</div>
+            ${(() => { const ov=getPlanEdit(c.anio,c.f); const td=(ov&&ov.tema)?ov.tema:c.tema; const dd=(ov&&ov.dr!==undefined)?ov.dr:c.dr; const mod=ov?'<span style="font-size:8px;background:#fef3c7;color:#92400e;padding:1px 4px;border-radius:4px;font-weight:700;margin-left:3px;">editado</span>':''; return `<p class="cc-tema" style="margin-top:5px;margin-bottom:4px;">${td}${mod}</p>${dd?`<p class="cc-dr" style="margin-bottom:${editable?'6px':'0'};display:flex;align-items:flex-start;gap:3px;"><span style="opacity:.7;">👨‍⚕️</span>${dd}</p>`:''}`; })()}
             ${editable ? `<div id="tema-container-${i}"
                 data-key="${localKey}"
                 data-fecha="${c.f}"
@@ -1585,17 +1812,7 @@ function renderClases() {
                 }
             </div>` : ''}
         </div>`;
-    }).join('');
-
-    // Scroll centrado a la clase de hoy / próxima
-    setTimeout(() => {
-        const carousel = document.getElementById('claseCarousel');
-        const card = document.getElementById('clase-card-' + inicialIdx);
-        if (carousel && card) {
-            const targetScroll = card.offsetLeft - (carousel.offsetWidth / 2) + (card.offsetWidth / 2);
-            carousel.scrollTo({ left: Math.max(0, targetScroll), behavior: 'smooth' });
-        }
-    }, 120);
+    })(c, i);
 }
 
 // ──────────────────────────────────────────────────────────
