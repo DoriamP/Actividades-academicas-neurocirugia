@@ -1304,6 +1304,7 @@
                       '<div style="padding:8px 12px;border-top:1px solid #e2e8f0;display:flex;gap:12px;flex-wrap:wrap;align-items:center;">' +
                         '<span style="font-size:10px;color:#64748b;"><span style="display:inline-block;width:9px;height:9px;background:#e0e7ff;border:1px solid #c7d2fe;border-radius:2px;vertical-align:-1px;"></span> con clase</span>' +
                         '<span style="font-size:10px;color:#64748b;"><span style="display:inline-block;width:9px;height:9px;background:#fff;border:1px dashed #cbd5e1;border-radius:2px;vertical-align:-1px;"></span> libre</span>' +
+                        '<span style="font-size:10px;color:#cbd5e1;">lun–vie</span>' +
                         '<button type="button" onclick="calIrAHoy()" style="margin-left:auto;border:1px solid #c7d2fe;background:#eef2ff;color:#4338ca;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:800;cursor:pointer;">Hoy</button>' +
                       '</div>' +
                     '</div>';
@@ -1355,44 +1356,47 @@
             var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
             var primero = new Date(_calMes.getFullYear(), _calMes.getMonth(), 1);
             var diasMes = new Date(_calMes.getFullYear(), _calMes.getMonth() + 1, 0).getDate();
-            // La semana empieza en lunes
+            // Cinco columnas: sábado y domingo no aparecen. No hay actividad
+            // docente el fin de semana, y quitarlos deja un 40 % más de ancho
+            // para cada día laborable, que es donde están las clases.
             var hueco = (primero.getDay() + 6) % 7;
+            if (hueco > 4) hueco = 0;              // si el 1 cae en fin de semana
 
             var celdas = '';
             for (var v = 0; v < hueco; v++) celdas += '<div></div>';
 
             for (var dia = 1; dia <= diasMes; dia++) {
                 var f = new Date(_calMes.getFullYear(), _calMes.getMonth(), dia);
-                var finde = (f.getDay() === 0 || f.getDay() === 6);
+                if (f.getDay() === 0 || f.getDay() === 6) continue;   // fin de semana fuera
                 var esHoyC = f.getTime() === hoy.getTime();
                 var lista = porDia[dia] || [];
 
-                var fondo = lista.length ? '#e0e7ff' : (finde ? '#f8fafc' : '#fff');
-                var borde = lista.length ? '1px solid #c7d2fe' : (finde ? '1px solid #f1f5f9' : '1px dashed #cbd5e1');
+                var fondo = lista.length ? '#e0e7ff' : '#fff';
+                var borde = lista.length ? '1px solid #c7d2fe' : '1px dashed #cbd5e1';
 
                 var temas = lista.map(function (c) {
                     var col = ANIO_COLORES[c.anio] || ANIO_COLORES['I'];
                     var ov2 = getPlanEdit(c.anio, c.f);
                     var t = (ov2 && ov2.tema) ? ov2.tema : c.tema;
-                    return '<div style="margin-top:2px;line-height:1.15;">'
-                        + '<span style="font-size:7.5px;font-weight:900;padding:0 2px;border-radius:2px;background:' + (col.hex || '#e0e7ff') + ';color:#1e293b;">' + _invEsc(c.anio) + '</span>'
-                        + '<span style="font-size:7.5px;color:#334155;display:block;overflow:hidden;text-overflow:ellipsis;">' + _invEsc(t) + '</span>'
+                    return '<div style="margin-top:3px;line-height:1.2;">'
+                        + '<span style="font-size:9px;font-weight:900;padding:0 3px;border-radius:3px;background:' + (col.hex || '#e0e7ff') + ';color:#1e293b;">' + _invEsc(c.anio) + '</span>'
+                        + '<span style="font-size:9px;color:#334155;display:block;overflow:hidden;">' + _invEsc(t) + '</span>'
                         + '</div>';
                 }).join('');
 
-                celdas += '<div style="background:' + fondo + ';border:' + borde + ';border-radius:6px;padding:3px;min-height:52px;overflow:hidden;'
+                celdas += '<div style="background:' + fondo + ';border:' + borde + ';border-radius:6px;padding:4px;min-height:58px;overflow:hidden;'
                     + (esHoyC ? 'box-shadow:0 0 0 2px #4338ca;' : '') + '">'
-                    + '<div style="font-size:10px;font-weight:900;color:' + (esHoyC ? '#4338ca' : finde ? '#cbd5e1' : '#475569') + ';">' + dia + '</div>'
+                    + '<div style="font-size:12px;font-weight:900;color:' + (esHoyC ? '#4338ca' : '#475569') + ';">' + dia + '</div>'
                     + temas + '</div>';
             }
 
             cuerpo.innerHTML =
-                '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:4px;">'
-                + ['L','M','X','J','V','S','D'].map(function (d) {
-                    return '<div style="text-align:center;font-size:9px;font-weight:900;color:#94a3b8;">' + d + '</div>';
+                '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-bottom:4px;">'
+                + ['Lun','Mar','Mié','Jue','Vie'].map(function (d) {
+                    return '<div style="text-align:center;font-size:10px;font-weight:900;color:#94a3b8;">' + d + '</div>';
                   }).join('')
                 + '</div>'
-                + '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">' + celdas + '</div>';
+                + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px;">' + celdas + '</div>';
         }
 
         function getGruposPorFecha() {
