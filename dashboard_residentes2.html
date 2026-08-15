@@ -713,12 +713,24 @@
    a tres líneas con puntos suspensivos. Así todas miden igual y la fila se lee
    como una fila, no como un peine.
    Las flechas laterales se ocultan en móvil: ocupaban 80 px de los 390. */
+/* Altura ÚNICA para todas las tarjetas.
+   Dejarlas crecer libremente tenía un efecto que no se ve hasta tenerlo en
+   pantalla: una fila flexible mide lo que su hijo más alto, y como el carrusel
+   lleva las 204 tarjetas del curso, el título más largo del año entero estiraba
+   el contenedor y bajo las tarjetas cortas quedaba un hueco enorme, incómodo
+   para deslizar porque el dedo cae en el vacío.
+   Para que nada quede escondido, la tarjeta se divide: el contenido se
+   desplaza por dentro y el editor de tema queda en un pie fijo, siempre visible. */
 .clase-card { scroll-snap-align:start; flex-shrink:0;
               width:calc((100% - 12px) / 2); min-width:150px; max-width:250px;
-              min-height:168px; box-sizing:border-box;
+              height:212px; box-sizing:border-box;
               display:flex; flex-direction:column;
               border-radius:12px; border-width:2px; border-style:solid;
               padding:9px; position:relative; transition:box-shadow .2s; }
+.clase-card > .cc-scroll { flex:1 1 auto; min-height:0; overflow-y:auto;
+                           -webkit-overflow-scrolling:touch; }
+.clase-card > .cc-pie    { flex:0 0 auto; }
+.clase-card-editable { height:268px; }
 .clase-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.10); }
 .clase-card-hoy { box-shadow:0 0 0 3px #6366f1, 0 4px 18px rgba(99,102,241,.25); }
 .clase-card-pasada { opacity:.55; }
@@ -741,7 +753,8 @@
 .carrusel-flecha { display:none; }
 
 @media (min-width: 640px) {
-    .clase-card { width:240px; max-width:none; min-height:190px; padding:14px; border-radius:14px; }
+    .clase-card { width:240px; max-width:none; height:230px; padding:14px; border-radius:14px; }
+    .clase-card-editable { height:290px; }
     .cc-dia  { font-size:30px; }
     .cc-mes  { font-size:14px; }
     .cc-anio { font-size:12px; }
@@ -1754,6 +1767,20 @@ function renderClases() {
  * programada»— y el salto parecería llevar al sitio equivocado. Por eso se
  * comprueba que la tarjeta traiga clase y, si no, se quitan los filtros.
  */
+/**
+ * Posición a la que hay que desplazar el carrusel para centrar una tarjeta.
+ *
+ * Se mide con getBoundingClientRect y no con offsetLeft: offsetLeft se cuenta
+ * desde el «padre posicionado», que aquí es el contenedor con las flechas y no
+ * el carrusel, así que las dos medidas no compartían origen y el salto caía en
+ * una tarjeta equivocada.
+ */
+function _posicionDe(car, card) {
+    const rc = car.getBoundingClientRect();
+    const rt = card.getBoundingClientRect();
+    return Math.max(0, car.scrollLeft + (rt.left - rc.left) - (rc.width / 2) + (rt.width / 2));
+}
+
 function irAClaseDesdeCalendario(fechaStr) {
     const car = document.getElementById('claseCarousel');
     if (!car) return;
@@ -1775,7 +1802,7 @@ function irAClaseDesdeCalendario(fechaStr) {
     const panel = document.getElementById('panelCalClases');
     if (panel) panel.style.display = 'none';
 
-    const destino = Math.max(0, card.offsetLeft - (car.offsetWidth / 2) + (card.offsetWidth / 2));
+    const destino = _posicionDe(car, card);
     if (typeof car.scrollTo === 'function') car.scrollTo({ left: destino, behavior: 'smooth' });
     else car.scrollLeft = destino;
 
@@ -1822,7 +1849,7 @@ function irACarruselHoy(inicialIdx, suave) {
     if (!card && inicialIdx !== undefined) card = document.getElementById('clase-card-' + inicialIdx);
     if (!card) card = carousel.querySelector('.clase-card');
     if (!card) return;
-    const destino = Math.max(0, card.offsetLeft - (carousel.offsetWidth / 2) + (card.offsetWidth / 2));
+    const destino = _posicionDe(carousel, card);
     // scrollTo con animación no existe en todos los navegadores; si falta, se
     // salta directo. Peor es que el botón no haga nada.
     if (typeof carousel.scrollTo === 'function') {
@@ -1909,13 +1936,15 @@ function _tarjetaClase(c, i, hoy) {
                      style="border-color:${col.border};background:${esHoy ? '#fff' : col.bg};">
             ${esHoy ? '<div style="position:absolute;top:8px;right:8px;background:#4f46e5;color:#fff;font-size:9px;font-weight:800;padding:2px 8px;border-radius:99px;letter-spacing:.05em;">HOY</div>' : ''}
             ${pasada && !esHoy ? '<div style="position:absolute;top:8px;right:8px;background:#94a3b8;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;">Pasada</div>' : ''}
-            <div style="margin-bottom:4px;display:flex;align-items:baseline;gap:4px;flex-shrink:0;">
+            <div class="cc-scroll">
+            <div style="margin-bottom:4px;display:flex;align-items:baseline;gap:4px;">
                 <span class="cc-dia">${f.getDate()}</span>
                 <span class="cc-mes">${MESES[f.getMonth()]}</span>
             </div>
             <div class="cc-anio" style="color:${col.text};text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;${col.badge}padding:2px 6px;border-radius:6px;display:inline-block;">${c.anio} Año</div>
             ${(() => { const ov=getPlanEdit(c.anio,c.f); const td=(ov&&ov.tema)?ov.tema:c.tema; const dd=(ov&&ov.dr!==undefined)?ov.dr:c.dr; const mod=ov?'<span style="font-size:8px;background:#fef3c7;color:#92400e;padding:1px 4px;border-radius:4px;font-weight:700;margin-left:3px;">editado</span>':''; return `<p class="cc-tema" title="${td.replace(/"/g,'&quot;')}" style="margin-top:5px;margin-bottom:4px;">${td}${mod}</p>${dd?`<p class="cc-dr" style="margin-bottom:${editable?'6px':'0'};display:flex;align-items:flex-start;gap:3px;"><span style="opacity:.7;">👨‍⚕️</span>${dd}</p>`:''}`; })()}
-            ${editable ? `<div id="tema-container-${i}"
+            </div>
+            ${editable ? `<div class="cc-pie" id="tema-container-${i}"
                 data-key="${localKey}"
                 data-fecha="${c.f}"
                 data-anio="${c.anio}"
@@ -1923,7 +1952,7 @@ function _tarjetaClase(c, i, hoy) {
                 data-bg="${col.bg}"
                 data-text="${col.text}"
                 data-border="${col.border}"
-                style="margin-top:auto;padding-top:6px;border-top:1px solid ${col.border};flex-shrink:0;">
+                style="padding-top:6px;border-top:1px solid ${col.border};">
                 ${guardado
                     ? `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px;">
                            <div style="flex:1;min-width:0;">
