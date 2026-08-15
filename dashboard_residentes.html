@@ -424,6 +424,23 @@
         }
         const URL_SCRIPT = (window.CONFIG && window.CONFIG.URL_SCRIPT) || '';
 
+// ══════════════════════════════════════════════════════════════════
+//  AL ABRIR, ARRIBA DEL TODO
+//  ----------------------------------------------------------------
+//  Dos cosas dejaban la página abierta por «Fechas Importantes»:
+//  un scrollIntoView que arrastraba la página entera (ya corregido) y
+//  la restauración automática del navegador, que al recargar devuelve
+//  la vista donde estaba la vez anterior. Lo segundo se desactiva aquí.
+// ══════════════════════════════════════════════════════════════════
+try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) {}
+window.addEventListener('load', function () {
+    // Dos pasadas: la segunda, por si algo reacomoda la página al terminar
+    // de llegar los datos.
+    window.scrollTo(0, 0);
+    setTimeout(function () { if (window.scrollY < 400) window.scrollTo(0, 0); }, 350);
+});
+
+
 // ── Caché de temas manuales (sincronizado con Google Sheets) ──
 let _temasCache = {};
 
@@ -1280,6 +1297,30 @@ function renderClases() {
  * el carrusel, así que las dos medidas no compartían origen y el salto caía en
  * una tarjeta equivocada.
  */
+/**
+ * Desplaza el carrusel a una posición.
+ *
+ * Se hace de golpe y desactivando temporalmente el imán de las tarjetas
+ * (scroll-snap) y la animación (scroll-behavior). Con el imán activo, Safari
+ * de iOS ignora el desplazamiento por código y la tarjeta se queda donde
+ * estaba: eso hacía que al pulsar una fecha del calendario solo se cerrara la
+ * ventana y no se moviera nada.
+ */
+function _desplazarCarrusel(car, destino) {
+    destino = Math.max(0, Math.min(destino, car.scrollWidth - car.clientWidth));
+    const snapAntes = car.style.scrollSnapType;
+    const behAntes  = car.style.scrollBehavior;
+    car.style.scrollSnapType = 'none';
+    car.style.scrollBehavior = 'auto';
+    car.scrollLeft = destino;
+    const restaurar = () => {
+        car.style.scrollSnapType = snapAntes;
+        car.style.scrollBehavior = behAntes;
+    };
+    if (window.requestAnimationFrame) requestAnimationFrame(() => requestAnimationFrame(restaurar));
+    else setTimeout(restaurar, 50);
+}
+
 function _posicionDe(car, card) {
     const rc = car.getBoundingClientRect();
     const rt = card.getBoundingClientRect();
@@ -1307,9 +1348,10 @@ function irAClaseDesdeCalendario(fechaStr) {
     const panel = document.getElementById('panelCalClases');
     if (panel) panel.style.display = 'none';
 
-    const destino = _posicionDe(car, card);
-    if (typeof car.scrollTo === 'function') car.scrollTo({ left: destino, behavior: 'smooth' });
-    else car.scrollLeft = destino;
+    // Tras cerrar la ventana el diseño cambia: se mide en el fotograma
+    // siguiente, no antes, o la posición sale de la pantalla anterior.
+    const saltar = () => _desplazarCarrusel(car, _posicionDe(car, card));
+    if (window.requestAnimationFrame) requestAnimationFrame(saltar); else saltar();
 
     card.classList.add('tarjeta-destacada');
     setTimeout(() => card.classList.remove('tarjeta-destacada'), 1800);
@@ -1354,14 +1396,7 @@ function irACarruselHoy(inicialIdx) {
     if (!card && inicialIdx !== undefined) card = document.getElementById('clase-card-' + inicialIdx);
     if (!card) card = carousel.querySelector('.clase-card');
     if (!card) return;
-    const destino = _posicionDe(carousel, card);
-    // scrollTo con animación no existe en todos los navegadores; si falta, se
-    // salta directo. Peor es que el botón no haga nada.
-    if (typeof carousel.scrollTo === 'function') {
-        carousel.scrollTo({ left: destino, behavior: 'smooth' });
-    } else {
-        carousel.scrollLeft = destino;
-    }
+    _desplazarCarrusel(carousel, _posicionDe(carousel, card));
 }
 
 /**
@@ -1680,8 +1715,17 @@ function renderFechasImportantes() {
         const d = futuras[i];
         return d && new Date(d.fecha + 'T00:00:00') >= hoy;
     });
+    // OJO: aquí había un scrollIntoView. Ese método desplaza TODOS los
+    // contenedores con scroll que haya por encima, incluida la página entera,
+    // así que 100 ms después de abrir el panel la vista saltaba sola hasta
+    // «Fechas Importantes» y las clases programadas quedaban arriba, fuera de
+    // pantalla. Se mueve solo el scroll interno de la lista, que es lo que se
+    // quería: scrollFechasAHoy() ya lo hace bien con lista.scrollTop.
     if (hoyItems.length > 0) {
-        setTimeout(() => hoyItems[0].scrollIntoView({ block:'start' }), 100);
+        setTimeout(() => {
+            const cont = document.getElementById('listFechasImportantes');
+            if (cont) cont.scrollTop = Math.max(0, hoyItems[0].offsetTop - cont.offsetTop);
+        }, 100);
     }
 }
 
