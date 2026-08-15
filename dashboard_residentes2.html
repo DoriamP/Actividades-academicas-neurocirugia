@@ -1884,13 +1884,32 @@ function _activarArrastreCarrusel() {
     }, true);
 }
 
-function irACarruselHoy(inicialIdx, suave) {
+function irACarruselHoy(inicialIdx) {
     const carousel = document.getElementById('claseCarousel');
     if (!carousel) return;
+
     let card = document.getElementById('carrusel-ancla-hoy');
+
+    // Si no hay ancla —hoy es sábado o domingo, o hay un mes filtrado que no
+    // incluye hoy— se busca el primer día que NO haya pasado.
+    //
+    // Aquí estaba el fallo: el repliegue cogía «la primera tarjeta del
+    // carrusel», que es el 25 de mayo, el arranque del curso. Pulsar «Hoy» un
+    // fin de semana mandaba al principio del año académico. Y como el curso
+    // empieza en fin de semana una de cada tres veces que alguien abre esto,
+    // el botón parecía sencillamente roto.
+    if (!card) {
+        const hoy = hoyMedianoche();
+        const todas = Array.from(carousel.querySelectorAll('.clase-card[data-fecha]'));
+        card = todas.find(t => {
+            const fx = parseFecha(t.dataset.fecha);
+            return fx && fx >= hoy;
+        }) || todas[todas.length - 1];
+    }
+    // Último recurso: la tarjeta que se calculó al pintar
     if (!card && inicialIdx !== undefined) card = document.getElementById('clase-card-' + inicialIdx);
-    if (!card) card = carousel.querySelector('.clase-card');
     if (!card) return;
+
     _desplazarCarrusel(carousel, _posicionDe(carousel, card));
 }
 
