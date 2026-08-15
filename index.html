@@ -957,6 +957,23 @@
         }
         var URL_SCRIPT = (window.CONFIG && window.CONFIG.URL_SCRIPT) || '';
 
+// ══════════════════════════════════════════════════════════════════
+//  AL ABRIR, ARRIBA DEL TODO
+//  ----------------------------------------------------------------
+//  Dos cosas dejaban la página abierta por «Fechas Importantes»:
+//  un scrollIntoView que arrastraba la página entera (ya corregido) y
+//  la restauración automática del navegador, que al recargar devuelve
+//  la vista donde estaba la vez anterior. Lo segundo se desactiva aquí.
+// ══════════════════════════════════════════════════════════════════
+try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) {}
+window.addEventListener('load', function () {
+    // Dos pasadas: la segunda, por si algo reacomoda la página al terminar
+    // de llegar los datos.
+    window.scrollTo(0, 0);
+    setTimeout(function () { if (window.scrollY < 400) window.scrollTo(0, 0); }, 350);
+});
+
+
         // ─── Cache de evaluaciones: "tema|nombreResidente" → { esp: true }
         var _evalCache = {};
 
@@ -1478,7 +1495,10 @@
             var panel = document.getElementById('panelCalClases');
             if (panel) panel.style.display = 'none';
 
-            _desplazarCarrusel(car, _posicionDe(car, card));
+            // Tras cerrar la ventana el diseño cambia: se mide en el fotograma
+            // siguiente, no antes, o la posición sale de la pantalla anterior.
+            var saltar = function () { _desplazarCarrusel(car, _posicionDe(car, card)); };
+            if (window.requestAnimationFrame) requestAnimationFrame(saltar); else saltar();
             // Un destello breve: si no, no se ve cuál de las tarjetas es
             card.classList.add('tarjeta-destacada');
             setTimeout(function () { card.classList.remove('tarjeta-destacada'); }, 1800);
@@ -1701,10 +1721,31 @@
             _desplazarCarrusel(car, car.scrollLeft + dir * paso);
         }
 
+        /**
+         * Desplaza el carrusel a una posición.
+         *
+         * Se hace de golpe y desactivando temporalmente el imán de las tarjetas
+         * (scroll-snap) y la animación (scroll-behavior). Con el imán activo,
+         * Safari de iOS ignora el desplazamiento por código y la tarjeta se
+         * queda donde estaba: eso era lo que hacía que al pulsar una fecha del
+         * calendario se cerrara la ventana y no se moviera nada.
+         * Un salto instantáneo también es mejor aquí: la distancia puede ser de
+         * miles de píxeles y animarla no aporta nada.
+         */
         function _desplazarCarrusel(car, destino) {
             destino = Math.max(0, Math.min(destino, car.scrollWidth - car.clientWidth));
-            if (typeof car.scrollTo === 'function') car.scrollTo({ left: destino, behavior: 'smooth' });
-            else car.scrollLeft = destino;
+            var snapAntes = car.style.scrollSnapType;
+            var behAntes  = car.style.scrollBehavior;
+            car.style.scrollSnapType  = 'none';
+            car.style.scrollBehavior  = 'auto';
+            car.scrollLeft = destino;
+            // Se restaura en el fotograma siguiente, ya con la posición fijada
+            var restaurar = function () {
+                car.style.scrollSnapType = snapAntes;
+                car.style.scrollBehavior = behAntes;
+            };
+            if (window.requestAnimationFrame) requestAnimationFrame(function () { requestAnimationFrame(restaurar); });
+            else setTimeout(restaurar, 50);
         }
 
         /**
