@@ -38,34 +38,52 @@
             cursor: grab;
         }
         .carrusel-clases.arrastrando { cursor: grabbing; scroll-behavior: auto; }
+        /* Nada se recorta: ni el tema ni el botón de evaluar.
+           Recortar a dos líneas dejaba fuera títulos como «Manejo inicial de
+           trauma craneoencefálico del adulto», y con altura fija el botón
+           «Evaluar» de los días con más contenido se quedaba debajo del borde.
+           Ahora la tarjeta crece con lo que lleva dentro, y para que no se
+           vuelva una columna estrecha y larguísima se ensancha: DOS tarjetas
+           por pantalla en vez de 2,75, que reduce casi a la mitad el número de
+           líneas de cada título. */
+        .carrusel-clases { align-items: flex-start; }   /* cada una su alto */
         .carrusel-clases > .tarjeta-clase {
             flex: 0 0 auto;
-            width: calc((100% - 16px) / 2.75);      /* la tercera se ve empezada */
-            min-width: 118px; max-width: 200px;
-            /* Altura fija: antes un tema largo estiraba la tarjeta a 300 px y
-               quedaba una columna, no una tarjeta. Ahora todas miden igual. */
-            height: 178px; box-sizing: border-box; overflow: hidden;
+            width: calc((100% - 12px) / 2);
+            min-width: 150px; max-width: 250px;
+            min-height: 168px;            /* las cortas no quedan diminutas */
+            box-sizing: border-box;
             display: flex; flex-direction: column;
         }
-        .tarjeta-clase > .tc-cuerpo { flex: 1; min-height: 0; overflow-y: auto; }
+        .tarjeta-clase > .tc-cuerpo { flex: 1; }
 
         .tarjeta-clase .tc-fecha  { font-size: 20px; line-height: 1.1; letter-spacing: -0.3px; }
         .tarjeta-clase .tc-anio   { font-size: 12px; }
-        .tarjeta-clase .tc-dr     { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .tarjeta-clase .tc-dr     { font-size: 12px; line-height: 1.3; }
         .tarjeta-clase .tc-etiq   { font-size: 11px; }
-        .tarjeta-clase .tc-boton  { font-size: 11.5px; padding: 3px 8px; }
+        .tarjeta-clase .tc-boton  { font-size: 11.5px; padding: 4px 9px; }
         .tarjeta-clase .tc-vacio  { font-size: 13px; line-height: 1.35; }
-        /* El tema se corta a dos líneas; el texto entero queda en el title */
-        .tarjeta-clase .tc-tema   { font-size: 13px; line-height: 1.3;
-                                    display: -webkit-box; -webkit-line-clamp: 2;
-                                    -webkit-box-orient: vertical; overflow: hidden; }
+        .tarjeta-clase .tc-tema   { font-size: 13px; line-height: 1.32;
+                                    overflow-wrap: anywhere; }
+
+        /* Casilla del calendario que lleva a su tarjeta del carrusel */
+        .cal-dia-con-clase { transition: background .15s, box-shadow .15s; }
+        .cal-dia-con-clase:hover { background: #c7d2fe !important; box-shadow: 0 2px 8px rgba(67,56,202,.25); }
+        .cal-dia-con-clase:active { transform: scale(.97); }
+
+        /* Destello al llegar desde el calendario: sin él no se sabe cuál es */
+        .tarjeta-destacada { animation: destello 1.8s ease-out; }
+        @keyframes destello {
+            0%, 45% { box-shadow: 0 0 0 3px #4338ca, 0 6px 20px rgba(67,56,202,.35); }
+            100%    { box-shadow: 0 0 0 0 rgba(67,56,202,0); }
+        }
 
         @media (min-width: 640px) {
             .carrusel-clases { gap: 12px; padding-left: 20px; padding-right: 20px; }
-            .carrusel-clases > .tarjeta-clase { width: 232px; max-width: none; height: 200px; }
+            .carrusel-clases > .tarjeta-clase { width: 240px; max-width: none; min-height: 190px; }
             .tarjeta-clase .tc-fecha { font-size: 24px; }
             .tarjeta-clase .tc-anio  { font-size: 13px; }
-            .tarjeta-clase .tc-tema  { font-size: 14px; -webkit-line-clamp: 3; }
+            .tarjeta-clase .tc-tema  { font-size: 14px; }
             .tarjeta-clase .tc-dr    { font-size: 13px; }
         }
     </style>
@@ -1405,7 +1423,17 @@
                         + '</div>';
                 }).join('');
 
-                celdas += '<div style="background:' + fondo + ';border:' + borde + ';border-radius:6px;padding:4px;min-height:58px;overflow:hidden;'
+                // Una casilla con clase es un enlace a su tarjeta del carrusel:
+                // el calendario sirve para localizar el día, y desde ahí se salta
+                // a evaluarlo sin recorrer el carrusel a mano.
+                var clave = String(dia).padStart(2, '0') + '/' +
+                            String(_calMes.getMonth() + 1).padStart(2, '0') + '/' + _calMes.getFullYear();
+                var pinchable = lista.length
+                    ? ' onclick="irAClaseDesdeCalendario(\'' + clave + '\')" role="button" tabindex="0"' +
+                      ' title="' + _invEsc('Ir a la clase del ' + clave) + '" class="cal-dia-con-clase"'
+                    : '';
+                celdas += '<div' + pinchable + ' style="background:' + fondo + ';border:' + borde + ';border-radius:6px;padding:4px;min-height:58px;overflow:hidden;'
+                    + (lista.length ? 'cursor:pointer;' : '')
                     + (esHoyC ? 'box-shadow:0 0 0 2px #4338ca;' : '') + '">'
                     + '<div style="font-size:12px;font-weight:900;color:' + (esHoyC ? '#4338ca' : '#475569') + ';">' + dia + '</div>'
                     + temas + '</div>';
@@ -1418,6 +1446,45 @@
                   }).join('')
                 + '</div>'
                 + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px;">' + celdas + '</div>';
+        }
+
+        /**
+         * Salta del calendario a la tarjeta de ese día en el carrusel.
+         *
+         * Si la tarjeta no está —porque el filtro de año la deja fuera— se
+         * quita el filtro y se vuelve a pintar antes de buscarla. Sin eso, el
+         * enlace no haría nada y parecería estropeado.
+         */
+        function irAClaseDesdeCalendario(fechaStr) {
+            var car = document.getElementById('clasesCarousel');
+            if (!car) return;
+
+            var card = car.querySelector('[data-fecha="' + fechaStr + '"]');
+            // Ojo: la tarjeta de ese día SIEMPRE existe, porque el carrusel
+            // incluye los días hábiles sin clase. Si el filtro de año deja la
+            // clase fuera, lo que se encuentra es la tarjeta vacía —«no hay
+            // clase programada»— y el salto parecería llevar al sitio
+            // equivocado. Por eso se comprueba que la tarjeta traiga clase.
+            if ((!card || card.dataset.clases === '0') && filtroAnio !== 'ALL') {
+                setFiltroAnio('ALL');
+                card = car.querySelector('[data-fecha="' + fechaStr + '"]');
+            }
+            if (!card) return;
+
+            var panel = document.getElementById('panelCalClases');
+            if (panel) panel.style.display = 'none';
+
+            _desplazarCarrusel(car, card.offsetLeft - car.offsetLeft - 4);
+            // Un destello breve: si no, no se ve cuál de las tarjetas es
+            card.classList.add('tarjeta-destacada');
+            setTimeout(function () { card.classList.remove('tarjeta-destacada'); }, 1800);
+
+            // Y que el carrusel quede a la vista, no fuera de pantalla
+            if (typeof card.scrollIntoView === 'function') {
+                setTimeout(function () {
+                    car.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }, 80);
+            }
         }
 
         function getGruposPorFecha() {
@@ -1490,6 +1557,8 @@
 
                 var card = document.createElement('div');
                 if (esHoy) card.id = 'carrusel-ancla-hoy';
+                card.dataset.fecha  = fechaStr;   // para saltar aquí desde el calendario
+                card.dataset.clases = String(clases.length);
                 card.className = 'tarjeta-clase scroll-snap-start rounded-xl border shadow-sm overflow-hidden ' +
                     (esHoy ? 'border-indigo-400 ring-2 ring-indigo-300' : sinClase ? 'border-dashed border-slate-300' : 'border-slate-200');
                 if (esPasada) card.style.opacity = sinClase ? '0.45' : '0.65';
