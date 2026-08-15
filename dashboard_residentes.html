@@ -11,13 +11,13 @@
     <script src="auth.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
-<body class="bg-slate-100 min-h-screen py-6 px-3">
+<body class="bg-slate-100 min-h-screen py-3 sm:py-6 px-3">
 
-<div class="max-w-4xl mx-auto space-y-5">
+<div class="max-w-4xl mx-auto space-y-3 sm:space-y-5">
 
     <!-- CABECERA -->
-    <div class="bg-gradient-to-r from-indigo-900 to-blue-900 text-white rounded-2xl px-6 py-6 shadow-lg">
-        <h1 class="text-2xl font-black leading-tight">Dashboard del Residente</h1>
+    <div class="bg-gradient-to-r from-indigo-900 to-blue-900 text-white rounded-2xl px-4 py-3 sm:px-6 sm:py-6 shadow-lg">
+        <h1 class="text-lg sm:text-2xl font-black leading-tight">Dashboard del Residente</h1>
         <p class="text-indigo-200 text-sm mt-1">Seguimiento académico — Neurocirugía</p>
     </div>
 
@@ -305,6 +305,20 @@
 .tab-inactivo { background:transparent; color:#64748b; }
 .tab-inactivo:hover { background:#f1f5f9; color:#1e293b; }
 #claseCarousel::-webkit-scrollbar { display:none; }
+#claseCarousel { -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; cursor:grab; align-items:flex-start; }
+
+/* Casilla del calendario que lleva a su tarjeta del carrusel */
+.cal-dia-con-clase { transition:background .15s, box-shadow .15s; }
+.cal-dia-con-clase:hover { background:#c7d2fe !important; box-shadow:0 2px 8px rgba(67,56,202,.25); }
+.cal-dia-con-clase:active { transform:scale(.97); }
+
+/* Destello al llegar desde el calendario: sin él no se sabe cuál es */
+.tarjeta-destacada { animation:destello 1.8s ease-out; }
+@keyframes destello {
+    0%, 45% { box-shadow:0 0 0 3px #4338ca, 0 6px 20px rgba(67,56,202,.35); }
+    100%    { box-shadow:0 0 0 0 rgba(67,56,202,0); }
+}
+#claseCarousel.arrastrando { cursor:grabbing; scroll-behavior:auto; }
 #listFechasImportantes::-webkit-scrollbar { width:5px; }
 #listFechasImportantes::-webkit-scrollbar-thumb { background:#e2e8f0; border-radius:99px; }
 /* ── CARRUSEL DE CLASES ───────────────────────────────────────────────
@@ -316,8 +330,8 @@
    como una fila, no como un peine.
    Las flechas laterales se ocultan en móvil: ocupaban 80 px de los 390. */
 .clase-card { scroll-snap-align:start; flex-shrink:0;
-              width:calc((100vw - 16px - 12px) / 2.75); min-width:118px; max-width:190px;
-              height:172px; box-sizing:border-box; overflow:hidden;
+              width:calc((100% - 12px) / 2); min-width:150px; max-width:250px;
+              min-height:168px; box-sizing:border-box;
               display:flex; flex-direction:column;
               border-radius:12px; border-width:2px; border-style:solid;
               padding:9px; position:relative; transition:box-shadow .2s; }
@@ -326,33 +340,28 @@
 .clase-card-pasada { opacity:.55; }
 .clase-card-vacia { border-style:dashed; background:#fff !important; justify-content:center; }
 
-/* La tarjeta con editor de tema necesita sitio para el campo y el botón */
-.clase-card-editable { height:250px; }
+/* Ya no se fija la altura: la tarjeta con editor de tema crece lo que haga
+   falta para que el campo y el botón «Guardar» queden siempre visibles. */
 
 .cc-dia   { font-size:25px; font-weight:900; color:#1e293b; line-height:1; }
 .cc-mes   { font-size:12.5px; font-weight:700; color:#64748b; }
 .cc-anio  { font-size:11.5px; font-weight:800; }
-.cc-dr    { font-size:12px; color:#6366f1; font-weight:600;
-            overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cc-dr    { font-size:12px; color:#6366f1; font-weight:600; line-height:1.3; }
 .cc-vacio { font-size:13px; color:#94a3b8; font-style:italic; text-align:center; line-height:1.35; }
 
-/* El tema se corta a tres líneas: es lo que impedía que la altura fuera fija.
-   El texto completo sigue disponible en el title y en el calendario. */
-.cc-tema  { font-size:13px; font-weight:600; color:#334155; line-height:1.3;
-            display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;
-            overflow:hidden; }
-.cc-tema-corto { -webkit-line-clamp:2; }
+/* Nada de recortes: el título se muestra entero, en las líneas que necesite */
+.cc-tema  { font-size:13px; font-weight:600; color:#334155; line-height:1.32;
+            overflow-wrap:anywhere; }
 
 .carrusel-envoltorio { padding-left:8px; padding-right:8px; }
 .carrusel-flecha { display:none; }
 
 @media (min-width: 640px) {
-    .clase-card { width:228px; max-width:none; height:196px; padding:14px; border-radius:14px; }
-    .clase-card-editable { height:274px; }
+    .clase-card { width:240px; max-width:none; min-height:190px; padding:14px; border-radius:14px; }
     .cc-dia  { font-size:30px; }
     .cc-mes  { font-size:14px; }
     .cc-anio { font-size:12px; }
-    .cc-tema { font-size:14.5px; -webkit-line-clamp:4; }
+    .cc-tema { font-size:14.5px; }
     .cc-dr   { font-size:13px; }
     .carrusel-envoltorio { padding-left:40px; padding-right:40px; }
     .carrusel-flecha { display:flex; }
@@ -1164,7 +1173,16 @@ function _pintarCalendario() {
                 '</div>';
         }).join('');
 
-        celdas += '<div style="background:' + fondo + ';border:' + borde + ';border-radius:6px;padding:4px;min-height:58px;overflow:hidden;' +
+        // Una casilla con clase es un enlace a su tarjeta del carrusel: el
+        // calendario sirve para localizar el día y desde ahí se salta a él.
+        const claveF = String(dia).padStart(2,'0') + '/' +
+                       String(_calMes.getMonth()+1).padStart(2,'0') + '/' + _calMes.getFullYear();
+        const pinchable = lista.length
+            ? ' onclick="irAClaseDesdeCalendario(\'' + claveF + '\')" role="button" tabindex="0"' +
+              ' title="Ir a la clase del ' + claveF + '" class="cal-dia-con-clase"'
+            : '';
+        celdas += '<div' + pinchable + ' style="background:' + fondo + ';border:' + borde + ';border-radius:6px;padding:4px;min-height:58px;overflow:hidden;' +
+            (lista.length ? 'cursor:pointer;' : '') +
             (esHoyC ? 'box-shadow:0 0 0 2px #4338ca;' : '') + '">' +
             '<div style="font-size:12px;font-weight:900;color:' + (esHoyC ? '#4338ca' : '#475569') + ';">' + dia + '</div>' +
             temas + '</div>';
@@ -1218,6 +1236,7 @@ function renderClases() {
     const tarjetas = lista.map((c, i) => ({ fecha: parseFecha(c.f), html: _tarjetaClase(c, i, hoy) }));
     carousel.innerHTML = _conDiasSinClase(tarjetas, hoy, filtroMes);
 
+    _activarArrastreCarrusel();
     setTimeout(() => irACarruselHoy(inicialIdx), 80);
 }
 
@@ -1226,6 +1245,81 @@ function renderClases() {
  * Primero busca el ancla de hoy —exista clase o no—; si hoy cae en fin de
  * semana o fuera del curso, se queda en la primera clase que no haya pasado.
  */
+/**
+ * Arrastre con el ratón. En móvil el dedo ya desplaza solo —para eso está
+ * overflow-x— pero en escritorio hacía falta usar las flechas. Se ignora si
+ * el gesto empieza sobre un campo o un botón, para no romper el editor de tema.
+ */
+/**
+ * Salta del calendario a la tarjeta de ese día en el carrusel.
+ *
+ * Cuidado: la tarjeta de cualquier día hábil SIEMPRE existe, porque el
+ * carrusel incluye los días sin clase. Si los filtros de año o de mes dejan la
+ * clase fuera, lo que se encuentra es la tarjeta vacía —«no hay clase
+ * programada»— y el salto parecería llevar al sitio equivocado. Por eso se
+ * comprueba que la tarjeta traiga clase y, si no, se quitan los filtros.
+ */
+function irAClaseDesdeCalendario(fechaStr) {
+    const car = document.getElementById('claseCarousel');
+    if (!car) return;
+
+    let card = car.querySelector('[data-fecha="' + fechaStr + '"]');
+    if (!card || card.dataset.clases === '0') {
+        const selA = document.getElementById('filtroClaseAnio');
+        const selM = document.getElementById('filtroClaseMes');
+        let tocado = false;
+        if (selA && selA.value) { selA.value = ''; tocado = true; }
+        if (selM && selM.value !== '') { selM.value = ''; tocado = true; }
+        if (tocado) {
+            renderClases();
+            card = car.querySelector('[data-fecha="' + fechaStr + '"]');
+        }
+    }
+    if (!card) return;
+
+    const panel = document.getElementById('panelCalClases');
+    if (panel) panel.style.display = 'none';
+
+    const destino = Math.max(0, card.offsetLeft - (car.offsetWidth / 2) + (card.offsetWidth / 2));
+    if (typeof car.scrollTo === 'function') car.scrollTo({ left: destino, behavior: 'smooth' });
+    else car.scrollLeft = destino;
+
+    card.classList.add('tarjeta-destacada');
+    setTimeout(() => card.classList.remove('tarjeta-destacada'), 1800);
+
+    if (typeof car.scrollIntoView === 'function') {
+        setTimeout(() => car.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 80);
+    }
+}
+
+function _activarArrastreCarrusel() {
+    const car = document.getElementById('claseCarousel');
+    if (!car || car._arrastreListo) return;
+    car._arrastreListo = true;
+    let pulsando = false, x0 = 0, s0 = 0, movido = 0;
+
+    car.addEventListener('mousedown', e => {
+        if (e.button !== 0 || e.target.closest('a,button,input,select,textarea')) return;
+        pulsando = true; movido = 0; x0 = e.pageX; s0 = car.scrollLeft;
+        car.classList.add('arrastrando');
+    });
+    window.addEventListener('mousemove', e => {
+        if (!pulsando) return;
+        const d = e.pageX - x0;
+        movido = Math.abs(d);
+        if (movido > 3) e.preventDefault();
+        car.scrollLeft = s0 - d;
+    });
+    window.addEventListener('mouseup', () => {
+        if (!pulsando) return;
+        pulsando = false;
+        car.classList.remove('arrastrando');
+    });
+    car.addEventListener('click', e => {
+        if (movido > 5) { e.preventDefault(); e.stopPropagation(); movido = 0; }
+    }, true);
+}
+
 function irACarruselHoy(inicialIdx) {
     const carousel = document.getElementById('claseCarousel');
     if (!carousel) return;
@@ -1284,8 +1378,11 @@ function _conDiasSinClase(tarjetas, hoy, filtroMes) {
                 salida.push(bloque);
             } else {
                 const esHoy = esHoyDia;
+                const fTxt = String(d.getDate()).padStart(2,'0') + '/' +
+                             String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
                 salida.push(
                     '<div ' + (esHoy ? 'id="carrusel-ancla-hoy" ' : '') +
+                    'data-fecha="' + fTxt + '" data-clases="0" ' +
                     'class="clase-card clase-card-vacia ' + (esHoy ? 'clase-card-hoy' : '') + ' ' +
                         (d < hoy && !esHoy ? 'clase-card-pasada' : '') + '" style="border-color:#cbd5e1;">' +
                     (esHoy ? '<div style="position:absolute;top:6px;right:6px;background:#4f46e5;color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:99px;">HOY</div>' : '') +
@@ -1313,7 +1410,7 @@ function _tarjetaClase(c, i, hoy) {
         const col = ANIO_COLORS[c.anio] || ANIO_COLORS['I'];
 
         return `<div class="clase-card ${editable ? 'clase-card-editable' : ''} ${esHoy ? 'clase-card-hoy' : ''} ${pasada && !esHoy ? 'clase-card-pasada' : ''}"
-                     id="clase-card-${i}"
+                     id="clase-card-${i}" data-fecha="${c.f}" data-clases="1"
                      style="border-color:${col.border};background:${esHoy ? '#fff' : col.bg};">
             ${esHoy ? '<div style="position:absolute;top:8px;right:8px;background:#4f46e5;color:#fff;font-size:9px;font-weight:800;padding:2px 8px;border-radius:99px;letter-spacing:.05em;">HOY</div>' : ''}
             ${pasada && !esHoy ? '<div style="position:absolute;top:8px;right:8px;background:#94a3b8;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;">Pasada</div>' : ''}
@@ -1322,7 +1419,7 @@ function _tarjetaClase(c, i, hoy) {
                 <span class="cc-mes">${MESES[f.getMonth()]}</span>
             </div>
             <div class="cc-anio" style="color:${col.text};text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;${col.badge}padding:2px 6px;border-radius:6px;display:inline-block;">${c.anio} Año</div>
-            ${(() => { const ov=getPlanEdit(c.anio,c.f); const td=(ov&&ov.tema)?ov.tema:c.tema; const dd=(ov&&ov.dr!==undefined)?ov.dr:c.dr; const mod=ov?'<span style="font-size:8px;background:#fef3c7;color:#92400e;padding:1px 4px;border-radius:4px;font-weight:700;margin-left:3px;">editado</span>':''; return `<p class="cc-tema${editable ? ' cc-tema-corto' : ''}" title="${td.replace(/"/g,'&quot;')}" style="margin-top:5px;margin-bottom:4px;">${td}${mod}</p>${dd?`<p class="cc-dr" style="margin-bottom:${editable?'6px':'0'};display:flex;align-items:flex-start;gap:3px;"><span style="opacity:.7;">👨‍⚕️</span>${dd}</p>`:''}`; })()}
+            ${(() => { const ov=getPlanEdit(c.anio,c.f); const td=(ov&&ov.tema)?ov.tema:c.tema; const dd=(ov&&ov.dr!==undefined)?ov.dr:c.dr; const mod=ov?'<span style="font-size:8px;background:#fef3c7;color:#92400e;padding:1px 4px;border-radius:4px;font-weight:700;margin-left:3px;">editado</span>':''; return `<p class="cc-tema" title="${td.replace(/"/g,'&quot;')}" style="margin-top:5px;margin-bottom:4px;">${td}${mod}</p>${dd?`<p class="cc-dr" style="margin-bottom:${editable?'6px':'0'};display:flex;align-items:flex-start;gap:3px;"><span style="opacity:.7;">👨‍⚕️</span>${dd}</p>`:''}`; })()}
             ${editable ? `<div id="tema-container-${i}"
                 data-key="${localKey}"
                 data-fecha="${c.f}"
