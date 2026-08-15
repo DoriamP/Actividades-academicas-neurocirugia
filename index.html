@@ -38,24 +38,28 @@
             cursor: grab;
         }
         .carrusel-clases.arrastrando { cursor: grabbing; scroll-behavior: auto; }
-        /* Nada se recorta: ni el tema ni el botón de evaluar.
-           Recortar a dos líneas dejaba fuera títulos como «Manejo inicial de
-           trauma craneoencefálico del adulto», y con altura fija el botón
-           «Evaluar» de los días con más contenido se quedaba debajo del borde.
-           Ahora la tarjeta crece con lo que lleva dentro, y para que no se
-           vuelva una columna estrecha y larguísima se ensancha: DOS tarjetas
-           por pantalla en vez de 2,75, que reduce casi a la mitad el número de
-           líneas de cada título. */
-        .carrusel-clases { align-items: flex-start; }   /* cada una su alto */
+        /* Altura ÚNICA para todas las tarjetas.
+           Dejarlas crecer libremente tenía un efecto que no se ve hasta que
+           está en pantalla: una fila flexible mide lo que su hijo más alto, y
+           como el carrusel lleva las 204 tarjetas del curso, el título más
+           largo de todo el año estiraba el contenedor y bajo las tarjetas
+           cortas quedaba un hueco enorme —difícil de deslizar, porque el dedo
+           cae en el vacío—.
+           Con altura única no hay hueco. Y para que nada quede escondido, la
+           tarjeta se divide en tres: cabecera fija, cuerpo que se desplaza por
+           dentro si el título es muy largo, y pie fijo con el botón «Evaluar»,
+           que así está SIEMPRE visible. */
         .carrusel-clases > .tarjeta-clase {
             flex: 0 0 auto;
             width: calc((100% - 12px) / 2);
             min-width: 150px; max-width: 250px;
-            min-height: 168px;            /* las cortas no quedan diminutas */
-            box-sizing: border-box;
+            height: 208px; box-sizing: border-box;
             display: flex; flex-direction: column;
         }
-        .tarjeta-clase > .tc-cuerpo { flex: 1; }
+        .tarjeta-clase > .tc-cabecera { flex: 0 0 auto; }
+        .tarjeta-clase > .tc-cuerpo   { flex: 1 1 auto; min-height: 0; overflow-y: auto;
+                                        -webkit-overflow-scrolling: touch; }
+        .tarjeta-clase > .tc-pie      { flex: 0 0 auto; }
 
         .tarjeta-clase .tc-fecha  { font-size: 20px; line-height: 1.1; letter-spacing: -0.3px; }
         .tarjeta-clase .tc-anio   { font-size: 12px; }
@@ -80,7 +84,7 @@
 
         @media (min-width: 640px) {
             .carrusel-clases { gap: 12px; padding-left: 20px; padding-right: 20px; }
-            .carrusel-clases > .tarjeta-clase { width: 240px; max-width: none; min-height: 190px; }
+            .carrusel-clases > .tarjeta-clase { width: 240px; max-width: none; height: 226px; }
             .tarjeta-clase .tc-fecha { font-size: 24px; }
             .tarjeta-clase .tc-anio  { font-size: 13px; }
             .tarjeta-clase .tc-tema  { font-size: 14px; }
@@ -1474,7 +1478,7 @@
             var panel = document.getElementById('panelCalClases');
             if (panel) panel.style.display = 'none';
 
-            _desplazarCarrusel(car, card.offsetLeft - car.offsetLeft - 4);
+            _desplazarCarrusel(car, _posicionDe(car, card));
             // Un destello breve: si no, no se ve cuál de las tarjetas es
             card.classList.add('tarjeta-destacada');
             setTimeout(function () { card.classList.remove('tarjeta-destacada'); }, 1800);
@@ -1621,17 +1625,43 @@
                         + (drDisplay ? '<p class="tc-dr text-slate-500 mt-0.5">' + drDisplay + '</p>' : '')
                         + (esCasoRev && temaGuardado ? '<div class="mt-1.5 pt-1.5 border-t ' + col.border + ' flex items-start gap-1"><span class="text-indigo-500 text-xs">📌</span><p class="tc-tema font-semibold text-indigo-800">' + temaGuardado + '</p></div>' : '')
                         + (esCasoRev && !temaGuardado ? '<p class="tc-dr text-slate-400 italic mt-1">— tema por asignar —</p>' : '')
-                        + '<div class="mt-2 pt-1.5" style="border-top:1px solid rgba(0,0,0,.08);">'
-                        + (esFutura
-                            ? '<a href="' + formUrl + params + '&aviso=futura" class="tc-boton" style="display:inline-block;font-weight:800;background:#b45309;color:#fff;border-radius:6px;text-decoration:none;">▶ Evaluar ⚠</a>'
-                            : '<a href="' + formUrl + params + '" class="tc-boton" style="display:inline-block;font-weight:800;background:#4338ca;color:#fff;border-radius:6px;text-decoration:none;">▶ Evaluar</a>')
-                        + '</div>'
                         + '</div>';
+                }).join('');
+
+                // Los botones «Evaluar» viven en el pie de la tarjeta, fuera de
+                // la zona que se desplaza: así no pueden quedar ocultos por un
+                // título largo, que es justo lo que pasaba antes.
+                var botonesHTML = clases.map(function (c) {
+                    var esCasoRev  = esEditableIdx(c.tema);
+                    var esInvestig = esInvestigacionIdx(c.tema);
+                    var formUrl    = esInvestig ? 'clases_investigacion.html'
+                                                : (esCasoRev ? 'casos_clinicos_y_articulos.html' : 'clases_programadas.html');
+                    var override   = getPlanEdit(c.anio, c.f);
+                    var temaDisplay = (override && override.tema) ? override.tema : c.tema;
+                    var temaGuardado = getTemaIdx(c.f, c.anio);
+                    var temaParaForm = (esCasoRev && temaGuardado) ? temaGuardado : temaDisplay;
+                    var drDisplay  = (override && override.dr !== undefined) ? override.dr : c.dr;
+                    var resFull = '';
+                    var drCorto = (drDisplay || '').trim();
+                    if (drCorto && typeof RESIDENTE_CORTO !== 'undefined') {
+                        for (var rn in RESIDENTE_CORTO) {
+                            if (RESIDENTE_CORTO[rn] === drCorto) { resFull = rn; break; }
+                        }
+                    }
+                    var params = '?anio=' + encodeURIComponent(c.anio)
+                               + '&tema=' + encodeURIComponent(temaParaForm)
+                               + '&fechaProg=' + encodeURIComponent(c.f)
+                               + '&bloquearFecha=1'
+                               + (resFull ? '&residente=' + encodeURIComponent(resFull) : '');
+                    var etiq = clases.length > 1 ? '▶ ' + c.anio : '▶ Evaluar';
+                    return esFutura
+                        ? '<a href="' + formUrl + params + '&aviso=futura" class="tc-boton" style="display:block;text-align:center;font-weight:800;background:#b45309;color:#fff;border-radius:6px;text-decoration:none;">' + etiq + ' ⚠</a>'
+                        : '<a href="' + formUrl + params + '" class="tc-boton" style="display:block;text-align:center;font-weight:800;background:#4338ca;color:#fff;border-radius:6px;text-decoration:none;">' + etiq + '</a>';
                 }).join('');
 
                 // El año no cabe en una tarjeta de 115 px y tampoco hace falta:
                 // el curso entero transcurre entre 2026 y 2027.
-                var cabecera = '<div class="' + hdrColor + ' px-2 py-2">'
+                var cabecera = '<div class="tc-cabecera ' + hdrColor + ' px-2 py-2">'
                     + '<div class="tc-fecha font-black">' + DIAS_ES[fechaObj.getDay()] + ' ' + fechaObj.getDate() + '</div>'
                     + '<div class="tc-anio font-bold opacity-80">' + MESES_ES[fechaObj.getMonth()] + '</div>'
                     + (etiqueta ? '<div class="mt-1">' + etiqueta + '</div>' : '')
@@ -1647,7 +1677,10 @@
                         + (esHoy ? 'Hoy no hay clase programada' : 'No hay clase programada') + '</p></div>'
                     : '<div class="tc-cuerpo bg-white p-2 space-y-2">' + temasHTML + '</div>';
 
-                card.innerHTML = cabecera + cuerpo;
+                var pie = sinClase ? ''
+                    : '<div class="tc-pie bg-white px-2 pb-2 pt-1 space-y-1" style="border-top:1px solid #f1f5f9;">' + botonesHTML + '</div>';
+
+                card.innerHTML = cabecera + cuerpo + pie;
                 carousel.appendChild(card);
             });
 
@@ -1672,6 +1705,22 @@
             destino = Math.max(0, Math.min(destino, car.scrollWidth - car.clientWidth));
             if (typeof car.scrollTo === 'function') car.scrollTo({ left: destino, behavior: 'smooth' });
             else car.scrollLeft = destino;
+        }
+
+        /**
+         * Posición a la que hay que desplazar el carrusel para dejar una
+         * tarjeta a la vista.
+         *
+         * Se mide con getBoundingClientRect y no con offsetLeft: offsetLeft se
+         * cuenta desde el «padre posicionado», que aquí no es el carrusel sino
+         * un contenedor de más arriba, así que las dos medidas no compartían
+         * origen y el salto caía en una tarjeta equivocada. El rectángulo se
+         * mide en pantalla y ya tiene en cuenta lo que hay desplazado.
+         */
+        function _posicionDe(car, card) {
+            var rc = car.getBoundingClientRect();
+            var rt = card.getBoundingClientRect();
+            return car.scrollLeft + (rt.left - rc.left) - 8;
         }
 
         /**
@@ -1735,7 +1784,7 @@
                 card = todas[Math.min(_idxClasesHoy(), Math.max(0, todas.length - 1))];
             }
             if (!card) return;
-            _desplazarCarrusel(car, card.offsetLeft - car.offsetLeft - 4);
+            _desplazarCarrusel(car, _posicionDe(car, card));
         }
 
         // ══════════════════════════════════════════════════════════════
