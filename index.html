@@ -1820,9 +1820,16 @@ window.addEventListener('load', function () {
             if (!car) return;
             var card = document.getElementById('carrusel-ancla-hoy');
             if (!card) {
-                // Hoy cae en fin de semana o fuera del curso: al primer día que queda
-                var todas = car.querySelectorAll('.tarjeta-clase');
-                card = todas[Math.min(_idxClasesHoy(), Math.max(0, todas.length - 1))];
+                // Hoy cae en fin de semana o fuera del curso: se va al primer
+                // día que NO haya pasado, buscándolo por su fecha. Fiarse de un
+                // índice era frágil: cualquier filtro cambia la lista.
+                var hoyC = new Date(); hoyC.setHours(0, 0, 0, 0);
+                var todas = Array.prototype.slice.call(car.querySelectorAll('.tarjeta-clase[data-fecha]'));
+                for (var i = 0; i < todas.length; i++) {
+                    var fx = parseDate(todas[i].dataset.fecha);
+                    if (fx && fx >= hoyC) { card = todas[i]; break; }
+                }
+                if (!card && todas.length) card = todas[todas.length - 1];
             }
             if (!card) return;
             _desplazarCarrusel(car, _posicionDe(car, card));
