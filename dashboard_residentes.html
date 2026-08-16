@@ -182,6 +182,7 @@
                         <tfoot id="tablaFoot" class="bg-slate-50 font-bold text-slate-800"></tfoot>
                     </table>
                 </div>
+                <div id="desgloseAnual"></div>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -566,7 +567,7 @@ function _esc(v) {
 var NOTAS_CANON = (function () {
     'use strict';
 
-    var VERSION = '1.0';
+    var VERSION = '2.0';
 
     var PESOS = {
         "Clases Programadas":          { peso: 30,  tipo: "Teórico" },
@@ -766,9 +767,173 @@ var NOTAS_CANON = (function () {
         };
     }
 
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     * NOTA FINAL DEL AÑO ACADÉMICO 2026-2027
+     * -----------------------------------------------------------------------
+     * Hasta ahora la «nota final estimada» era la nota del módulo que se
+     * estuviera mirando. Ya no: es la nota del AÑO, y es el promedio simple de
+     * tres clases de notas, todas con el mismo peso:
+     *
+     *   · la nota de cada módulo de neurocirugía  = (teórica + práctica) / 2
+     *   · la nota del módulo de investigación     = clases de investigación
+     *                                               y avances de tesis juntos
+     *   · la nota de cada rotación externa        = (teórica + práctica) / 2
+     *
+     * Consecuencia que conviene tener presente: como cada residente tiene UNA
+     * rotación externa en el plan del año, esa rotación pesa lo mismo que un
+     * módulo entero de neurocirugía —alrededor de un sexto de la nota del año—.
+     * Está así a propósito, es lo que dice la distribución de evaluación.
+     *
+     * Un módulo a medias entra con lo que tenga: si solo hay teórica, cuenta la
+     * teórica. La nota se va moviendo conforme entran las evaluaciones que
+     * faltan, que es como se ha comportado siempre la plataforma.
+     * ═══════════════════════════════════════════════════════════════════════ */
+
+    /**
+     * Rotaciones externas del año 2026-2027, tal como están en la distribución
+     * de evaluación. SOLO estas cuentan para la nota final: si un residente
+     * hace otra rotación este año, su nota se registra y se ve, pero no entra
+     * en el promedio del año.
+     */
+    var ROTACIONES_2026_2027 = [
+        { apellido: "díaz",     rotacion: "Neurología", mes: "Mayo 2026" },
+        { apellido: "blandón",  rotacion: "Neurología", mes: "Junio 2026" },
+        { apellido: "bobb",     rotacion: "Anestesia",  mes: "Agosto 2026" },
+        { apellido: "cerrato",  rotacion: "Neurología", mes: "Septiembre 2026" },
+        { apellido: "quintana", rotacion: "Anestesia",  mes: "Octubre 2026" },
+        { apellido: "olivas",   rotacion: "UCI",        mes: "Noviembre 2026" },
+        { apellido: "membreño", rotacion: "Extranjero", mes: "Diciembre 2026" },
+        { apellido: "abarca",   rotacion: "Extranjero", mes: "Enero 2027" },
+        { apellido: "rayo",     rotacion: "Neurología", mes: "Febrero 2027" },
+        { apellido: "cuadra",   rotacion: "UCI",        mes: "Marzo 2027" },
+        { apellido: "reynoso",  rotacion: "Neurología", mes: "Abril 2027" }
+    ];
+
+    /**
+     * ¿Son la misma rotación? Se compara con tolerancia porque en la hoja se
+     * escribe a mano: «Uci adulto», «UCI», «Neurologia», «Rotación extranjero».
+     */
+    function mismaRotacion(escrita, delPlan) {
+        var a = normTxt(escrita), b = normTxt(delPlan);
+        if (!a || !b) return false;
+        if (a.indexOf(b) !== -1 || b.indexOf(a) !== -1) return true;
+        var CLAVES = { 'uci': 'uci', 'neurolog': 'neurologia',
+                       'anestesi': 'anestesia', 'extranjer': 'extranjero' };
+        var ka = null, kb = null;
+        Object.keys(CLAVES).forEach(function (k) {
+            if (a.indexOf(k) !== -1) ka = CLAVES[k];
+            if (b.indexOf(k) !== -1) kb = CLAVES[k];
+        });
+        return !!ka && ka === kb;
+    }
+
+    /** La rotación que le toca a un residente este año, o null */
+    function rotacionDelAnio(nombreResidente) {
+        var n = normTxt(nombreResidente);
+        for (var i = 0; i < ROTACIONES_2026_2027.length; i++) {
+            var r = ROTACIONES_2026_2027[i];
+            if (n.indexOf(normTxt(r.apellido)) !== -1) return r;
+        }
+        return null;
+    }
+
+    /** Nota total de una rotación externa: media de teoría y práctica */
+    function notaRotacion(fila) {
+        var t = parseFloat(fila.notaTeorica), p = parseFloat(fila.notaPractica);
+        var vals = [];
+        if (!isNaN(t)) vals.push(Math.min(t, 100));
+        if (!isNaN(p)) vals.push(Math.min(p, 100));
+        if (!vals.length) return null;
+        return Math.round(vals.reduce(function (a, b) { return a + b; }, 0) / vals.length);
+    }
+
+    /**
+     * Nota final del año de un residente.
+     *
+     * @param filas       sus evaluaciones (las mismas que recibe calcular)
+     * @param fnModulo    función que dice a qué módulo pertenece cada fila
+     * @param rotaciones  filas de la hoja Rotaciones_Externas (puede ir vacío)
+     * @param residente   nombre completo, para saber qué rotación le toca
+     *
+     * Devuelve el promedio y el desglose, para poder enseñar de dónde sale.
+     */
+    function notaFinalAnual(filas, fnModulo, rotaciones, residente) {
+        var partes = [];
+
+        // 1) Un módulo de neurocirugía por cada módulo con evaluaciones
+        var porModulo = {};
+        (filas || []).forEach(function (r) {
+            var c = comp(r.tipo_evaluacion);
+            if (c === "Clases de Investigación") return;      // va aparte
+            var m = moduloDeFila(r, c, fnModulo);
+            if (!m || m === 'Sin módulo') return;
+            (porModulo[m] = porModulo[m] || []).push(r);
+        });
+        Object.keys(porModulo).sort().forEach(function (m) {
+            var res = calcular(porModulo[m], function () { return m; });
+            if (res.final !== null && res.final !== undefined) {
+                partes.push({ tipo: 'Módulo', clave: 'Módulo ' + m, nota: res.final,
+                              teorica: res.teorica, practica: res.practica });
+            }
+        });
+
+        // 2) El módulo de investigación, uno solo para todo el año
+        var resInv = calcular(filas || [], fnModulo);
+        if (resInv.investigacion !== null && resInv.investigacion !== undefined) {
+            partes.push({ tipo: 'Investigación', clave: 'Investigación',
+                          nota: resInv.investigacion });
+        }
+
+        // 3) La rotación externa del plan del año, si ya tiene nota.
+        //
+        //    SOLO cuenta la rotación que le toca según la distribución de
+        //    evaluación. Si un residente hace además otra rotación este año, su
+        //    nota se registra y se ve en su panel, pero NO entra en el promedio:
+        //    así lo dice el documento y así se evita que una rotación de más
+        //    mueva la nota del año.
+        var rot = rotacionDelAnio(residente);
+        if (rot) {
+            var suyas = (rotaciones || []).filter(function (x) {
+                return normTxt(x.residente) === normTxt(residente);
+            });
+            var elegida = null, ajenas = [];
+            for (var k = 0; k < suyas.length; k++) {
+                if (mismaRotacion(suyas[k].rotacion, rot.rotacion)) {
+                    if (!elegida) elegida = suyas[k];
+                } else {
+                    ajenas.push(String(suyas[k].rotacion || '').trim());
+                }
+            }
+            var nr = elegida ? notaRotacion(elegida) : null;
+            if (nr !== null) {
+                partes.push({ tipo: 'Rotación', clave: 'Rotación · ' + rot.rotacion, nota: nr,
+                              teorica: parseFloat(elegida.notaTeorica) || null,
+                              practica: parseFloat(elegida.notaPractica) || null,
+                              ajenas: ajenas });
+            } else {
+                partes.push({ tipo: 'Rotación', clave: 'Rotación · ' + rot.rotacion,
+                              nota: null, pendiente: true, mes: rot.mes,
+                              ajenas: ajenas });
+            }
+        }
+
+        var conNota = partes.filter(function (p) { return p.nota !== null && p.nota !== undefined; });
+        var final = conNota.length
+            ? Math.round(conNota.reduce(function (s, p) { return s + p.nota; }, 0) / conNota.length)
+            : null;
+
+        return { final: final, partes: partes, cuentan: conNota.length,
+                 rotacionPlan: rot };
+    }
+
     return { VERSION: VERSION, PESOS: PESOS, pct: pct, comp: comp,
              normTxt: normTxt, calcular: calcular,
-             moduloDeExamen: moduloDeExamen, moduloDeFila: moduloDeFila };
+             moduloDeExamen: moduloDeExamen, moduloDeFila: moduloDeFila,
+             ROTACIONES_2026_2027: ROTACIONES_2026_2027,
+             rotacionDelAnio: rotacionDelAnio, notaRotacion: notaRotacion,
+             mismaRotacion: mismaRotacion,
+             notaFinalAnual: notaFinalAnual };
 })();
 /* ══════════════ FIN DEL BLOQUE CANÓNICO DE CÁLCULO DE NOTAS ══════════════ */
 
@@ -1927,6 +2092,20 @@ function pedirArranque() {
     return _arranquePromesa;
 }
 
+// Las rotaciones externas entran ahora en la nota final del año, así que hacen
+// falta al pintar las notas. Se piden una sola vez: llevan las fotos de las
+// actas y son la respuesta más pesada de la plataforma.
+let _rotacionesPromesa = null;
+let _rotacionesDatos = [];
+function pedirRotaciones() {
+    if (_rotacionesPromesa) return _rotacionesPromesa;
+    _rotacionesPromesa = fetch(`${URL_SCRIPT}?action=getRotacionesExternas`, { mode: 'cors' })
+        .then(r => r.json())
+        .then(d => { _rotacionesDatos = Array.isArray(d) ? d : []; return _rotacionesDatos; })
+        .catch(() => { _rotacionesPromesa = null; return []; });
+    return _rotacionesPromesa;
+}
+
 let _datosCache = null;
 
 async function fetchEvaluaciones() {
@@ -1974,7 +2153,10 @@ async function cargarNotas() {
     if (!filasFiltr.length) { mostrarMsgNotas("No hay evaluaciones en el módulo seleccionado."); return; }
 
     document.getElementById('msgNotasEstado').classList.add('hidden');
-    renderNotas(residente, filasFiltr);
+    // La nota del AÑO se calcula con todas las evaluaciones del residente,
+    // no con las del módulo filtrado: el filtro cambia lo que se muestra,
+    // no la nota del año académico.
+    pedirRotaciones().then(() => renderNotas(residente, filasFiltr, filasConMod));
 }
 
 function mostrarMsgNotas(txt) {
@@ -1983,7 +2165,7 @@ function mostrarMsgNotas(txt) {
     document.getElementById('secNotas').classList.add('hidden');
 }
 
-function renderNotas(residente, filas) {
+function renderNotas(residente, filas, filasTodas) {
     // ── CÁLCULO DE NOTAS ────────────────────────────────────────────────
     // Toda la lógica vive en NOTAS_CANON (bloque canónico, arriba en este
     // mismo archivo), idéntico en index.html y en los dos dashboards, para
@@ -2002,13 +2184,19 @@ function renderNotas(residente, filas) {
     const filasTbl = _RES.tabla;
     const notaT = _RES.teorica;
     const notaP = _RES.practica;
-    const notaF = _RES.final !== null ? _RES.final : 0;
+    // La nota final estimada es ahora la del AÑO ACADÉMICO: promedio de los
+    // módulos de neurocirugía, el módulo de investigación y la rotación
+    // externa del plan. Antes era la nota del módulo que se estuviera viendo.
+    const _ANUAL = NOTAS_CANON.notaFinalAnual(filasTodas || filas, r => r._modulo,
+                                              _rotacionesDatos, residente);
+    const notaModulo = _RES.final !== null ? _RES.final : 0;
+    const notaF = _ANUAL.final !== null ? _ANUAL.final : notaModulo;
 
     document.getElementById('kpiCards').innerHTML=[
         {label:"Evaluaciones",val:filas.length,color:"bg-indigo-50 text-indigo-700"},
         {label:"Nota Teórica",val:notaT!==null?notaT+"%":"—",color:"bg-blue-50 text-blue-700"},
         {label:"Nota Práctica",val:notaP!==null?notaP+"%":"—",color:"bg-emerald-50 text-emerald-700"},
-        {label:"Nota Final Est.",val:notaF+"%",color:notaF>=70?"bg-green-50 text-green-700":"bg-red-50 text-red-700"},
+        {label:"Nota Final del Año",val:notaF+"%",color:notaF>=70?"bg-green-50 text-green-700":"bg-red-50 text-red-700"},
     ].map(c=>`<div class="${c.color} rounded-2xl p-4 text-center border border-slate-200"><p class="text-2xl font-black">${c.val}</p><p class="text-xs font-bold mt-1 opacity-70 uppercase tracking-wide">${c.label}</p></div>`).join('');
 
     document.getElementById('tablaBody').innerHTML=filasTbl.map(f=>`
@@ -2029,9 +2217,42 @@ function renderNotas(residente, filas) {
             <td class="px-4 py-3 text-center"><span class="inline-block px-2 py-1 rounded-lg text-xs font-bold ${notaT!==null?badgeColor(notaT):'bg-slate-100 text-slate-400'}">${notaT!==null?notaT+'%':'—'}</span></td><td></td></tr>
         <tr><td colspan="5" class="px-4 py-3 text-right text-slate-600">Nota Práctica (pond.)</td>
             <td class="px-4 py-3 text-center"><span class="inline-block px-2 py-1 rounded-lg text-xs font-bold ${notaP!==null?badgeColor(notaP):'bg-slate-100 text-slate-400'}">${notaP!==null?notaP+'%':'—'}</span></td><td></td></tr>
-        <tr class="bg-indigo-50"><td colspan="5" class="px-4 py-3 text-right font-bold text-indigo-900">NOTA FINAL ESTIMADA</td>
+        <tr><td colspan="5" class="px-4 py-3 text-right text-slate-600">Nota del periodo mostrado <span class="text-xs text-slate-400">(teórica + práctica) / 2</span></td>
+            <td class="px-4 py-3 text-center"><span class="inline-block px-2 py-1 rounded-lg text-xs font-bold ${badgeColor(notaModulo)}">${notaModulo}%</span></td><td></td></tr>
+        <tr class="bg-indigo-50"><td colspan="5" class="px-4 py-3 text-right font-bold text-indigo-900">NOTA FINAL DEL AÑO 2026-2027</td>
             <td class="px-4 py-3 text-center"><span class="inline-block px-3 py-1 rounded-lg font-black text-sm ${badgeColor(notaF)}">${notaF}%</span></td>
             <td class="px-4 py-3"><span class="text-xs font-bold ${notaF>=70?'text-emerald-600':'text-red-600'}">${notaF>=70?'✓ APROBADO':'✗ REPROBADO'}</span></td></tr>`;
+
+    // ── De dónde sale la nota del año ────────────────────────────────────
+    // Un promedio sin desglose es un número que hay que creerse. Aquí se ven
+    // las notas que entran, las que faltan y cuánto pesa cada una.
+    const _cont = document.getElementById('desgloseAnual');
+    if (_cont) {
+        const partes = _ANUAL.partes || [];
+        const peso = _ANUAL.cuentan ? Math.round(100 / _ANUAL.cuentan) : 0;
+        _cont.innerHTML = !partes.length ? '' : `
+            <div class="mt-5 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
+                <div class="flex items-center gap-2 flex-wrap mb-1">
+                    <span class="text-sm font-black text-indigo-900">Cómo se compone la nota del año</span>
+                    <span class="text-[11px] text-indigo-700">promedio simple de ${_ANUAL.cuentan} nota${_ANUAL.cuentan!==1?'s':''} · cada una pesa ${peso} %</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mb-3">Módulos de neurocirugía, el módulo de investigación y la rotación externa del plan, todos con el mismo peso.</p>
+                <div class="space-y-1.5">
+                ${partes.map(p => {
+                    const pend = p.nota === null;
+                    const det = (p.teorica != null && p.practica != null)
+                        ? `<span class="text-[10px] text-slate-400 ml-1">teórica ${Math.round(p.teorica)} · práctica ${Math.round(p.practica)}</span>` : '';
+                    return `<div class="flex items-center justify-between gap-3 bg-white rounded-xl border ${pend?'border-dashed border-slate-300':'border-slate-200'} px-3 py-2">
+                        <div class="min-w-0">
+                            <span class="text-xs font-bold ${pend?'text-slate-400':'text-slate-700'}">${_esc(p.clave)}</span>${det}
+                            ${pend ? `<span class="block text-[10px] text-amber-600">pendiente${p.mes?' · '+_esc(p.mes):''} — no entra en el promedio todavía</span>` : ''}
+                        </div>
+                        <span class="text-sm font-black ${pend?'text-slate-300':(p.nota>=70?'text-emerald-600':'text-red-500')}">${pend?'—':p.nota+'%'}</span>
+                    </div>`;
+                }).join('')}
+                </div>
+            </div>`;
+    }
 
     if(chartBarrasInst){chartBarrasInst.destroy();chartBarrasInst=null;}
     if(chartRadarInst){chartRadarInst.destroy();chartRadarInst=null;}
@@ -2634,6 +2855,8 @@ function renderRotExtDash1() {
                     + '<p style="margin-top:6px;">'
                     + (x.notaTeorica?'<span style="font-size:10px;background:#eef2ff;color:#3730a3;font-weight:800;padding:2px 8px;border-radius:99px;margin-right:4px;">Teórica: '+esc(x.notaTeorica)+'%</span>':'')
                     + (x.notaPractica?'<span style="font-size:10px;background:#ecfdf5;color:#065f46;font-weight:800;padding:2px 8px;border-radius:99px;">Práctica: '+esc(x.notaPractica)+'%</span>':'')
+                    + (function(){ var tt = NOTAS_CANON.notaRotacion(x); return tt === null ? '' :
+                        '<span style="font-size:10px;background:#4338ca;color:#fff;font-weight:900;padding:2px 9px;border-radius:99px;margin-left:4px;">Total: '+tt+'%</span>'; })()
                     + '</p></div></div>';
             }).join('')
             + '</div></div>';
