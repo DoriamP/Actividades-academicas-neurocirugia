@@ -623,8 +623,15 @@
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">a) Nombre de la rotación evaluada *</label>
-                        <input id="rotExtNombre" type="text" placeholder="Ej.: Neurocirugía pediátrica — Hospital ..."
-                            class="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+                        <!-- Desplegable, no texto libre: la rotación escrita a mano tenía
+                             que coincidir exactamente con la del plan para contar en la nota
+                             del año, y «Uci adulto» no coincide con «UCI». Ahora solo se
+                             puede elegir la que le toca al residente seleccionado. -->
+                        <select id="rotExtNombre"
+                            class="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none appearance-none">
+                            <option value="" disabled selected>Primero seleccione al residente…</option>
+                        </select>
+                        <p id="rotExtNombreAyuda" class="text-[11px] text-slate-500 mt-1"></p>
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">b) Nota teórica (%)</label>
@@ -3824,8 +3831,54 @@ function toggleRotExternas() {
             sel.value = _auth.residente;
             sel.disabled = true;
         }
+        sel.addEventListener('change', cargarRotacionesDelPlan);
+        cargarRotacionesDelPlan();
     }
     cargarRotacionesExternas();
+}
+
+/**
+ * Rellena el desplegable con la rotación que le toca al residente elegido,
+ * según la programación de rotaciones externas 2026-2027.
+ *
+ * Solo se ofrece esa: es la única que cuenta para la nota del año, y escribirla
+ * a mano era la puerta de entrada a las erratas. La tabla vive en el bloque
+ * canónico (NOTAS_CANON.ROTACIONES_2026_2027), así que basta con cambiarla ahí
+ * para el curso siguiente.
+ */
+function cargarRotacionesDelPlan() {
+    const selRes = document.getElementById('rotExtResidente');
+    const selRot = document.getElementById('rotExtNombre');
+    const ayuda  = document.getElementById('rotExtNombreAyuda');
+    if (!selRes || !selRot) return;
+
+    const residente = selRes.value;
+    if (!residente) {
+        selRot.innerHTML = '<option value="" disabled selected>Primero seleccione al residente…</option>';
+        selRot.disabled = true;
+        if (ayuda) ayuda.textContent = '';
+        return;
+    }
+
+    const plan = NOTAS_CANON.rotacionDelAnio(residente);
+    if (!plan) {
+        // Sin rotación en la tabla: se dejan las cuatro estándar para no
+        // bloquear el registro, avisando de que no contará para la nota.
+        selRot.innerHTML = '<option value="" disabled selected>Seleccione la rotación…</option>'
+            + ['Neurología', 'UCI', 'Anestesia', 'Extranjero']
+                .map(r => `<option value="${r}">${r}</option>`).join('');
+        selRot.disabled = false;
+        if (ayuda) ayuda.innerHTML = '<span class="text-amber-600">Este residente no tiene rotación en la programación 2026-2027: la nota que registre no entrará en su nota del año.</span>';
+        return;
+    }
+
+    selRot.innerHTML = `<option value="${plan.rotacion}" selected>${plan.rotacion}</option>`;
+    selRot.disabled = false;
+    if (ayuda) {
+        ayuda.innerHTML = 'Según la programación 2026-2027 le corresponde <b>' +
+            _esc(plan.rotacion) + '</b> en <b>' + _esc(plan.mes) + '</b>. ' +
+            'Es la única que cuenta para la nota del año.';
+    }
 }
 
 function prepararFotoRotExt(input) {
@@ -3893,7 +3946,7 @@ function guardarRotacionExterna() {
     fetch(URL_SCRIPT, { method: 'POST', mode: 'no-cors', body: body })
         .then(() => {
             estado.textContent = '✓ Rotación guardada correctamente.'; estado.style.color = '#10b981';
-            document.getElementById('rotExtNombre').value = '';
+            cargarRotacionesDelPlan();   // el desplegable vuelve a su opción, no a vacío
             document.getElementById('rotExtTeorica').value = '';
             document.getElementById('rotExtPractica').value = '';
             document.getElementById('rotExtFoto').value = '';
