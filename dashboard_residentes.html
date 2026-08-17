@@ -567,7 +567,7 @@ function _esc(v) {
 var NOTAS_CANON = (function () {
     'use strict';
 
-    var VERSION = '2.0';
+    var VERSION = '4.0';
 
     var PESOS = {
         "Clases Programadas":          { peso: 30,  tipo: "Teórico" },
@@ -859,72 +859,142 @@ var NOTAS_CANON = (function () {
      * Devuelve el promedio y el desglose, para poder enseñar de dónde sale.
      */
     function notaFinalAnual(filas, fnModulo, rotaciones, residente) {
-        var partes = [];
+        filas = filas || [];
 
-        // 1) Un módulo de neurocirugía por cada módulo con evaluaciones
+        // ── COMPONENTE 1 · Módulos de neurocirugía ──────────────────────────
+        // Cada módulo tiene dos mitades: teoría (con sus cuatro subcomponentes
+        // ponderados 30/20/20/30) y práctica quirúrgica. La nota del módulo es
+        // la media de las dos, y el componente es la media de los módulos.
         var porModulo = {};
-        (filas || []).forEach(function (r) {
+        filas.forEach(function (r) {
             var c = comp(r.tipo_evaluacion);
-            if (c === "Clases de Investigación") return;      // va aparte
+            if (c === "Clases de Investigación") return;      // va en el componente 2
             var m = moduloDeFila(r, c, fnModulo);
             if (!m || m === 'Sin módulo') return;
             (porModulo[m] = porModulo[m] || []).push(r);
         });
-        Object.keys(porModulo).sort().forEach(function (m) {
+
+        var modulos = [];
+        Object.keys(porModulo).sort(ordenModulos).forEach(function (m) {
             var res = calcular(porModulo[m], function () { return m; });
-            if (res.final !== null && res.final !== undefined) {
-                partes.push({ tipo: 'Módulo', clave: 'Módulo ' + m, nota: res.final,
-                              teorica: res.teorica, practica: res.practica });
-            }
+            if (res.final === null || res.final === undefined) return;
+            // Los subcomponentes teóricos, con su peso y lo que aportan
+            var teoria = res.tabla.filter(function (t) { return t.tipo === 'Teórico'; })
+                .map(function (t) {
+                    return { nombre: t.comp, promedio: t.promedio, peso: t.peso,
+                             aporta: t.pond, evaluaciones: t.count };
+                });
+            var pract = res.tabla.filter(function (t) { return t.tipo === 'Práctico'; })
+                .map(function (t) {
+                    return { nombre: t.comp, promedio: t.promedio, peso: t.peso,
+                             aporta: t.pond, evaluaciones: t.count };
+                });
+            modulos.push({
+                modulo: m, nota: res.final,
+                teorica: res.teorica, practica: res.practica,
+                subTeoria: teoria, subPractica: pract
+            });
         });
+        var notaModulos = modulos.length
+            ? Math.round(modulos.reduce(function (s2, m) { return s2 + m.nota; }, 0) / modulos.length)
+            : null;
 
-        // 2) El módulo de investigación, uno solo para todo el año
-        var resInv = calcular(filas || [], fnModulo);
-        if (resInv.investigacion !== null && resInv.investigacion !== undefined) {
-            partes.push({ tipo: 'Investigación', clave: 'Investigación',
-                          nota: resInv.investigacion });
-        }
+        // ── COMPONENTE 2 · Investigación ────────────────────────────────────
+        // Dos subcomponentes que se promedian entre sí: las clases de
+        // investigación y las presentaciones de avances de tesis. Se separan
+        // aquí aunque para el cálculo de módulo vayan juntos, porque el
+        // residente necesita ver de dónde sale cada uno.
+        var invClases = [], invTesis = [];
+        filas.forEach(function (r) {
+            if (comp(r.tipo_evaluacion) !== "Clases de Investigación") return;
+            var v = pct(r);
+            if (v === null) return;
+            if (normTxt(r.tipo_evaluacion).indexOf('tesis') !== -1) invTesis.push(v);
+            else invClases.push(v);
+        });
+        var media = function (a) {
+            return a.length ? Math.round(a.reduce(function (s2, v) { return s2 + v; }, 0) / a.length) : null;
+        };
+        var subInv = [
+            { nombre: 'Clases de Investigación', nota: media(invClases), evaluaciones: invClases.length },
+            { nombre: 'Presentación de avances de tesis', nota: media(invTesis), evaluaciones: invTesis.length }
+        ];
+        var conNotaInv = subInv.filter(function (x) { return x.nota !== null; });
+        var notaInvestigacion = conNotaInv.length
+            ? Math.round(conNotaInv.reduce(function (s2, x) { return s2 + x.nota; }, 0) / conNotaInv.length)
+            : null;
 
-        // 3) La rotación externa del plan del año, si ya tiene nota.
-        //
-        //    SOLO cuenta la rotación que le toca según la distribución de
-        //    evaluación. Si un residente hace además otra rotación este año, su
-        //    nota se registra y se ve en su panel, pero NO entra en el promedio:
-        //    así lo dice el documento y así se evita que una rotación de más
-        //    mueva la nota del año.
+        // ── COMPONENTE 3 · Rotaciones externas ──────────────────────────────
+        // Solo la que le toca en la programación del año. Si hace alguna más,
+        // se anota aparte pero no entra en el promedio.
         var rot = rotacionDelAnio(residente);
+        var subRot = [], ajenas = [];
         if (rot) {
             var suyas = (rotaciones || []).filter(function (x) {
                 return normTxt(x.residente) === normTxt(residente);
             });
-            var elegida = null, ajenas = [];
+            var elegida = null;
             for (var k = 0; k < suyas.length; k++) {
-                if (mismaRotacion(suyas[k].rotacion, rot.rotacion)) {
-                    if (!elegida) elegida = suyas[k];
-                } else {
-                    ajenas.push(String(suyas[k].rotacion || '').trim());
-                }
+                if (mismaRotacion(suyas[k].rotacion, rot.rotacion)) { if (!elegida) elegida = suyas[k]; }
+                else ajenas.push(String(suyas[k].rotacion || '').trim());
             }
-            var nr = elegida ? notaRotacion(elegida) : null;
-            if (nr !== null) {
-                partes.push({ tipo: 'Rotación', clave: 'Rotación · ' + rot.rotacion, nota: nr,
-                              teorica: parseFloat(elegida.notaTeorica) || null,
-                              practica: parseFloat(elegida.notaPractica) || null,
-                              ajenas: ajenas });
-            } else {
-                partes.push({ tipo: 'Rotación', clave: 'Rotación · ' + rot.rotacion,
-                              nota: null, pendiente: true, mes: rot.mes,
-                              ajenas: ajenas });
-            }
+            subRot.push({
+                nombre: rot.rotacion, mes: rot.mes,
+                nota: elegida ? notaRotacion(elegida) : null,
+                teorica:  elegida ? (parseFloat(elegida.notaTeorica)  || null) : null,
+                practica: elegida ? (parseFloat(elegida.notaPractica) || null) : null
+            });
         }
-
-        var conNota = partes.filter(function (p) { return p.nota !== null && p.nota !== undefined; });
-        var final = conNota.length
-            ? Math.round(conNota.reduce(function (s, p) { return s + p.nota; }, 0) / conNota.length)
+        var conNotaRot = subRot.filter(function (x) { return x.nota !== null; });
+        var notaRotaciones = conNotaRot.length
+            ? Math.round(conNotaRot.reduce(function (s2, x) { return s2 + x.nota; }, 0) / conNotaRot.length)
             : null;
 
-        return { final: final, partes: partes, cuentan: conNota.length,
-                 rotacionPlan: rot };
+        // ── NOTA DEL AÑO ────────────────────────────────────────────────────
+        // Cada módulo de neurocirugía es un COMPONENTE por sí mismo, igual que
+        // investigación y que la rotación externa. Todos participan por igual
+        // en el promedio: hoy, con el módulo I e investigación evaluados, cada
+        // uno vale la mitad; cuando el I año tenga sus cuatro módulos más
+        // investigación y la rotación, serán seis componentes a partes iguales.
+        //
+        // Un componente sin ninguna nota todavía no entra, así que la cifra se
+        // va ajustando conforme avanza el curso en vez de dar un salto al final.
+        var componentes = [];
+        modulos.forEach(function (m) {
+            componentes.push({
+                tipo: 'modulo', nombre: 'Módulo ' + m.modulo + ' de neurocirugía',
+                nota: m.nota, teorica: m.teorica, practica: m.practica,
+                subTeoria: m.subTeoria, subPractica: m.subPractica
+            });
+        });
+        componentes.push({ tipo: 'investigacion', nombre: 'Investigación',
+                           nota: notaInvestigacion, sub: subInv });
+        componentes.push({ tipo: 'rotacion', nombre: 'Rotación externa',
+                           nota: notaRotaciones, sub: subRot, ajenas: ajenas });
+        componentes.forEach(function (c, i) { c.n = i + 1; });
+
+        var conNota = componentes.filter(function (c) { return c.nota !== null; });
+        var final = conNota.length
+            ? Math.round(conNota.reduce(function (s2, c) { return s2 + c.nota; }, 0) / conNota.length)
+            : null;
+
+        // «partes» se mantiene para lo que ya lo usaba
+        var partes = componentes.map(function (c) {
+            return { tipo: c.tipo === 'modulo' ? 'Módulo' : c.tipo === 'rotacion' ? 'Rotación' : 'Investigación',
+                     clave: c.nombre, nota: c.nota,
+                     teorica: c.teorica || null, practica: c.practica || null,
+                     pendiente: c.nota === null };
+        });
+
+        return { final: final, componentes: componentes, partes: partes,
+                 modulos: modulos, cuentan: conNota.length, rotacionPlan: rot };
+    }
+
+    /** I, II, III, IV, V y luego Cierre */
+    function ordenModulos(a, b) {
+        var ORD = { 'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5, 'CIERRE': 6 };
+        var ia = ORD[String(a).toUpperCase()] || 99, ib = ORD[String(b).toUpperCase()] || 99;
+        return ia - ib || String(a).localeCompare(String(b));
     }
 
     return { VERSION: VERSION, PESOS: PESOS, pct: pct, comp: comp,
@@ -933,7 +1003,7 @@ var NOTAS_CANON = (function () {
              ROTACIONES_2026_2027: ROTACIONES_2026_2027,
              rotacionDelAnio: rotacionDelAnio, notaRotacion: notaRotacion,
              mismaRotacion: mismaRotacion,
-             notaFinalAnual: notaFinalAnual };
+             notaFinalAnual: notaFinalAnual, ordenModulos: ordenModulos };
 })();
 /* ══════════════ FIN DEL BLOQUE CANÓNICO DE CÁLCULO DE NOTAS ══════════════ */
 
@@ -2224,286 +2294,100 @@ function renderNotas(residente, filas, filasTodas) {
             <td class="px-4 py-3"><span class="text-xs font-bold ${notaF>=70?'text-emerald-600':'text-red-600'}">${notaF>=70?'✓ APROBADO':'✗ REPROBADO'}</span></td></tr>`;
 
     // ── De dónde sale la nota del año ────────────────────────────────────
-    // Un promedio sin desglose es un número que hay que creerse. Aquí se ven
-    // las notas que entran, las que faltan y cuánto pesa cada una.
+    // Cada módulo de neurocirugía es un componente por sí mismo, igual que
+    // investigación y la rotación externa: todos pesan lo mismo en el promedio.
+    // Se enseña la jerarquía completa —componente → subcomponentes → total— y
+    // la operación final escrita, para que la nota no aparezca de la nada.
     const _cont = document.getElementById('desgloseAnual');
     if (_cont) {
-        const partes = _ANUAL.partes || [];
-        const peso = _ANUAL.cuentan ? Math.round(100 / _ANUAL.cuentan) : 0;
-        _cont.innerHTML = !partes.length ? '' : `
-            <div class="mt-5 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
-                <div class="flex items-center gap-2 flex-wrap mb-1">
-                    <span class="text-sm font-black text-indigo-900">Cómo se compone la nota del año</span>
-                    <span class="text-[11px] text-indigo-700">promedio simple de ${_ANUAL.cuentan} nota${_ANUAL.cuentan!==1?'s':''} · cada una pesa ${peso} %</span>
-                </div>
-                <p class="text-[11px] text-slate-500 mb-3">Módulos de neurocirugía, el módulo de investigación y la rotación externa del plan, todos con el mismo peso.</p>
-                <div class="space-y-1.5">
-                ${partes.map(p => {
-                    const pend = p.nota === null;
-                    const det = (p.teorica != null && p.practica != null)
-                        ? `<span class="text-[10px] text-slate-400 ml-1">teórica ${Math.round(p.teorica)} · práctica ${Math.round(p.practica)}</span>` : '';
-                    return `<div class="flex items-center justify-between gap-3 bg-white rounded-xl border ${pend?'border-dashed border-slate-300':'border-slate-200'} px-3 py-2">
-                        <div class="min-w-0">
-                            <span class="text-xs font-bold ${pend?'text-slate-400':'text-slate-700'}">${_esc(p.clave)}</span>${det}
-                            ${pend ? `<span class="block text-[10px] text-amber-600">pendiente${p.mes?' · '+_esc(p.mes):''} — no entra en el promedio todavía</span>` : ''}
-                        </div>
-                        <span class="text-sm font-black ${pend?'text-slate-300':(p.nota>=70?'text-emerald-600':'text-red-500')}">${pend?'—':p.nota+'%'}</span>
-                    </div>`;
-                }).join('')}
-                </div>
+        const comps = _ANUAL.componentes || [];
+        const col = v => v === null ? '#94a3b8' : (v >= 70 ? '#059669' : '#dc2626');
+        const nota = v => v === null ? '<span style="color:#cbd5e1;">—</span>'
+                                     : `<span style="color:${col(v)};">${v}%</span>`;
+
+        const filaSub = (etiq, val, extra, sangria) => `
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+                        padding:4px 0 4px ${sangria||16}px;border-top:1px dashed #e2e8f0;">
+                <span style="font-size:12px;color:#475569;">${etiq}
+                    ${extra ? `<span style="font-size:10.5px;color:#94a3b8;margin-left:4px;">${extra}</span>` : ''}</span>
+                <span style="font-size:12.5px;font-weight:800;white-space:nowrap;">${nota(val)}</span>
             </div>`;
-    }
 
-    if(chartBarrasInst){chartBarrasInst.destroy();chartBarrasInst=null;}
-    if(chartRadarInst){chartRadarInst.destroy();chartRadarInst=null;}
-    const labels=filasTbl.map(f=>f.comp); const promedios=filasTbl.map(f=>f.promedio);
-    const bgColors=filasTbl.map(f=>COLORES_COMP[f.comp]||"#94a3b8");
-    chartBarrasInst=new Chart(document.getElementById('chartBarras'),{type:'bar',data:{labels:labels.map(l=>l.length>16?l.slice(0,14)+'…':l),datasets:[{label:'%',data:promedios,backgroundColor:bgColors,borderRadius:8,borderSkipped:false}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}},x:{grid:{display:false}}}}});
-    chartRadarInst=new Chart(document.getElementById('chartRadar'),{type:'radar',data:{labels:labels.map(l=>l.length>14?l.slice(0,12)+'…':l),datasets:[{label:'Promedio',data:promedios,backgroundColor:'rgba(99,102,241,0.15)',borderColor:'#6366f1',pointBackgroundColor:bgColors,pointRadius:4,borderWidth:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{r:{min:0,max:100,ticks:{stepSize:20,callback:v=>v+'%',font:{size:10}},pointLabels:{font:{size:10}}}}}});
+        const cuerpoModulo = c => `
+            <div style="font-size:11px;font-weight:800;color:#1d4ed8;padding:2px 0;">a) Teoría</div>
+            ${c.subTeoria.map(t => filaSub(_esc(t.nombre), t.promedio,
+                `peso ${t.peso}% · aporta ${t.aporta} pts · ${t.evaluaciones} eval.`, 16)).join('')}
+            <div style="display:flex;justify-content:space-between;padding:4px 0 4px 16px;border-top:1px solid #cbd5e1;">
+                <span style="font-size:11.5px;font-weight:800;color:#1d4ed8;">Total teoría</span>
+                <span style="font-size:12.5px;font-weight:900;color:${col(c.teorica)};">${c.teorica === null ? '—' : c.teorica + '%'}</span>
+            </div>
+            <div style="font-size:11px;font-weight:800;color:#047857;padding:6px 0 2px;">b) Práctica quirúrgica</div>
+            ${c.subPractica.map(t => filaSub(_esc(t.nombre), t.promedio, `${t.evaluaciones} eval.`, 16)).join('')}
+            <div style="display:flex;justify-content:space-between;padding:4px 0 4px 16px;border-top:1px solid #cbd5e1;">
+                <span style="font-size:11.5px;font-weight:800;color:#047857;">Total práctica</span>
+                <span style="font-size:12.5px;font-weight:900;color:${col(c.practica)};">${c.practica === null ? '—' : c.practica + '%'}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:6px 0 2px;border-top:2px solid #e2e8f0;margin-top:4px;">
+                <span style="font-size:11.5px;font-weight:900;color:#334155;">Total del componente <span style="font-weight:600;color:#94a3b8;">(teoría + práctica) / 2</span></span>
+                <span style="font-size:13px;font-weight:900;color:${col(c.nota)};">${c.nota === null ? '—' : c.nota + '%'}</span>
+            </div>`;
 
-    // ─── Consolidado de evaluaciones ───────────────────────────────────────
-    // "Clases Programadas" y "Casos Clínicos y Artículos" se agrupan POR TEMA
-    // (promedio de TODAS las evaluaciones de ese tema para el residente), no por día.
-    // El resto de componentes se mantiene agrupado por día.
-    const PALETA_TEMAS = [
-        { accent:'#6366f1', soft:'#eef2ff', chipTxt:'#3730a3' },
-        { accent:'#8b5cf6', soft:'#f5f3ff', chipTxt:'#5b21b6' },
-        { accent:'#0ea5e9', soft:'#f0f9ff', chipTxt:'#075985' },
-        { accent:'#10b981', soft:'#ecfdf5', chipTxt:'#065f46' },
-        { accent:'#f59e0b', soft:'#fffbeb', chipTxt:'#92400e' },
-        { accent:'#f43f5e', soft:'#fff1f2', chipTxt:'#9f1239' },
-        { accent:'#14b8a6', soft:'#f0fdfa', chipTxt:'#115e59' },
-        { accent:'#d946ef', soft:'#fdf4ff', chipTxt:'#86198f' }
-    ];
-    const COMPS_POR_TEMA = ["Clases Programadas", "Casos Clínicos y Artículos"];
+        const cuerpoInvestigacion = c => `
+            ${(c.sub || []).map((x, i) => filaSub(
+                `${i === 0 ? 'a)' : 'b)'} ${_esc(x.nombre)}`, x.nota,
+                x.evaluaciones ? `${x.evaluaciones} eval.` : 'sin evaluaciones', 8)).join('')}
+            <div style="display:flex;justify-content:space-between;padding:6px 0 2px;border-top:2px solid #e2e8f0;margin-top:4px;">
+                <span style="font-size:11.5px;font-weight:900;color:#334155;">Total del componente</span>
+                <span style="font-size:13px;font-weight:900;color:${col(c.nota)};">${c.nota === null ? '—' : c.nota + '%'}</span>
+            </div>`;
 
-    const gruposDiarios = {};
-    filas.forEach(r => {
-        const porTema = COMPS_POR_TEMA.includes(r._comp);
-        const temaRaw = (r.tema || r.surgeryType || "Evaluación académica").trim();
-        const temaKey = temaRaw.toLowerCase().replace(/\s+/g, ' ');
-        // Agrupación por CLASE: fecha programada (si existe; si no, fecha de
-        // evaluación) + componente + tema. El residente ya viene filtrado.
-        const fpKey   = ((r.fechaProg || '') + '').trim();
-        const clave   = porTema ? `${r._comp}||TEMA||${temaKey}||${fpKey}` : `${fpKey || r.fecha}||${r._comp}||${temaKey}`;
-        if (!gruposDiarios[clave]) {
-            gruposDiarios[clave] = {
-                fecha: r.fecha,
-                sortFecha: r.fecha,
-                fechasSet: new Set(),
-                esPorTema: porTema,
-                fechaProg: fpKey,
-                componente: r._comp,
-                tema: temaRaw,
-                evaluacionesCount: 0,
-                sumaTotal: 0,
-                c1Suma: 0, c1Count: 0,
-                c2Suma: 0, c2Count: 0,
-                c3Suma: 0, c3Count: 0,
-                comentariosList: [],
-                maxPosible: r._comp === "Clases Programadas" ? 30 : (r._comp === "Clases de Investigación" ? 100 : (r._comp === "Casos Clínicos y Artículos" ? 20 : 20))
-            };
-        }
-        if (r.fecha) {
-            gruposDiarios[clave].fechasSet.add(r.fecha);
-            if (parseFecha(r.fecha) > parseFecha(gruposDiarios[clave].sortFecha)) gruposDiarios[clave].sortFecha = r.fecha;
-        }
-        if (/tesis/i.test(r.tipo_evaluacion || '')) gruposDiarios[clave].esTesis = true;
-        gruposDiarios[clave].evaluacionesCount++;
-        gruposDiarios[clave].sumaTotal += r._pct;
-        const txtComentario = (r.comentarios || r.observaciones || "").trim();
-        if(txtComentario && txtComentario.toLowerCase() !== "ninguno" && txtComentario.toLowerCase() !== "ninguna") {
-            gruposDiarios[clave].comentariosList.push(txtComentario);
-        }
-        let c1 = parseInt(r.criterio1 || r.score1 || r.aspecto1);
-        let c2 = parseInt(r.criterio2 || r.score2 || r.aspecto2);
-        let c3 = parseInt(r.criterio3 || r.score3 || 0);
-        // Los máximos de cada dominio dependen del FORMULARIO, no del
-        // componente: un avance de tesis reparte 25/25/50 donde una clase de
-        // investigación reparte 35/35/30, y ambos son el mismo componente.
-        // Sin esta distinción, un 50/50 en la tesis se pintaría como 143 %.
-        const _esTesis = /tesis/i.test(r.tipo_evaluacion || '');
-        if (!isNaN(c1)) {
-            let maxC1 = r._comp === "Clases Programadas" ? 10 : (r._comp === "Clases de Investigación" ? (_esTesis ? 25 : 35) : (r._comp === "Casos Clínicos y Artículos" ? 7 : 40));
-            if (r._comp === "Sesiones Diarias") maxC1 = 10;
-            gruposDiarios[clave].c1Suma += (c1 / maxC1) * 100; gruposDiarios[clave].c1Count++;
-        }
-        if (!isNaN(c2)) {
-            let maxC2 = r._comp === "Clases Programadas" ? 10 : (r._comp === "Clases de Investigación" ? (_esTesis ? 25 : 35) : (r._comp === "Casos Clínicos y Artículos" ? 6 : 30));
-            if (r._comp === "Sesiones Diarias") maxC2 = 10;
-            gruposDiarios[clave].c2Suma += (c2 / maxC2) * 100; gruposDiarios[clave].c2Count++;
-        }
-        if (!isNaN(c3) && r._comp !== "Sesiones Diarias") {
-            let maxC3 = r._comp === "Clases Programadas" ? 10 : (r._comp === "Clases de Investigación" ? (_esTesis ? 50 : 30) : (r._comp === "Casos Clínicos y Artículos" ? 7 : 30));
-            gruposDiarios[clave].c3Suma += (c3 / maxC3) * 100; gruposDiarios[clave].c3Count++;
-        }
-    });
+        const cuerpoRotacion = c => {
+            if (!(c.sub || []).length) return '<p style="font-size:12px;color:#94a3b8;font-style:italic;padding:6px 0;">Sin rotación en la programación del año.</p>';
+            return (c.sub || []).map(x => filaSub(
+                `Rotación de ${_esc(x.nombre)}`, x.nota,
+                x.nota === null ? `pendiente · ${_esc(x.mes || '')}`
+                                : `teórica ${Math.round(x.teorica)} · práctica ${Math.round(x.practica)}`, 8)).join('')
+                + ((c.ajenas || []).length
+                    ? `<p style="font-size:10.5px;color:#b45309;padding:6px 0 0 8px;">Registrada además: ${c.ajenas.map(_esc).join(', ')} — no entra en la nota del año.</p>`
+                    : '');
+        };
 
-    const contenedorHTML = document.getElementById('contenedorConsolidadoDiario');
-    if (Object.keys(gruposDiarios).length === 0) {
-        contenedorHTML.innerHTML = `<p class="text-xs text-slate-400 italic text-center py-2">No hay registros detallados para consolidar.</p>`;
-    } else {
-        contenedorHTML.innerHTML = Object.values(gruposDiarios).sort((a,b) => parseFecha(b.sortFecha) - parseFecha(a.sortFecha)).map((g, index) => {
-            const pal = PALETA_TEMAS[index % PALETA_TEMAS.length];
-            const promGlobal = Math.round(g.sumaTotal / g.evaluacionesCount);
-            const notaEscala = Math.round((promGlobal * g.maxPosible) / 100);
-            const promC1 = g.c1Count > 0 ? Math.round(g.c1Suma / g.c1Count) : null;
-            const promC2 = g.c2Count > 0 ? Math.round(g.c2Suma / g.c2Count) : null;
-            const promC3 = g.c3Count > 0 ? Math.round(g.c3Suma / g.c3Count) : null;
-            let aspectoA = g.componente === "Sesiones Diarias" ? "Profundidad y Calidad del Conocimiento Neuroquirúrgico" : "Estructura y Organización de la Presentación";
-            let aspectoB = g.componente === "Sesiones Diarias" ? "Análisis Crítico y Contribución a la Estrategia" : "Literatura Científica Variada y Pertinente";
-            let aspectoC = g.componente === "Práctica Quirúrgica" ? "Comportamiento adecuado dentro y fuera del Quirófano" : "Dominio del Tema y Manejo de Preguntas";
-            if (g.componente === "Práctica Quirúrgica") {
-                aspectoA = "Adecuada Preparación Académica y Clínica para el Caso";
-                aspectoB = "Habilidad Técnica y Destreza con Instrumentos";
-            }
-            if (g.componente === "Clases de Investigación") {
-                aspectoA = "Estructura y Organización de la Presentación";
-                aspectoB = "Dominio del Tema y Manejo de Preguntas";
-                aspectoC = g.esTesis
-                    ? "Calidad y Utilidad de la Investigación Realizada"
-                    : "Aplicación a la Práctica Clínica e Investigación";
-            }
-            const colorBadge = promGlobal >= 70 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200';
-            const nFechas = g.fechasSet.size;
-            const metaChips = g.esPorTema
-                ? `<span class="text-[11px] font-bold px-2 py-0.5 rounded-md" style="background:${pal.accent}22;color:${pal.chipTxt};border:1px solid ${pal.accent}55;">${g.componente}</span>`
-                  + `<span class="text-[11px] text-violet-600 font-bold bg-violet-50 px-2 py-0.5 rounded-md">Promedio de ${g.evaluacionesCount} evaluación${g.evaluacionesCount > 1 ? 'es' : ''}</span>`
-                  + (g.fechaProg ? `<span class="text-[11px] text-sky-700 font-bold bg-sky-50 px-2 py-0.5 rounded-md">Clase programada: ${g.fechaProg}</span>` : '')
-                  + `<span class="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">${nFechas} fecha${nFechas > 1 ? 's' : ''}</span>`
-                : `<span class="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">${g.fecha}</span>`
-                  + `<span class="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">${g.componente}</span>`
-                  + `<span class="text-[11px] text-violet-600 font-bold bg-violet-50 px-2 py-0.5 rounded-md">Evaluado por ${g.evaluacionesCount} especialista${g.evaluacionesCount > 1 ? 'es' : ''}</span>`;
+        const cuentan = comps.filter(c => c.nota !== null);
+        const peso = cuentan.length ? Math.round(100 / cuentan.length) : 0;
+
+        const bloque = c => {
+            const cuerpo = c.tipo === 'modulo' ? cuerpoModulo(c)
+                         : c.tipo === 'investigacion' ? cuerpoInvestigacion(c)
+                         : cuerpoRotacion(c);
+            const activo = c.nota !== null;
             return `
-            <div class="rounded-xl overflow-hidden shadow-sm" style="border:1px solid ${pal.accent}55;">
-                <button onclick="document.getElementById('dropc-${index}').classList.toggle('hidden')"
-                    class="w-full text-left px-4 py-3.5 transition flex items-center justify-between gap-3 flex-wrap" style="background:${pal.soft};border-left:6px solid ${pal.accent};">
-                    <div class="min-w-0 flex-1">
-                        <div class="flex items-center gap-2 flex-wrap mb-1">
-                            ${metaChips}
-                        </div>
-                        <p class="text-sm font-bold text-slate-800 truncate">"${_esc(g.tema)}"</p>
+            <div style="border:1px solid ${activo ? '#c7d2fe' : '#e2e8f0'};border-radius:12px;background:#fff;margin-bottom:10px;overflow:hidden;">
+                <div style="background:${activo ? '#eef2ff' : '#f8fafc'};padding:8px 12px;display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+                    <span style="font-size:13px;font-weight:900;color:${activo ? '#3730a3' : '#94a3b8'};">${c.n}) ${_esc(c.nombre)}</span>
+                    <span style="text-align:right;white-space:nowrap;">
+                        <span style="font-size:15px;font-weight:900;color:${col(c.nota)};">${c.nota === null ? '—' : c.nota + '%'}</span>
+                        <span style="display:block;font-size:9.5px;color:${activo ? '#6366f1' : '#cbd5e1'};">${activo ? peso + ' % de la nota' : 'aún sin evaluar'}</span>
+                    </span>
+                </div>
+                <div style="padding:6px 12px 10px;">${cuerpo}</div>
+            </div>`;
+        };
+
+        _cont.innerHTML = `
+            <div class="mt-5 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
+                <p class="text-sm font-black text-indigo-900 mb-0.5">Cómo se compone la nota del año</p>
+                <p class="text-[11px] text-slate-500 mb-3">Cada módulo de neurocirugía es un componente, igual que investigación y la rotación externa: todos pesan lo mismo.
+                    ${cuentan.length ? `Ahora mismo hay <b>${cuentan.length} componente${cuentan.length!==1?'s':''} evaluado${cuentan.length!==1?'s':''}</b>, así que cada uno vale <b>${peso} %</b> de la nota.` : ''}</p>
+                ${comps.map(bloque).join('')}
+                <div style="border:2px solid #4338ca;border-radius:12px;background:#eef2ff;padding:10px 12px;display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+                    <div>
+                        <span style="font-size:13px;font-weight:900;color:#3730a3;">NOTA FINAL DEL AÑO 2026-2027</span>
+                        <span style="display:block;font-size:10.5px;color:#6366f1;">${cuentan.length ? '(' + cuentan.map(c => c.nota + '%').join(' + ') + ') ÷ ' + cuentan.length : 'sin notas todavía'}</span>
                     </div>
-                    <div class="flex items-center gap-3">
-                        <div class="text-center px-3 py-1 rounded-xl border ${colorBadge} bg-white">
-                            <p class="text-base font-black leading-none">${promGlobal}%</p>
-                            <p class="text-[10px] font-bold opacity-70 mt-0.5">${notaEscala}/${g.maxPosible} pts</p>
-                        </div>
-                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </div>
-                </button>
-                <div id="dropc-${index}" class="hidden p-4 border-t space-y-4 text-sm text-slate-700" style="background:${pal.soft};border-color:${pal.accent}55;">
-                    <p class="text-xs font-bold uppercase tracking-wider border-b pb-1" style="color:${pal.chipTxt};border-color:${pal.accent}33;">Promedio de cada aspecto evaluado</p>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                        ${promC1 !== null ? `<div class="space-y-1"><div class="flex justify-between text-xs font-semibold text-slate-600"><span class="truncate pr-2">a) ${aspectoA}</span><span class="${promC1 >= 70 ? 'text-emerald-600' : 'text-red-500'}">${promC1}%</span></div><div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden"><div class="h-2 rounded-full ${promC1 >= 70 ? 'bg-emerald-500' : 'bg-red-400'}" style="width: ${promC1}%"></div></div></div>` : ''}
-                        ${promC2 !== null ? `<div class="space-y-1"><div class="flex justify-between text-xs font-semibold text-slate-600"><span class="truncate pr-2">b) ${aspectoB}</span><span class="${promC2 >= 70 ? 'text-emerald-600' : 'text-red-500'}">${promC2}%</span></div><div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden"><div class="h-2 rounded-full ${promC2 >= 70 ? 'bg-emerald-500' : 'bg-red-400'}" style="width: ${promC2}%"></div></div></div>` : ''}
-                        ${promC3 !== null ? `<div class="space-y-1 sm:col-span-2"><div class="flex justify-between text-xs font-semibold text-slate-600"><span class="truncate pr-2">c) ${aspectoC}</span><span class="${promC3 >= 70 ? 'text-emerald-600' : 'text-red-500'}">${promC3}%</span></div><div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden"><div class="h-2 rounded-full ${promC3 >= 70 ? 'bg-emerald-500' : 'bg-red-400'}" style="width: ${promC3}%"></div></div></div>` : ''}
-                    </div>
-                    <div class="pt-2">
-                        <p class="text-xs font-bold uppercase tracking-wider border-b pb-1 mb-2" style="color:${pal.chipTxt};border-color:${pal.accent}33;">Retroalimentación docente</p>
-                        ${g.comentariosList.length === 0
-                            ? `<p class="text-xs text-slate-400 italic">No se registraron comentarios cualitativos.</p>`
-                            : `<ul class="list-disc pl-4 space-y-1.5 text-xs text-slate-600 font-medium">${g.comentariosList.map(c => `<li>"${_esc(c)}"</li>`).join('')}</ul>`}
-                    </div>
-                    <div class="rounded-xl p-3 border flex justify-between items-center mt-1" style="background:#ffffffcc;border-color:${pal.accent}55;">
-                        <span class="text-xs font-bold uppercase tracking-wide" style="color:${pal.chipTxt};">Promedio Global Acumulado:</span>
-                        <span class="text-sm font-black ${promGlobal >= 70 ? 'text-emerald-600' : 'text-red-600'}">${promGlobal}% · ${notaEscala}/${g.maxPosible} pts</span>
-                    </div>
+                    <span style="font-size:20px;font-weight:900;color:${col(_ANUAL.final)};white-space:nowrap;">${_ANUAL.final === null ? '—' : _ANUAL.final + '%'}</span>
                 </div>
             </div>`;
-        }).join('');
     }
-
-    const modMap={};
-    filas.forEach(r=>{const m=r._modulo;if(!modMap[m])modMap[m]=[];modMap[m].push(r);});
-    // El promedio de cada módulo usa, para Práctica Quirúrgica, la media de los
-    // promedios de cada especialista (no la media simple de todas sus notas).
-    // La nota de cada módulo se calcula EXACTAMENTE igual que la nota final
-    // estimada de arriba: mismo bloque canónico, mismos pesos por componente,
-    // mismo promedio por especialista en la práctica. Antes esta barra hacía
-    // una media simple de todas las evaluaciones del módulo, así que nunca
-    // cuadraba con la tabla de componentes.
-    const _notaModulo = rows => NOTAS_CANON.calcular(rows, r => r._modulo);
-
-    const _barrasHTML=Object.keys(modMap).sort().map(m=>{
-        const rows=modMap[m];
-        const r=_notaModulo(rows);
-        const prom=r.final!==null?r.final:0; const ap=prom>=70;
-        const detalle=[
-            r.teorica!==null?('Teórica '+r.teorica+'%'):null,
-            r.practica!==null?('Práctica '+r.practica+'%'):null
-        ].filter(Boolean).join(' · ');
-        return `<div><div class="flex justify-between items-center mb-1"><span class="text-sm font-semibold text-slate-700">Módulo ${_esc(m)}</span><span class="text-sm font-bold ${ap?'text-emerald-600':'text-red-500'}">${prom}% — ${ap?'Aprobado':'Reprobado'}</span></div><div class="w-full bg-slate-200 rounded-full h-3"><div class="h-3 rounded-full transition-all ${colorBarra(prom)}" style="width:${prom}%"></div></div><p class="text-xs text-slate-400 mt-0.5">${detalle}${detalle?' · ':''}${rows.length} evaluación${rows.length!==1?'es':''}</p></div>`;
-    }).join('');
-
-    // Desglose transparente de la NOTA PRÁCTICA por módulo y especialista
-    const _practHTML = !PRACT_DETALLE.length ? '' : `
-        <div class="mt-5 pt-4 border-t border-slate-200">
-            <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Nota práctica por módulo</h4>
-            <p class="text-[11px] text-slate-400 mb-3">Se promedian primero las notas de cada especialista y luego esos promedios entre sí.</p>
-            <div class="space-y-3">
-            ${PRACT_DETALLE.map(d=>`
-                <div class="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="text-sm font-bold text-slate-700">Módulo ${d.modulo}</span>
-                        <span class="text-sm font-black ${d.promedio>=70?'text-emerald-600':'text-red-500'}">${d.promedio}%</span>
-                    </div>
-                    <table class="w-full text-xs">
-                        <thead><tr class="text-slate-500">
-                            <th class="text-left font-semibold py-1">Especialista evaluador</th>
-                            <th class="text-center font-semibold">Evaluaciones</th>
-                            <th class="text-right font-semibold">Promedio</th>
-                        </tr></thead>
-                        <tbody>${d.especialistas.map(e=>`<tr class="border-t border-emerald-100">
-                            <td class="py-1 text-slate-700">${e.nombre}</td>
-                            <td class="text-center text-slate-500">${e.n}</td>
-                            <td class="text-right font-bold ${e.promedio>=70?'text-emerald-600':'text-red-500'}">${e.promedio}%</td>
-                        </tr>`).join('')}</tbody>
-                    </table>
-                    <p class="text-[11px] text-slate-500 mt-2">(${d.especialistas.map(e=>e.promedio+'%').join(' + ')}) ÷ ${d.especialistas.length} especialista${d.especialistas.length!==1?'s':''} = <span class="font-bold">${d.promedio}%</span> · ${d.evals} evaluación${d.evals!==1?'es':''} en total</p>
-                </div>`).join('')}
-            </div>
-        </div>`;
-
-    // ── Examen de módulo: la nota y el comentario del evaluador ─────────
-    // El examen pesa el 30 % de la teoría. Se muestra aparte porque es la
-    // única nota que tiene respaldo documental (las páginas escaneadas).
-    const _EXAMENES = filas.filter(r => NOTAS_CANON.comp(r.tipo_evaluacion) === 'Examen')
-        .map(r => ({ modulo: r._modulo, nota: NOTAS_CANON.pct(r), fecha: r.fecha,
-                     comentarios: (r.comentarios || '').trim(),
-                     evaluador: (r.especialista || '').trim() }))
-        .sort((a, b) => String(a.modulo).localeCompare(String(b.modulo)));
-
-    const _examenHTML = !_EXAMENES.length ? `
-        <div class="mt-5 pt-4 border-t border-slate-200">
-            <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Examen de módulo</h4>
-            <p class="text-xs text-slate-400 italic">Todavía no hay ninguna nota de examen registrada. Mientras falte, la nota teórica se calcula solo con los componentes disponibles.</p>
-        </div>` : `
-        <div class="mt-5 pt-4 border-t border-slate-200">
-            <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Examen de módulo</h4>
-            <p class="text-[11px] text-slate-400 mb-3">30 % de la nota teórica de cada módulo.</p>
-            <div class="space-y-3">
-            ${_EXAMENES.map((x, i) => `
-                <div class="rounded-xl border border-violet-200 bg-violet-50/50 p-3">
-                    <div class="flex justify-between items-center gap-3 flex-wrap">
-                        <div>
-                            <span class="text-sm font-bold text-slate-700">Módulo ${_esc(x.modulo)}</span>
-                            ${x.fecha ? `<span class="ml-2 text-[11px] text-slate-500">${_esc(x.fecha)}</span>` : ''}
-                        </div>
-                        <div class="text-right">
-                            <span class="text-sm font-black ${x.nota >= 70 ? 'text-emerald-600' : 'text-red-500'}">${x.nota}%</span>
-                            <span class="block text-[10px] text-slate-400 font-bold">aporta ${Math.round(x.nota * 0.3)} pts al 30 %</span>
-                        </div>
-                    </div>
-                    ${x.comentarios && x.comentarios.toLowerCase() !== 'ninguno'
-                        ? `<p class="text-[11px] text-slate-600 mt-2 leading-relaxed border-t border-violet-100 pt-2">"${_esc(x.comentarios)}"</p>` : ''}
-                </div>`).join('')}
-            </div>
-        </div>`;
-
-    document.getElementById('barrasModulo').innerHTML = _barrasHTML + _practHTML + _examenHTML;
-
-    document.getElementById('secNotas').classList.remove('hidden');
 }
 
 async function cargarPendientes() {
