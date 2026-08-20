@@ -632,8 +632,12 @@
                     </div>
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">c) Foto de la evaluación escrita *</label>
-                    <input id="rotExtFoto" type="file" accept="image/*" capture="environment" onchange="prepararFotoRotExt(this)"
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">c) Foto de la evaluación escrita *
+                        <span class="normal-case font-normal text-slate-400">— de la galería, de archivos o hecha ahora</span></label>
+                    <!-- Sin capture: con ese atributo el móvil abría la cámara directamente y no
+                         dejaba elegir una foto ya guardada. Sin él, iOS y Android ofrecen
+                         las tres opciones: fototeca, archivos o hacer la foto. -->
+                    <input id="rotExtFoto" type="file" accept="image/*" onchange="prepararFotoRotExt(this)"
                         class="w-full text-sm text-slate-600 file:mr-3 file:px-4 file:py-2 file:border-0 file:rounded-lg file:bg-amber-100 file:text-amber-800 file:font-bold file:text-xs file:cursor-pointer bg-slate-50 border border-slate-200 rounded-xl p-2">
                     <div id="rotExtPreviewWrap" class="hidden mt-2">
                         <img id="rotExtPreview" alt="Vista previa" style="max-height:180px;border-radius:10px;border:1px solid #e2e8f0;">
@@ -4079,7 +4083,7 @@ function prepararFotoRotExt(input) {
             if (data.length <= _ROTEXT_MAX) break;
         }
         if (data.length > _ROTEXT_MAX) {
-            estado.textContent = '⚠️ La foto es demasiado grande incluso comprimida. Tome la foto más cerca o con menos resolución.';
+            estado.textContent = '⚠️ La imagen es demasiado grande incluso comprimida. Use una foto de menos resolución o recórtela.';
             estado.style.color = '#ef4444';
             return;
         }
@@ -4103,7 +4107,7 @@ function guardarRotacionExterna() {
     if (!residente) { estado.textContent = '⚠️ Seleccione al residente.'; estado.style.color = '#ef4444'; return; }
     if (!rotacion)  { estado.textContent = '⚠️ Escriba el nombre de la rotación.'; estado.style.color = '#ef4444'; return; }
     if (!teorica && !practica) { estado.textContent = '⚠️ Ingrese al menos una nota (teórica o práctica).'; estado.style.color = '#ef4444'; return; }
-    if (!_rotExtFotoData) { estado.textContent = '⚠️ Tome o adjunte la foto de la evaluación escrita.'; estado.style.color = '#ef4444'; return; }
+    if (!_rotExtFotoData) { estado.textContent = '⚠️ Adjunte la foto del acta: puede elegirla de su teléfono o hacerla ahora.'; estado.style.color = '#ef4444'; return; }
     const btn = document.getElementById('btnGuardarRotExt');
     btn.disabled = true; btn.textContent = 'Guardando…';
     estado.textContent = 'Enviando a Google Sheets…'; estado.style.color = '#6366f1';
