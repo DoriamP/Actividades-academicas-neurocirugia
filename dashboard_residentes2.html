@@ -4117,18 +4117,56 @@ function guardarRotacionExterna() {
         comentarios:  '',
         foto:         _rotExtFotoData
     });
-    fetch(URL_SCRIPT, { method: 'POST', mode: 'no-cors', body: body })
-        .then(() => {
-            estado.textContent = '✓ Rotación guardada correctamente.'; estado.style.color = '#10b981';
-            cargarRotacionesDelPlan();   // el desplegable vuelve a su opción, no a vacío
-            document.getElementById('rotExtTeorica').value = '';
-            document.getElementById('rotExtPractica').value = '';
-            document.getElementById('rotExtFoto').value = '';
-            document.getElementById('rotExtPreviewWrap').classList.add('hidden');
-            _rotExtFotoData = '';
-            setTimeout(cargarRotacionesExternas, 2500); // dar tiempo a Sheets
+    // Antes esto iba en modo 'no-cors': el navegador manda la petición pero NO
+    // puede leer la respuesta, así que el «✓ guardado» se escribía siempre,
+    // incluso cuando el servidor la rechazaba. Ahora se lee de verdad y, si el
+    // navegador bloquea la lectura, se comprueba releyendo la hoja.
+    const _limpiar = () => {
+        cargarRotacionesDelPlan();   // el desplegable vuelve a su opción, no a vacío
+        document.getElementById('rotExtTeorica').value = '';
+        document.getElementById('rotExtPractica').value = '';
+        document.getElementById('rotExtFoto').value = '';
+        document.getElementById('rotExtPreviewWrap').classList.add('hidden');
+        _rotExtFotoData = '';
+    };
+    const _ok = () => {
+        estado.textContent = '✓ Rotación guardada correctamente.'; estado.style.color = '#10b981';
+        _limpiar();
+        _rotacionesPromesa = null;              // la nota del año se recalcula con ella
+        setTimeout(cargarRotacionesExternas, 2000);
+    };
+    const _fallo = msg => {
+        estado.textContent = '⚠️ ' + (msg || 'No se pudo guardar. Intente de nuevo.');
+        estado.style.color = '#ef4444';
+    };
+
+    fetch(URL_SCRIPT, { method: 'POST', mode: 'cors',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                        body: body.toString() })
+        .then(r => r.json())
+        .then(res => {
+            if (res && res.status === 'success') _ok();
+            else _fallo((res && res.message) || 'El servidor rechazó el registro.');
         })
-        .catch(() => { estado.textContent = '⚠️ Error de red. Intente de nuevo.'; estado.style.color = '#ef4444'; })
+        .catch(() => {
+            // Apps Script redirige el POST y a veces el navegador no deja leer la
+            // respuesta. Se comprueba releyendo la hoja: si la fila está, se guardó.
+            estado.textContent = 'Comprobando…'; estado.style.color = '#6366f1';
+            setTimeout(() => {
+                fetch(`${URL_SCRIPT}?action=getRotacionesExternas`, { mode: 'cors' })
+                    .then(r => r.json())
+                    .then(d => {
+                        const guardada = Array.isArray(d) && d.some(x =>
+                            (x.residente || '').trim() === residente &&
+                            (x.rotacion || '').trim() === rotacion &&
+                            String(x.notaTeorica || '') === String(teorica) &&
+                            String(x.notaPractica || '') === String(practica));
+                        if (guardada) _ok();
+                        else _fallo('No se pudo confirmar el guardado. Vuelva a intentarlo.');
+                    })
+                    .catch(() => _fallo('Sin conexión con la hoja de cálculo.'));
+            }, 2500);
+        })
         .finally(() => { btn.disabled = false; btn.textContent = '💾 Guardar rotación'; });
 }
 
