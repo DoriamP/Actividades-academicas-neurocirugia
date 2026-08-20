@@ -98,7 +98,8 @@
                 class="flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-violet-300 rounded-xl text-violet-700 text-sm font-bold cursor-pointer hover:bg-violet-50 transition">
                 <span class="text-lg leading-none">＋</span> Añadir páginas
             </label>
-            <input id="inputFotos" type="file" accept="image/*" multiple capture="environment" class="hidden">
+            <!-- Sin capture: deja elegir entre la fototeca, archivos o hacer la foto -->
+            <input id="inputFotos" type="file" accept="image/*" multiple class="hidden">
 
             <div id="galeria" class="grid grid-cols-3 sm:grid-cols-4 gap-2.5 mt-4"></div>
             <p id="fotosMsg" class="hidden text-[11px] font-semibold mt-3"></p>
