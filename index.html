@@ -855,6 +855,50 @@
                     </button>
                     <div id="rotExtIdxContador" class="ml-auto self-center text-xs text-slate-400 font-medium"></div>
                 </div>
+                <!-- Registro desde el portal docente. Antes solo se podía desde el
+                     panel del residente; ahora también aquí, que es donde suele
+                     llegar el acta en papel. -->
+                <div class="px-5 py-4 border-b border-slate-200 bg-white">
+                    <p class="text-xs font-black text-slate-700 uppercase tracking-wider mb-3">Registrar una rotación</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Médico residente *</label>
+                            <select id="rotIdxResidente" onchange="rotIdxCargarPlan()"
+                                class="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none appearance-none"></select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Rotación evaluada *</label>
+                            <select id="rotIdxNombre"
+                                class="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none appearance-none">
+                                <option value="" disabled selected>Primero seleccione al residente…</option>
+                            </select>
+                            <p id="rotIdxAyuda" class="text-[11px] text-slate-500 mt-1"></p>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Nota teórica (%)</label>
+                            <input id="rotIdxTeorica" type="number" min="0" max="100" placeholder="0 – 100"
+                                class="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Nota práctica (%)</label>
+                            <input id="rotIdxPractica" type="number" min="0" max="100" placeholder="0 – 100"
+                                class="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Foto del acta *</label>
+                        <input id="rotIdxFoto" type="file" accept="image/*" capture="environment" onchange="rotIdxPrepararFoto(this)"
+                            class="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-amber-100 file:text-amber-800">
+                        <div id="rotIdxPreviewWrap" class="hidden mt-2">
+                            <img id="rotIdxPreview" alt="Vista previa" style="max-height:170px;border-radius:10px;border:1px solid #e2e8f0;">
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 mt-3 flex-wrap">
+                        <button id="btnRotIdxGuardar" onclick="rotIdxGuardar()"
+                            class="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold rounded-lg transition">💾 Guardar rotación</button>
+                        <span id="rotIdxEstado" class="text-xs font-semibold text-slate-500"></span>
+                    </div>
+                </div>
                 <div id="rotExtIdxLista" class="p-5"></div>
             </div>
         </section>
@@ -2273,6 +2317,156 @@ window.addEventListener('load', function () {
             return r ? r[1] : '';
         }
 
+
+        // ══════════════════════════════════════════════════════════════
+        //  REGISTRAR ROTACIONES EXTERNAS DESDE EL PORTAL DOCENTE
+        //  --------------------------------------------------------------
+        //  La rotación se elige de un desplegable con la que le toca a ese
+        //  residente en la programación del año: escribirla a mano hacía que
+        //  «Uci adulto» no coincidiera con «UCI» y la nota se quedara fuera
+        //  del promedio del año.
+        // ══════════════════════════════════════════════════════════════
+        var _rotIdxFoto = '';
+        var _ROTIDX_MAX = 8 * 44000;   // 8 celdas de Sheets
+
+        function rotIdxInit() {
+            var sel = document.getElementById('rotIdxResidente');
+            if (!sel || sel.options.length) return;
+            var lista = [];
+            ['I','II','III','IV','V'].forEach(function (a) {
+                (RESIDENTES_POR_ANIO[a] || []).forEach(function (r) { lista.push({ n: r, a: a }); });
+            });
+            sel.innerHTML = '<option value="" disabled selected>Seleccione al residente…</option>'
+                + lista.map(function (x) { return '<option value="' + _invEsc(x.n) + '">' + _invEsc(x.n) + ' (' + x.a + ' año)</option>'; }).join('');
+        }
+
+        function rotIdxCargarPlan() {
+            var res = (document.getElementById('rotIdxResidente') || {}).value || '';
+            var sel = document.getElementById('rotIdxNombre');
+            var ayuda = document.getElementById('rotIdxAyuda');
+            if (!sel) return;
+            if (!res) {
+                sel.innerHTML = '<option value="" disabled selected>Primero seleccione al residente…</option>';
+                sel.disabled = true; if (ayuda) ayuda.textContent = ''; return;
+            }
+            var plan = NOTAS_CANON.rotacionDelAnio(res);
+            if (!plan) {
+                sel.innerHTML = '<option value="" disabled selected>Seleccione la rotación…</option>'
+                    + ['Neurología','UCI','Anestesia','Extranjero'].map(function (r) { return '<option value="' + r + '">' + r + '</option>'; }).join('');
+                sel.disabled = false;
+                if (ayuda) ayuda.innerHTML = '<span style="color:#b45309;">Sin rotación en la programación 2026-2027: la nota no entrará en su nota del año.</span>';
+                return;
+            }
+            sel.innerHTML = '<option value="' + _invEsc(plan.rotacion) + '" selected>' + _invEsc(plan.rotacion) + '</option>';
+            sel.disabled = false;
+            if (ayuda) ayuda.innerHTML = 'Le corresponde <b>' + _invEsc(plan.rotacion) + '</b> en <b>' + _invEsc(plan.mes) + '</b>.';
+        }
+
+        function rotIdxPrepararFoto(input) {
+            var file = input.files && input.files[0];
+            var estado = document.getElementById('rotIdxEstado');
+            _rotIdxFoto = '';
+            document.getElementById('rotIdxPreviewWrap').classList.add('hidden');
+            if (!file) return;
+            estado.textContent = 'Procesando la foto…'; estado.style.color = '#6366f1';
+            var lector = new FileReader();
+            lector.onload = function (ev) {
+                var img = new Image();
+                img.onload = function () {
+                    // Se reduce a 1600 px y calidad 0,72: una foto de móvil sin
+                    // comprimir no cabe en las 8 celdas que admite la hoja.
+                    var MAX = 1600, w = img.width, h = img.height;
+                    if (w > MAX || h > MAX) { var k = MAX / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k); }
+                    var c = document.createElement('canvas');
+                    c.width = w; c.height = h;
+                    var ctx = c.getContext('2d');
+                    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+                    ctx.drawImage(img, 0, 0, w, h);
+                    var d = c.toDataURL('image/jpeg', 0.72);
+                    if (d.length > _ROTIDX_MAX) {
+                        estado.textContent = '⚠️ La foto es demasiado grande. Tómela de nuevo con menos resolución.';
+                        estado.style.color = '#dc2626'; return;
+                    }
+                    _rotIdxFoto = d;
+                    document.getElementById('rotIdxPreview').src = d;
+                    document.getElementById('rotIdxPreviewWrap').classList.remove('hidden');
+                    estado.textContent = 'Foto lista (' + Math.round(d.length / 1024) + ' KB).';
+                    estado.style.color = '#10b981';
+                };
+                img.onerror = function () { estado.textContent = '⚠️ No se pudo leer la imagen.'; estado.style.color = '#dc2626'; };
+                img.src = ev.target.result;
+            };
+            lector.readAsDataURL(file);
+        }
+
+        function rotIdxGuardar() {
+            var estado = document.getElementById('rotIdxEstado');
+            var res  = (document.getElementById('rotIdxResidente').value || '').trim();
+            var rot  = (document.getElementById('rotIdxNombre').value || '').trim();
+            var teo  = (document.getElementById('rotIdxTeorica').value || '').trim();
+            var pra  = (document.getElementById('rotIdxPractica').value || '').trim();
+            var fallo = function (m) { estado.textContent = '⚠️ ' + m; estado.style.color = '#dc2626'; };
+            if (!res) return fallo('Seleccione al residente.');
+            if (!rot) return fallo('Seleccione la rotación.');
+            if (!teo && !pra) return fallo('Ingrese al menos una nota.');
+            if (!_rotIdxFoto) return fallo('Adjunte la foto del acta.');
+
+            var anio = '';
+            ['I','II','III','IV','V'].forEach(function (a) {
+                if ((RESIDENTES_POR_ANIO[a] || []).indexOf(res) !== -1) anio = a;
+            });
+
+            var btn = document.getElementById('btnRotIdxGuardar');
+            btn.disabled = true; btn.textContent = 'Guardando…';
+            estado.textContent = 'Enviando a la hoja…'; estado.style.color = '#6366f1';
+
+            var body = new URLSearchParams({
+                action: 'saveRotacionExterna', residente: res, anio: anio, rotacion: rot,
+                notaTeorica: teo, notaPractica: pra, comentarios: '', foto: _rotIdxFoto
+            });
+
+            var ok = function () {
+                estado.textContent = '✓ Rotación guardada.'; estado.style.color = '#10b981';
+                document.getElementById('rotIdxTeorica').value = '';
+                document.getElementById('rotIdxPractica').value = '';
+                document.getElementById('rotIdxFoto').value = '';
+                document.getElementById('rotIdxPreviewWrap').classList.add('hidden');
+                _rotIdxFoto = '';
+                _rotacionesPromesa = null;            // la nota del año se recalcula
+                _rotExtIdxDatos = null;
+                pedirRotaciones().then(function () { if (_resumenDatos) renderResumenAcademico(); });
+                setTimeout(cargarRotExtIndex, 2000);
+            };
+
+            fetch(URL_SCRIPT, { method: 'POST', mode: 'cors',
+                                headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                                body: body.toString() })
+                .then(function (r) { return r.json(); })
+                .then(function (j) {
+                    if (j && j.status === 'success') ok();
+                    else fallo((j && j.message) || 'El servidor rechazó el registro.');
+                })
+                .catch(function () {
+                    // No se pudo leer la respuesta: se confirma releyendo la hoja
+                    estado.textContent = 'Comprobando…'; estado.style.color = '#6366f1';
+                    setTimeout(function () {
+                        fetch(URL_SCRIPT + '?action=getRotacionesExternas', { mode: 'cors' })
+                            .then(function (r) { return r.json(); })
+                            .then(function (d) {
+                                var hay = Array.isArray(d) && d.some(function (x) {
+                                    return (x.residente || '').trim() === res &&
+                                           (x.rotacion || '').trim() === rot &&
+                                           String(x.notaTeorica || '') === String(teo) &&
+                                           String(x.notaPractica || '') === String(pra);
+                                });
+                                if (hay) ok(); else fallo('No se pudo confirmar el guardado. Reintente.');
+                            })
+                            .catch(function () { fallo('Sin conexión con la hoja.'); });
+                    }, 2500);
+                })
+                .then(function () { btn.disabled = false; btn.textContent = '💾 Guardar rotación'; });
+        }
+
         // ══════════════════════════════════════════════════════════════
         //  EXÁMENES ESCRITOS — solo desde aquí
         //  --------------------------------------------------------------
@@ -2345,7 +2539,8 @@ window.addEventListener('load', function () {
                     }
                     if (!r.fotos.length) {
                         return '<div style="padding:12px 14px;border-bottom:1px solid #f1f5f9;">' + cab +
-                               '<p style="font-size:11px;color:#94a3b8;font-style:italic;">Sin examen escrito adjunto.</p></div>';
+                               '<p style="font-size:11px;color:#94a3b8;font-style:italic;margin-bottom:6px;">Sin examen escrito adjunto.</p>' +
+                               _botonSubirPaginas(r.nombre, anio, modulo, 0) + '</div>';
                     }
                     var pags = r.fotos.map(function (f, i) {
                         return '<button type="button" onclick="abrirFotoEscrito(\'' + _invEsc(f.id) + '\')" ' +
@@ -2358,12 +2553,14 @@ window.addEventListener('load', function () {
                     var ids = r.fotos.map(function (f) { return f.id; }).join('|');
                     return '<div style="padding:12px 14px;border-bottom:1px solid #f1f5f9;">' + cab +
                            '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + pags + '</div>' +
+                           '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;">' +
                            '<button type="button" id="dl-' + _invEsc(_slug(r.nombre)) + '" ' +
                              'onclick="descargarEscritos(' + _invAttr(ids) + ',' + _invAttr(r.nombre) + ',' + _invAttr(anio) + ',' + _invAttr(modulo) + ',this)" ' +
-                             'style="margin-top:7px;padding:4px 10px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;' +
+                             'style="padding:4px 10px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;' +
                              'color:#334155;font-size:10.5px;font-weight:800;cursor:pointer;">⬇ Descargar ' +
                              (r.fotos.length === 1 ? 'la página' : 'las ' + r.fotos.length + ' páginas') + '</button>' +
-                           '</div>';
+                           _botonSubirPaginas(r.nombre, anio, modulo, r.fotos.length) +
+                           '</div></div>';
                 }).join('') +
                 '<p style="font-size:10px;color:#94a3b8;padding:10px 14px;">' + conFotos + ' de ' + res.length +
                 ' residente' + (res.length !== 1 ? 's' : '') + ' con el examen escaneado.</p>';
@@ -2378,6 +2575,96 @@ window.addEventListener('load', function () {
                     'style="margin-top:9px;padding:5px 12px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;' +
                     'font-size:11px;font-weight:800;color:#334155;cursor:pointer;">Reintentar</button></div>';
             });
+        }
+
+
+        // ══════════════════════════════════════════════════════════════
+        //  SUBIR PÁGINAS DEL EXAMEN ESCRITO DESDE EL PORTAL
+        //  --------------------------------------------------------------
+        //  Hasta ahora las hojas escaneadas solo se podían adjuntar al
+        //  registrar la nota, en examen_modulo.html. Si llegaban después —o
+        //  faltaba una página— no había manera de añadirlas sin volver a
+        //  registrar el examen. Ahora se añaden desde el mismo visor.
+        // ══════════════════════════════════════════════════════════════
+        function _botonSubirPaginas(nombre, anio, modulo, yaHay) {
+            var id = 'up-' + _slug(nombre) + '-' + anio + '-' + modulo;
+            return '<input type="file" accept="image/*" capture="environment" multiple id="' + id + '" style="display:none" ' +
+                     'onchange="subirPaginasExamen(this,' + _invAttr(nombre) + ',' + _invAttr(anio) + ',' + _invAttr(modulo) + ')">' +
+                   '<button type="button" onclick="document.getElementById(\'' + id + '\').click()" ' +
+                     'style="padding:4px 10px;border:1px solid #ddd6fe;border-radius:7px;background:#f5f3ff;' +
+                     'color:#6d28d9;font-size:10.5px;font-weight:800;cursor:pointer;">➕ ' +
+                     (yaHay ? 'Añadir páginas' : 'Adjuntar el examen') + '</button>';
+        }
+
+        /** Reduce la foto: sin esto una imagen de móvil no cabe en Drive de una vez */
+        function _comprimirFotoExamen(file) {
+            return new Promise(function (resolve, reject) {
+                var lector = new FileReader();
+                lector.onload = function (ev) {
+                    var img = new Image();
+                    img.onload = function () {
+                        var MAX = 1600, w = img.width, h = img.height;
+                        if (w > MAX || h > MAX) { var k = MAX / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k); }
+                        var c = document.createElement('canvas');
+                        c.width = w; c.height = h;
+                        var ctx = c.getContext('2d');
+                        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+                        ctx.drawImage(img, 0, 0, w, h);
+                        resolve(c.toDataURL('image/jpeg', 0.72));
+                    };
+                    img.onerror = function () { reject(new Error('No se pudo leer la imagen')); };
+                    img.src = ev.target.result;
+                };
+                lector.onerror = function () { reject(new Error('No se pudo leer el archivo')); };
+                lector.readAsDataURL(file);
+            });
+        }
+
+        function subirPaginasExamen(input, nombre, anio, modulo) {
+            var files = Array.prototype.slice.call(input.files || []);
+            input.value = '';
+            if (!files.length) return;
+
+            var cuerpo = document.getElementById('escritosCuerpo');
+            var aviso = document.createElement('p');
+            aviso.style.cssText = 'font-size:11px;color:#6366f1;font-weight:700;padding:8px 14px;';
+            aviso.textContent = 'Subiendo 0 de ' + files.length + '…';
+            if (cuerpo) cuerpo.insertBefore(aviso, cuerpo.firstChild);
+
+            // Se suben de una en una: en bloque, Apps Script las encola y falla
+            var subidas = 0, fallidas = 0, i = 0;
+            var siguiente = function () {
+                if (i >= files.length) {
+                    aviso.textContent = fallidas
+                        ? '⚠ ' + subidas + ' subidas, ' + fallidas + ' con error. Vuelva a intentarlo.'
+                        : '✓ ' + subidas + ' página' + (subidas !== 1 ? 's' : '') + ' añadida' + (subidas !== 1 ? 's' : '') + '.';
+                    aviso.style.color = fallidas ? '#dc2626' : '#059669';
+                    // Se olvida lo cacheado y se vuelve a pedir, para verlas ya
+                    delete _cacheEscritos[anio + '||' + modulo];
+                    setTimeout(function () { verEscritosExamen(anio, modulo); }, 1800);
+                    return;
+                }
+                aviso.textContent = 'Subiendo ' + (i + 1) + ' de ' + files.length + '…';
+                _comprimirFotoExamen(files[i])
+                    .then(function (dataUrl) {
+                        var body = new URLSearchParams({
+                            action: 'saveExamenFoto',
+                            nombreResidente: nombre, anoResidencia: anio, modulo: modulo,
+                            orden: Date.now() % 100000 + i, foto: dataUrl
+                        });
+                        return fetch(URL_SCRIPT, { method: 'POST', mode: 'cors',
+                                headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                                body: body.toString() })
+                            .then(function (r) { return r.json(); })
+                            .then(function (j) { if (j && j.status === 'success') subidas++; else fallidas++; })
+                            // Si el navegador no deja leer la respuesta, se da por
+                            // enviada y se confirma al recargar la lista al final.
+                            .catch(function () { subidas++; });
+                    })
+                    .catch(function () { fallidas++; })
+                    .then(function () { i++; setTimeout(siguiente, 250); });
+            };
+            siguiente();
         }
 
         function _abrirPanelEscritos(anio, modulo) {
@@ -5013,6 +5300,7 @@ var NOTAS_CANON = (function () {
             if (!_rotExtIdxOpen) { panel.classList.add('hidden'); chev.style.transform = ''; return; }
             panel.classList.remove('hidden');
             chev.style.transform = 'rotate(180deg)';
+            rotIdxInit();
             var filtro = document.getElementById('rotExtIdxFiltro');
             if (filtro.options.length <= 1) {
                 Object.keys(RESIDENTE_ANIO).forEach(function(r) {
