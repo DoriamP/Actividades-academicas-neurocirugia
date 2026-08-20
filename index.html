@@ -886,8 +886,10 @@
                         </div>
                     </div>
                     <div class="mt-3">
-                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Foto del acta *</label>
-                        <input id="rotIdxFoto" type="file" accept="image/*" capture="environment" onchange="rotIdxPrepararFoto(this)"
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Foto del acta *
+                            <span class="normal-case font-normal text-slate-400">— de la galería, de archivos o hecha ahora</span></label>
+                        <!-- Sin capture: así se puede elegir una foto ya guardada, no solo hacerla -->
+                        <input id="rotIdxFoto" type="file" accept="image/*" onchange="rotIdxPrepararFoto(this)"
                             class="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-amber-100 file:text-amber-800">
                         <div id="rotIdxPreviewWrap" class="hidden mt-2">
                             <img id="rotIdxPreview" alt="Vista previa" style="max-height:170px;border-radius:10px;border:1px solid #e2e8f0;">
@@ -2384,7 +2386,7 @@ window.addEventListener('load', function () {
                     ctx.drawImage(img, 0, 0, w, h);
                     var d = c.toDataURL('image/jpeg', 0.72);
                     if (d.length > _ROTIDX_MAX) {
-                        estado.textContent = '⚠️ La foto es demasiado grande. Tómela de nuevo con menos resolución.';
+                        estado.textContent = '⚠️ La imagen es demasiado grande. Use una de menos resolución o recórtela.';
                         estado.style.color = '#dc2626'; return;
                     }
                     _rotIdxFoto = d;
@@ -2588,7 +2590,8 @@ window.addEventListener('load', function () {
         // ══════════════════════════════════════════════════════════════
         function _botonSubirPaginas(nombre, anio, modulo, yaHay) {
             var id = 'up-' + _slug(nombre) + '-' + anio + '-' + modulo;
-            return '<input type="file" accept="image/*" capture="environment" multiple id="' + id + '" style="display:none" ' +
+            // Sin capture: permite subir páginas ya escaneadas o guardadas en el teléfono
+            return '<input type="file" accept="image/*" multiple id="' + id + '" style="display:none" ' +
                      'onchange="subirPaginasExamen(this,' + _invAttr(nombre) + ',' + _invAttr(anio) + ',' + _invAttr(modulo) + ')">' +
                    '<button type="button" onclick="document.getElementById(\'' + id + '\').click()" ' +
                      'style="padding:4px 10px;border:1px solid #ddd6fe;border-radius:7px;background:#f5f3ff;' +
