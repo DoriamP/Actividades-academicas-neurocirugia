@@ -479,6 +479,8 @@ async function fetchTemas() {
             Object.keys(best).forEach(key => {
                 _temasCache[key] = best[key].tema;
                 try { localStorage.setItem(key, best[key].tema); } catch(e){}
+                // Si el servidor ya lo tiene, deja de estar pendiente.
+                marcarTemaPendiente(key, false);
             });
         }
     } catch(e) { /* usa localStorage como fallback */ }
@@ -1233,12 +1235,71 @@ function esEditable(tema) {
     return t.includes('presentacion de caso') || (t.includes('revision') && t.includes('articulo'));
 }
 
+// ══════════════════════════════════════════════════════════
+// TEMA DE LA PRESENTACIÓN (caso clínico / revisión de artículo)
+// ----------------------------------------------------------
+// Lo escribe quien va a presentar, desde su propia tarjeta del
+// carrusel, y tiene que llegar a la pestaña Tema_de_residentes
+// de la hoja: es lo que ve el docente en el portal y lo que se
+// autorrellena en la hoja de evaluación.
+//
+// Esto iba en modo 'no-cors', que manda la petición pero impide
+// leer la respuesta: la pantalla decía «✓ Guardado» pasara lo
+// que pasara. Y pasaba: el servidor rechazaba «saveTema» porque
+// no figuraba entre las acciones permitidas al perfil de
+// residente. El tema se quedaba en el navegador de quien lo
+// escribía —por eso allí parecía guardado— y no llegaba nunca
+// ni a la hoja ni al portal docente. Ahora se lee la respuesta
+// y, si no se puede leer, se comprueba releyendo los temas.
+// ══════════════════════════════════════════════════════════
+function _enviarTema(fecha, anio, tipo, tema) {
+    const params = new URLSearchParams({ action:'saveTema', hoja:'Tema_de_residentes',
+                                         fecha, anio, tipo, tema });
+    return fetch(`${URL_SCRIPT}?${params.toString()}`, { mode:'cors' })
+        .then(r => r.json())
+        .then(j => (j && j.status === 'success')
+            ? { ok: true }
+            : { ok: false, msg: (j && j.message) || 'El servidor no aceptó el tema' })
+        .catch(() => _confirmarTemaEnServidor(fecha, anio, tema));
+}
+
+// Si la respuesta no se puede leer, se pregunta de nuevo por los temas
+// guardados: si el nuestro está en la lista, se guardó de verdad.
+function _confirmarTemaEnServidor(fecha, anio, tema) {
+    const norm = s => String(s || '').trim().toLowerCase();
+    return fetch(`${URL_SCRIPT}?action=getTemas&_t=${Date.now()}`, { mode:'cors' })
+        .then(r => r.json())
+        .then(lista => {
+            const hay = Array.isArray(lista) && lista.some(t =>
+                _normFechaTema(t.fecha) === _normFechaTema(fecha) &&
+                String(t.anio).trim()   === String(anio).trim()   &&
+                norm(t.tema)            === norm(tema));
+            // Borrar un tema deja la fila vacía, y las vacías no vuelven en la
+            // lista: no encontrarlo es exactamente lo que se esperaba.
+            if (!norm(tema)) return { ok: true };
+            return hay ? { ok: true }
+                       : { ok: false, msg: 'No se pudo confirmar que el tema quedara guardado' };
+        })
+        .catch(() => ({ ok: false, msg: 'Sin conexión con el servidor' }));
+}
+
+// Un tema escrito que todavía no ha llegado al servidor se marca como
+// pendiente para no enseñarlo como si estuviera guardado.
+function temaPendiente(key) {
+    try { return localStorage.getItem(key + '_pend') === '1'; } catch(e) { return false; }
+}
+function marcarTemaPendiente(key, si) {
+    try { si ? localStorage.setItem(key + '_pend', '1') : localStorage.removeItem(key + '_pend'); }
+    catch(e) {}
+}
+
 function guardarTemaManual(key, value, fecha, anio, tipo) {
     const v = value.trim();
     if (v) { localStorage.setItem(key, v); _temasCache[key] = v; }
     else    { localStorage.removeItem(key); delete _temasCache[key]; }
-    const params = new URLSearchParams({ action:'saveTema', hoja:'Tema_de_residentes', fecha, anio, tipo, tema: v });
-    fetch(`${URL_SCRIPT}?${params.toString()}`, { mode:'no-cors' }).catch(() => {});
+    marcarTemaPendiente(key, !!v);
+    _enviarTema(fecha, anio, tipo, v)
+        .then(res => { if (res.ok) marcarTemaPendiente(key, false); });
 }
 
 // Guarda desde el botón explícito con feedback visual
@@ -1253,12 +1314,24 @@ function guardarTemaDesdeBoton(inputId, key, fecha, anio, tipo, estadoId, contai
     if (v) { localStorage.setItem(key, v); _temasCache[key] = v; }
     else    { localStorage.removeItem(key); delete _temasCache[key]; }
 
+    // Hasta que el servidor lo confirme, el tema está solo en este navegador.
+    marcarTemaPendiente(key, !!v);
+
     if (estadoEl) { estadoEl.textContent = 'Guardando…'; estadoEl.style.color = '#6366f1'; }
 
     // Envía a Google Sheets → hoja Evaluaciones, pestaña Tema_de_residentes
-    const params = new URLSearchParams({ action:'saveTema', hoja:'Tema_de_residentes', fecha, anio, tipo, tema: v });
-    fetch(`${URL_SCRIPT}?${params.toString()}`, { mode:'no-cors' })
-        .then(() => {
+    _enviarTema(fecha, anio, tipo, v)
+        .then(res => {
+            if (!res.ok) {
+                // Se dice lo que pasó en vez de fingir que se guardó: el tema
+                // sigue escrito en la tarjeta, marcado como pendiente.
+                if (estadoEl) {
+                    estadoEl.textContent = '⚠️ No se guardó: ' + res.msg;
+                    estadoEl.style.color = '#ef4444';
+                }
+                return;
+            }
+            marcarTemaPendiente(key, false);
             if (v && containerIdx !== undefined) {
                 // Cambiar al estado "guardado": ocultar input, mostrar texto en negrita + lápiz
                 const container = document.getElementById('tema-container-' + containerIdx);
@@ -1720,6 +1793,9 @@ function _tarjetaClase(c, i, hoy) {
         const editable = esEditable(c.tema);
         const localKey = 'manual_tema_' + c.anio + '_' + c.f;
         const guardado = getTemaGuardado(localKey);
+        // Escrito en este navegador pero sin confirmación del servidor: se
+        // avisa en la propia tarjeta en vez de darlo por bueno.
+        const pendiente = !!guardado && temaPendiente(localKey);
         const col = ANIO_COLORS[c.anio] || ANIO_COLORS['I'];
 
         return `<div class="clase-card ${editable ? 'clase-card-editable' : ''} ${esHoy ? 'clase-card-hoy' : ''} ${pasada && !esHoy ? 'clase-card-pasada' : ''}"
@@ -1747,7 +1823,7 @@ function _tarjetaClase(c, i, hoy) {
                 ${guardado
                     ? `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px;">
                            <div style="flex:1;min-width:0;">
-                               <div style="font-size:9px;color:${col.text};font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;">Tema guardado</div>
+                               <div style="font-size:9px;color:${pendiente ? '#b45309' : col.text};font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;">${pendiente ? '⚠ Sin guardar — pulse ✏️ y guarde otra vez' : 'Tema guardado'}</div>
                                <p style="font-size:11px;font-weight:800;color:${col.text};line-height:1.4;">${guardado.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>
                            </div>
                            <button onclick="editarTema(${i})" title="Editar tema"
