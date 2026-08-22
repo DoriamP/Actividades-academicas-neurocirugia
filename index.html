@@ -388,7 +388,7 @@
                             <div class="w-1 h-5 bg-amber-500 rounded-full"></div>
                             <h4 class="font-bold text-slate-800 text-sm">Cumplimiento de fechas de exámenes</h4>
                         </div>
-                        <p class="text-[11px] text-slate-500 mb-4 leading-relaxed">Días entre la fecha del examen <b>en el plan docente</b> y el momento en que la nota entró en la plataforma. Se mide siempre contra la fecha original: reprogramar un examen silencia los avisos por correo, pero el retraso se sigue contando desde el plan.</p>
+                        <p class="text-[11px] text-slate-500 mb-4 leading-relaxed"><b>Días de retraso para realizar el examen de módulo</b>: los que pasan entre la fecha del examen <b>en el plan docente</b> y el momento en que la nota entra en la plataforma. Se muestra el número de cada módulo y de cada docente, no un promedio. Se mide siempre contra la fecha original: reprogramar un examen silencia los avisos por correo, pero el retraso se sigue contando desde el plan.</p>
                         <div id="statsCumplimiento"></div>
                     </div>
 
@@ -3332,15 +3332,20 @@ window.addEventListener('load', function () {
                 g.exs.push(f);
             });
 
+            // Los días de retraso NO se promedian. Una media reparte el examen
+            // que llegó dos meses tarde entre los que llegaron a tiempo y lo
+            // hace desaparecer; y con dos exámenes registrados ya no se sabe
+            // cuál fue cuál. Lo que se enseña es el número de días de cada
+            // módulo, y debajo la suma de todos ellos.
             var docentes = Object.keys(porDoc).map(function (nombre) {
                 var g = porDoc[nombre];
                 var retrasos = g.exs.map(function (x) { return Math.max(0, x.dias); });
-                var media = Math.round(retrasos.reduce(function (a, b) { return a + b; }, 0) / retrasos.length);
-                var peor  = Math.max.apply(null, retrasos);
+                var suma = retrasos.reduce(function (a, b) { return a + b; }, 0);
+                var peor = Math.max.apply(null, retrasos);
                 var aTiempo = g.exs.filter(function (x) { return x.dias <= 0; }).length;
                 return { esp: nombre, exs: g.exs.sort(function (a, b) { return b.dias - a.dias; }),
-                         media: media, peor: peor, aTiempo: aTiempo, total: g.exs.length };
-            }).sort(function (a, b) { return b.media - a.media || b.peor - a.peor; });
+                         suma: suma, peor: peor, aTiempo: aTiempo, total: g.exs.length };
+            }).sort(function (a, b) { return b.suma - a.suma || b.peor - a.peor; });
 
             var colorDias = function (d) {
                 if (d <= 0)  return '#059669';
@@ -3348,10 +3353,15 @@ window.addEventListener('load', function () {
                 if (d <= 21) return '#d97706';
                 return '#dc2626';
             };
+            // Retraso en días, en absoluto. Registrar antes de la fecha del plan
+            // no es un retraso negativo: es cero días de retraso, y se dice al
+            // lado cuánto se adelantó.
+            var diasRetraso = function (d) { return Math.max(0, d); };
+            var plural = function (n) { return n === 1 ? ' día' : ' días'; };
             var textoDias = function (d) {
-                if (d < 0)  return Math.abs(d) + ' d antes';
-                if (d === 0) return 'el mismo día';
-                return d + ' d después';
+                if (d > 0)   return d + plural(d) + ' de retraso';
+                if (d === 0) return '0 días · el mismo día';
+                return '0 días · ' + Math.abs(d) + ' d antes';
             };
 
             cont.innerHTML = docentes.map(function (d) {
@@ -3377,12 +3387,28 @@ window.addEventListener('load', function () {
                             + '</p>';
                     }).join('');
 
+                // Los días de cada módulo se ven sin desplegar nada: es el dato
+                // que se venía a buscar. Al desplegar están las fechas exactas.
+                var fichas = d.exs.map(function (x) {
+                    var r = diasRetraso(x.dias);
+                    return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;'
+                        + 'border:1px solid ' + colorDias(x.dias) + '33;background:' + colorDias(x.dias) + '14;'
+                        + 'color:#334155;padding:2px 8px;border-radius:99px;white-space:nowrap;">'
+                        + '<span style="font-weight:700;">' + x.anio + ' año · Mód. ' + _invEsc(x.mod) + '</span>'
+                        + '<b style="color:' + colorDias(x.dias) + ';">' + r + ' d</b>'
+                        + (x.reprog ? '<span title="Este examen se movió de fecha">🗓</span>' : '')
+                        + '</span>';
+                }).join('');
+
                 return '<details style="border:1px solid #e2e8f0;border-radius:11px;margin-bottom:7px;overflow:hidden;">'
-                    + '<summary style="padding:10px 12px;cursor:pointer;display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:#fff;">'
+                    + '<summary style="padding:10px 12px;cursor:pointer;background:#fff;">'
+                    + '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;">'
                     +   '<span style="font-size:12.5px;font-weight:800;color:#1e293b;flex:1;min-width:150px;">' + _invEsc(d.esp) + '</span>'
-                    +   '<span style="font-size:10px;color:#94a3b8;">' + d.total + ' examen' + (d.total !== 1 ? 'es' : '') + '</span>'
-                    +   '<span style="font-size:10px;font-weight:800;color:#fff;background:' + colorDias(d.media) + ';padding:2px 9px;border-radius:99px;white-space:nowrap;">' + d.media + ' d de media</span>'
-                    +   '<span style="font-size:10px;color:#64748b;white-space:nowrap;">peor: ' + d.peor + ' d</span>'
+                    +   '<span style="font-size:10px;color:#94a3b8;">' + (d.total === 1 ? '1 examen' : d.total + ' exámenes') + ' · ' + d.aTiempo + ' a tiempo</span>'
+                    +   '<span style="font-size:10px;font-weight:800;color:#fff;background:' + colorDias(d.peor) + ';padding:2px 9px;border-radius:99px;white-space:nowrap;">'
+                    +     d.suma + plural(d.suma) + ' de retraso en total</span>'
+                    + '</div>'
+                    + (fichas ? '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">' + fichas + '</div>' : '')
                     + '</summary>'
                     + '<div style="overflow-x:auto;background:#fafafa;">'
                     + '<table style="width:100%;border-collapse:collapse;min-width:420px;">'
@@ -3396,7 +3422,7 @@ window.addEventListener('load', function () {
                     + '</div>'
                     + '</details>';
             }).join('')
-            + '<p style="font-size:10px;color:#94a3b8;margin-top:8px;line-height:1.4;">Verde: registrado el mismo día o antes. Hasta 7 días, verde oliva; hasta 21, ámbar; más, rojo. La media no cuenta como negativos los registros adelantados.</p>';
+            + '<p style="font-size:10px;color:#94a3b8;margin-top:8px;line-height:1.4;">Cada ficha es un examen de módulo con sus días de retraso. Verde: registrado el mismo día del plan o antes (0 días). Hasta 7 días, verde oliva; hasta 21, ámbar; más, rojo. Registrar antes de la fecha del plan cuenta como 0 días, no resta del total. El 🗓 marca los exámenes que se movieron de fecha: el motivo está al desplegar.</p>';
         }
 
         function _renderEstadisticas(datos) {
