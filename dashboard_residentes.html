@@ -147,10 +147,23 @@
                     </select>
                 </div>
             </div>
-            <button id="btnCargar" onclick="cargarNotas()"
-                class="mt-4 w-full sm:w-auto px-6 py-2.5 bg-indigo-700 hover:bg-indigo-800 active:scale-[0.98] text-white font-bold rounded-xl shadow text-sm transition">
-                Ver Notas
-            </button>
+            <div class="mt-4 flex flex-wrap gap-2">
+                <button id="btnCargar" onclick="cargarNotas()"
+                    class="px-6 py-2.5 bg-indigo-700 hover:bg-indigo-800 active:scale-[0.98] text-white font-bold rounded-xl shadow text-sm transition">
+                    Ver Notas
+                </button>
+                <!-- Imprimir respeta el módulo elegido arriba: con «Todos» sale el
+                     curso completo, con un módulo sale solo ese. -->
+                <button id="btnImprimirAvance" onclick="imprimirAvance()"
+                    class="px-4 py-2.5 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 font-bold rounded-xl border border-slate-300 shadow-sm text-sm transition">
+                    🖨 Imprimir avance
+                </button>
+                <button id="btnImprimirEvals" onclick="imprimirEvaluaciones()"
+                    class="px-4 py-2.5 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 font-bold rounded-xl border border-slate-300 shadow-sm text-sm transition">
+                    🖨 Imprimir evaluaciones
+                </button>
+            </div>
+            <p id="avisoImpresion" class="hidden mt-2 text-xs font-semibold"></p>
         </div>
 
         <div id="msgNotasEstado" class="hidden bg-white rounded-2xl shadow border border-slate-200 p-8 text-center">
@@ -1004,6 +1017,410 @@ var NOTAS_CANON = (function () {
              mismaRotacion: mismaRotacion,
              notaFinalAnual: notaFinalAnual, ordenModulos: ordenModulos };
 })();
+
+/* ══════════════════════════════════════════════════════════════════════════
+   IMPRESION v1.0 — expediente académico imprimible
+   --------------------------------------------------------------------------
+   Bloque IDÉNTICO en index.html, dashboard_residentes.html y
+   dashboard_residentes2.html. Si se corrige en uno hay que corregirlo en los
+   tres: es el mismo documento el que se imprime desde cualquiera de ellos, y
+   un expediente que no coincide consigo mismo no sirve de nada.
+
+   Imprime dos documentos distintos:
+
+     • AVANCE ACADÉMICO — el desglose por componentes y subcomponentes con la
+       nota final del año. Los números salen de NOTAS_CANON, los mismos que
+       muestra la pantalla: aquí no se recalcula nada.
+
+     • EVALUACIONES — una ficha por evaluación con TODOS los dominios de la
+       hoja con la que se evaluó, cada uno sobre su puntaje máximo, más el
+       total, el porcentaje y los comentarios del evaluador.
+
+   Los dos aceptan un módulo: se imprime el curso entero o solo ese módulo.
+
+   No abre ventanas nuevas —los bloqueadores de ventanas emergentes las
+   cierran sin avisar— sino que escribe el documento en un contenedor oculto
+   de la propia página y esconde todo lo demás al imprimir.
+   ══════════════════════════════════════════════════════════════════════════ */
+var IMPRESION = (function () {
+    var VERSION = '1.0';
+
+    // Los dominios de cada hoja de evaluación con el puntaje que reparte cada
+    // uno. Esto es lo que hace que la ficha impresa diga exactamente lo mismo
+    // que el formulario en el que se evaluó, y no un porcentaje suelto.
+    var HOJAS = {
+        'Clases Programadas': { total: 30, dominios: [
+            ['Estructura y organización de la presentación', 10],
+            ['Literatura científica variada y pertinente',   10],
+            ['Dominio del tema y manejo de preguntas',       10]] },
+        'Casos Clínicos y Artículos': { total: 20, dominios: [
+            ['Estructura y organización de la presentación',  7],
+            ['Literatura científica variada y pertinente',    6],
+            ['Dominio del tema y manejo de preguntas',        7]] },
+        'Sesiones Diarias': { total: 20, dominios: [
+            ['Profundidad y calidad del conocimiento neuroquirúrgico',    10],
+            ['Análisis crítico y contribución a la estrategia de manejo', 10]] },
+        'Práctica Quirúrgica': { total: 100, dominios: [
+            ['Adecuada preparación académica y clínica para el caso', 40],
+            ['Habilidad técnica y destreza con instrumentos',         30],
+            ['Comportamiento adecuado dentro y fuera del quirófano',  30]] },
+        'Clases de Investigación': { total: 100, dominios: [
+            ['Estructura y organización de la presentación', 35],
+            ['Dominio del tema y manejo de preguntas',       35],
+            ['Sabe cómo aplicar conocimientos a la práctica clínica e investigación', 30]] },
+        'Avances de Tesis': { total: 100, dominios: [
+            ['Estructura y organización de la presentación',     25],
+            ['Dominio del tema y manejo de preguntas',           25],
+            ['Calidad y utilidad de la investigación realizada', 50]] },
+        'Examen': { total: 100, dominios: [
+            ['Examen escrito del módulo', 100]] }
+    };
+
+    var ORDEN_HOJAS = ['Clases Programadas', 'Casos Clínicos y Artículos',
+                       'Sesiones Diarias', 'Examen', 'Práctica Quirúrgica',
+                       'Clases de Investigación', 'Avances de Tesis'];
+
+    // ── Utilidades ────────────────────────────────────────────────────────
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function num(v) { var n = parseFloat(v); return isNaN(n) ? null : n; }
+    function color(v) {
+        if (v === null || v === undefined) return '#94a3b8';
+        return v >= 80 ? '#047857' : v >= 70 ? '#1d4ed8' : v >= 60 ? '#b45309' : '#b91c1c';
+    }
+    function pct(v) { return (v === null || v === undefined) ? '—' : v + '%'; }
+    function plural(n, sing, pl) { return n === 1 ? '1 ' + sing : n + ' ' + pl; }
+
+    function esTesis(r) {
+        return NOTAS_CANON.normTxt(r.tipo_evaluacion || '').indexOf('tesis') !== -1;
+    }
+    /** Con qué hoja se evaluó esta fila */
+    function hojaDe(r) {
+        var c = NOTAS_CANON.comp(r.tipo_evaluacion);
+        if (c === 'Clases de Investigación' && esTesis(r)) return 'Avances de Tesis';
+        return c;
+    }
+    /** Los puntos de cada dominio, tolerando los nombres viejos de columna */
+    function dominiosDe(r) {
+        var hoja = hojaDe(r);
+        var def  = HOJAS[hoja] || HOJAS['Clases Programadas'];
+        var uno = function (a, b, c) {
+            if (a !== undefined && a !== null && a !== '') return num(a);
+            if (b !== undefined && b !== null && b !== '') return num(b);
+            return num(c);
+        };
+        var vals = [ uno(r.criterio1, r.score1, r.aspecto1),
+                     uno(r.criterio2, r.score2, r.aspecto2),
+                     uno(r.criterio3, r.score3, null) ];
+        // El examen de módulo no se evalúa por dominios: se registra la nota
+        // entera. Se pone como único renglón para que la ficha impresa diga
+        // cuánto sacó y no «se registró solo con la nota global».
+        if (hoja === 'Examen' && vals[0] === null) {
+            var n = num(r.total);
+            if (n === null) n = NOTAS_CANON.pct(r);
+            vals[0] = n;
+        }
+        return { hoja: hoja, def: def, vals: vals };
+    }
+
+    function fechaHoy() {
+        var d = new Date(), f2 = function (n) { return ('0' + n).slice(-2); };
+        return f2(d.getDate()) + '/' + f2(d.getMonth() + 1) + '/' + d.getFullYear() +
+               ' a las ' + f2(d.getHours()) + ':' + f2(d.getMinutes());
+    }
+
+    // ── Estilos: se inyectan una sola vez ─────────────────────────────────
+    var CSS = [
+'#zonaImpresion { display: none; }',
+'@media print {',
+'  body.imprimiendo > *:not(#zonaImpresion) { display: none !important; }',
+'  body.imprimiendo #zonaImpresion { display: block !important; }',
+'  @page { size: A4 portrait; margin: 13mm 11mm 15mm; }',
+'  .imp-hoja { page-break-after: always; }',
+'  .imp-hoja:last-child { page-break-after: auto; }',
+'  .imp-junto { page-break-inside: avoid; }',
+'  thead { display: table-header-group; }',
+'}',
+'#zonaImpresion { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;',
+'  color: #0f172a; font-size: 11px; line-height: 1.45; background: #fff; }',
+'#zonaImpresion * { box-sizing: border-box; }',
+'#zonaImpresion table { width: 100%; border-collapse: collapse; }',
+'#zonaImpresion .imp-membrete { border-bottom: 2.5px solid #1e293b; padding-bottom: 7px; margin-bottom: 12px; }',
+'#zonaImpresion .imp-membrete h1 { font-size: 15px; font-weight: 800; margin: 0; }',
+'#zonaImpresion .imp-membrete p { margin: 2px 0 0; font-size: 9.5px; color: #64748b; }',
+'#zonaImpresion .imp-quien { background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #1e293b;',
+'  border-radius: 7px; padding: 8px 11px; margin-bottom: 12px; }',
+'#zonaImpresion .imp-quien b { font-size: 13px; }',
+'#zonaImpresion .imp-quien span { color: #64748b; font-size: 9.5px; }',
+'#zonaImpresion h2.imp-tit { font-size: 11.5px; font-weight: 800; text-transform: uppercase;',
+'  letter-spacing: .05em; color: #334155; margin: 15px 0 6px; border-bottom: 1px solid #cbd5e1;',
+'  padding-bottom: 3px; overflow: hidden; }',
+'#zonaImpresion .imp-comp { border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }',
+'#zonaImpresion .imp-comp-cab { background: #f1f5f9; padding: 6px 10px; display: flex;',
+'  justify-content: space-between; align-items: baseline; gap: 10px; }',
+'#zonaImpresion .imp-comp-cab b { font-size: 11.5px; }',
+'#zonaImpresion td, #zonaImpresion th { padding: 4px 10px; font-size: 10px; vertical-align: top; }',
+'#zonaImpresion tbody tr + tr td { border-top: 1px solid #f1f5f9; }',
+'#zonaImpresion .imp-sub { color: #475569; }',
+'#zonaImpresion .imp-sub2 { color: #64748b; padding-left: 22px !important; }',
+'#zonaImpresion .imp-final { border: 2px solid #1e293b; border-radius: 8px; margin-top: 10px;',
+'  padding: 9px 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }',
+'#zonaImpresion .imp-ficha { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 11px; margin-bottom: 7px; }',
+'#zonaImpresion .imp-ficha-cab { display: flex; justify-content: space-between; gap: 10px;',
+'  align-items: baseline; margin-bottom: 5px; }',
+'#zonaImpresion .imp-chip { font-size: 8.5px; font-weight: 800; text-transform: uppercase;',
+'  letter-spacing: .04em; background: #eef2ff; color: #3730a3; padding: 2px 7px; border-radius: 99px; }',
+'#zonaImpresion .imp-firma { margin-top: 26px; display: flex; gap: 40px; }',
+'#zonaImpresion .imp-firma div { flex: 1; border-top: 1px solid #94a3b8; padding-top: 4px;',
+'  font-size: 9px; color: #64748b; text-align: center; }',
+'#zonaImpresion .imp-pie { margin-top: 14px; font-size: 8.5px; color: #94a3b8;',
+'  border-top: 1px solid #e2e8f0; padding-top: 5px; }',
+'#zonaImpresion .imp-vacio { font-style: italic; color: #94a3b8; padding: 10px 0; }'
+    ].join('\n');
+
+    function asegurarEstilos() {
+        if (document.getElementById('estilosImpresion')) return;
+        var st = document.createElement('style');
+        st.id = 'estilosImpresion';
+        st.textContent = CSS;
+        document.head.appendChild(st);
+    }
+
+    // ── Encabezado y pie comunes ──────────────────────────────────────────
+    function membrete(titulo, sub) {
+        return '<div class="imp-membrete">'
+             + '<h1>' + esc(titulo) + '</h1>'
+             + '<p>Programa de Residentes de Neurocirugía · Plan Docente 2026 – 2027'
+             + (sub ? ' · ' + esc(sub) : '') + '</p>'
+             + '</div>';
+    }
+    function identificacion(residente, anio, modulo, extra) {
+        return '<div class="imp-quien">'
+             + '<b>' + esc(residente) + '</b> '
+             + '<span>· ' + esc(anio) + ' año de residencia · '
+             + (modulo ? 'Módulo ' + esc(modulo) : 'Curso completo (mayo 2026 – abril 2027)')
+             + (extra ? ' · ' + esc(extra) : '')
+             + '</span></div>';
+    }
+    function pie() {
+        return '<div class="imp-firma"><div>Firma del residente</div>'
+             + '<div>Firma del coordinador docente</div></div>'
+             + '<div class="imp-pie">Documento generado por la plataforma de evaluación el '
+             + fechaHoy() + '. Las notas provienen de la hoja «Evaluaciones» y se calculan '
+             + 'con el mismo procedimiento que muestra la plataforma en pantalla.</div>';
+    }
+
+    // ── DOCUMENTO 1 · Avance académico ────────────────────────────────────
+    // Se pinta tal cual lo devuelve NOTAS_CANON.notaFinalAnual: cada
+    // componente con sus subcomponentes, sus totales, y la nota del año como
+    // promedio de los componentes que ya tienen nota.
+    function avanceHTML(o) {
+        var a = o.anual || {};
+        var comps = a.componentes || [];
+        var h = '<div class="imp-hoja">'
+              + membrete('Avance académico del residente')
+              + identificacion(o.residente, o.anio, o.modulo,
+                               plural(o.nEvaluaciones || 0, 'evaluación registrada', 'evaluaciones registradas'));
+
+        if (!comps.length) {
+            return h + '<p class="imp-vacio">No hay ninguna evaluación registrada en este periodo.</p>'
+                     + pie() + '</div>';
+        }
+
+        h += '<h2 class="imp-tit">Componentes evaluados</h2>';
+
+        comps.forEach(function (c) {
+            var filas = '';
+            if (c.tipo === 'modulo') {
+                (c.subTeoria || []).forEach(function (s) {
+                    filas += '<tr><td class="imp-sub2">' + esc(s.nombre)
+                          +  ' <span style="color:#cbd5e1;">· peso ' + s.peso + '%'
+                          +  (s.evaluaciones ? ' · ' + plural(s.evaluaciones, 'evaluación', 'evaluaciones') : '')
+                          +  '</span></td>'
+                          +  '<td style="text-align:right;color:' + color(s.promedio) + ';font-weight:700;">'
+                          +  pct(s.promedio) + '</td></tr>';
+                });
+                filas += '<tr><td class="imp-sub"><b>a) Teoría</b></td>'
+                      +  '<td style="text-align:right;font-weight:800;color:' + color(c.teorica) + ';">'
+                      +  pct(c.teorica) + '</td></tr>';
+                (c.subPractica || []).forEach(function (s) {
+                    filas += '<tr><td class="imp-sub2">' + esc(s.nombre)
+                          +  (s.evaluaciones ? ' <span style="color:#cbd5e1;">· ' + plural(s.evaluaciones, 'evaluación', 'evaluaciones') + '</span>' : '')
+                          +  '</td><td style="text-align:right;color:' + color(s.promedio) + ';font-weight:700;">'
+                          +  pct(s.promedio) + '</td></tr>';
+                });
+                filas += '<tr><td class="imp-sub"><b>b) Práctica quirúrgica</b></td>'
+                      +  '<td style="text-align:right;font-weight:800;color:' + color(c.practica) + ';">'
+                      +  pct(c.practica) + '</td></tr>';
+            } else {
+                (c.sub || []).forEach(function (s) {
+                    var det = [];
+                    if (s.mes) det.push(esc(s.mes));
+                    if (s.evaluaciones) det.push(plural(s.evaluaciones, 'evaluación', 'evaluaciones'));
+                    if (s.teorica !== undefined && s.teorica !== null) det.push('teórica ' + s.teorica + '%');
+                    if (s.practica !== undefined && s.practica !== null) det.push('práctica ' + s.practica + '%');
+                    filas += '<tr><td class="imp-sub2">' + esc(s.nombre)
+                          +  (det.length ? ' <span style="color:#cbd5e1;">· ' + det.join(' · ') + '</span>' : '')
+                          +  '</td><td style="text-align:right;color:' + color(s.nota) + ';font-weight:700;">'
+                          +  pct(s.nota) + '</td></tr>';
+                });
+                if (c.tipo === 'rotacion' && c.ajenas && c.ajenas.length) {
+                    filas += '<tr><td class="imp-sub2" colspan="2" style="color:#b45309;">'
+                          +  'Registrada además: ' + esc(c.ajenas.join(', '))
+                          +  ' — no entra en el promedio porque no es la rotación que le corresponde este año.</td></tr>';
+                }
+                if (!(c.sub || []).length) {
+                    filas += '<tr><td class="imp-sub2" colspan="2">Sin evaluaciones todavía.</td></tr>';
+                }
+            }
+
+            h += '<div class="imp-comp imp-junto">'
+              +  '<div class="imp-comp-cab"><b>' + c.n + ') ' + esc(c.nombre) + '</b>'
+              +  '<span style="font-weight:800;color:' + color(c.nota) + ';">' + pct(c.nota) + '</span></div>'
+              +  '<table><tbody>' + filas + '</tbody></table></div>';
+        });
+
+        // Con un módulo filtrado esto NO es la nota del año: es el promedio de
+        // los componentes de ese periodo. Decirle «nota final del año» sería
+        // mentir en un papel que se firma, así que se rotula distinto y se
+        // añade al lado la del curso completo.
+        // «cuentan» que devuelve NOTAS_CANON es un NÚMERO, no una lista: la
+        // operación se arma con los componentes que tienen nota.
+        var cuentan = comps.filter(function (c) { return c.nota !== null && c.nota !== undefined; });
+        var titulo = o.modulo ? 'PROMEDIO DE LOS COMPONENTES DEL MÓDULO ' + esc(o.modulo)
+                              : 'NOTA FINAL DEL AÑO 2026-2027';
+        h += '<div class="imp-final imp-junto"><div><b style="font-size:12px;">' + titulo + '</b>'
+          +  '<div style="font-size:9px;color:#64748b;margin-top:2px;">'
+          +  (cuentan.length
+                ? '(' + cuentan.map(function (c) { return c.nota + '%'; }).join(' + ') + ') ÷ ' + cuentan.length
+                  + ' — promedio de los componentes que ya tienen nota'
+                : 'Sin componentes evaluados todavía')
+          +  (o.modulo && o.finalAnio !== undefined
+                ? '<br>Nota final del año con todo el curso: <b>' + pct(o.finalAnio) + '</b>'
+                : '')
+          +  '</div></div>'
+          +  '<div style="font-size:20px;font-weight:900;color:' + color(a.final) + ';">' + pct(a.final) + '</div>'
+          +  '</div>';
+
+        return h + pie() + '</div>';
+    }
+
+    // ── DOCUMENTO 2 · Evaluaciones con todos sus dominios ─────────────────
+    function fichaHTML(r) {
+        var d = dominiosDe(r);
+        var filas = '', suma = 0, hayPuntos = false;
+        d.def.dominios.forEach(function (dom, i) {
+            var v = d.vals[i];
+            if (v === null) return;
+            hayPuntos = true; suma += v;
+            filas += '<tr><td>' + String.fromCharCode(97 + i) + ') ' + esc(dom[0]) + '</td>'
+                  +  '<td style="text-align:right;white-space:nowrap;font-weight:700;">'
+                  +  v + ' <span style="color:#94a3b8;font-weight:400;">/ ' + dom[1] + '</span></td></tr>';
+        });
+
+        var p = NOTAS_CANON.pct(r);
+        var totalTxt = hayPuntos ? suma + ' / ' + d.def.total
+                                 : (num(r.total) !== null ? num(r.total) + ' / ' + d.def.total : '—');
+        var com = String(r.comentarios || r.observaciones || '').trim();
+        if (/^(ninguno|ninguna|n\/a|-)$/i.test(com)) com = '';
+
+        return '<div class="imp-ficha imp-junto">'
+             + '<div class="imp-ficha-cab"><div>'
+             +   '<span class="imp-chip">' + esc(d.hoja) + '</span> '
+             +   '<b style="font-size:11px;">' + esc(r.tema || r.surgeryType || 'Evaluación académica') + '</b>'
+             +   '<div style="font-size:9px;color:#64748b;margin-top:2px;">'
+             +     esc(r.fecha || 's/f')
+             +     (r.especialista ? ' · evaluó ' + esc(r.especialista) : '') + '</div>'
+             + '</div>'
+             + '<div style="text-align:right;white-space:nowrap;"><b style="font-size:14px;color:' + color(p) + ';">'
+             +   pct(p) + '</b><div style="font-size:9px;color:#64748b;">' + totalTxt + ' pts</div></div>'
+             + '</div>'
+             + (filas ? '<table><tbody>' + filas + '</tbody></table>'
+                      : '<p style="font-size:9.5px;color:#94a3b8;font-style:italic;margin:0;">'
+                        + 'Esta evaluación se registró solo con la nota global.</p>')
+             + (com ? '<div style="margin-top:5px;font-size:9.5px;color:#475569;">'
+                      + '<b>Comentarios:</b> ' + esc(com) + '</div>' : '')
+             + '</div>';
+    }
+
+    function evaluacionesHTML(o) {
+        var filas = (o.filas || []).slice();
+        var h = '<div class="imp-hoja">'
+              + membrete('Evaluaciones registradas')
+              + identificacion(o.residente, o.anio, o.modulo,
+                               plural(filas.length, 'evaluación', 'evaluaciones'));
+
+        if (!filas.length) {
+            return h + '<p class="imp-vacio">No hay ninguna evaluación registrada en este periodo.</p>'
+                     + pie() + '</div>';
+        }
+
+        // Agrupadas por hoja de evaluación, y dentro de cada una por fecha.
+        var porHoja = {};
+        filas.forEach(function (r) {
+            var hj = hojaDe(r);
+            (porHoja[hj] = porHoja[hj] || []).push(r);
+        });
+
+        var ordFecha = function (f) {
+            var p = String(f || '').split('/');
+            return p.length === 3 ? p[2] + p[1] + p[0] : '0';
+        };
+
+        ORDEN_HOJAS.forEach(function (hj) {
+            var lista = porHoja[hj];
+            if (!lista || !lista.length) return;
+            var notas = lista.map(function (r) { return NOTAS_CANON.pct(r); })
+                             .filter(function (v) { return v !== null; });
+            var prom = notas.length
+                ? Math.round(notas.reduce(function (a, b) { return a + b; }, 0) / notas.length) : null;
+            h += '<h2 class="imp-tit"><span style="float:right;font-weight:700;color:' + color(prom) + ';">'
+              +  plural(lista.length, 'evaluación', 'evaluaciones') + ' · promedio ' + pct(prom)
+              +  '</span>' + esc(hj) + '</h2>';
+            lista.sort(function (a, b) { return ordFecha(b.fecha).localeCompare(ordFecha(a.fecha)); });
+            lista.forEach(function (r) { h += fichaHTML(r); });
+        });
+
+        return h + pie() + '</div>';
+    }
+
+    // ── Salida a la impresora ─────────────────────────────────────────────
+    function imprimir(cuerpo) {
+        asegurarEstilos();
+        var z = document.getElementById('zonaImpresion');
+        if (!z) {
+            z = document.createElement('div');
+            z.id = 'zonaImpresion';
+            document.body.appendChild(z);
+        }
+        z.innerHTML = cuerpo;
+        document.body.classList.add('imprimiendo');
+
+        // Se limpia siempre: si el documento se quedara puesto, la próxima
+        // impresión sacaría dos expedientes.
+        var limpiar = function () {
+            document.body.classList.remove('imprimiendo');
+            window.removeEventListener('afterprint', limpiar);
+            setTimeout(function () { z.innerHTML = ''; }, 300);
+        };
+        window.addEventListener('afterprint', limpiar);
+        setTimeout(function () {
+            try { window.print(); } catch (e) {}
+            // Safari en iOS no siempre dispara afterprint.
+            setTimeout(function () {
+                if (document.body.classList.contains('imprimiendo')) limpiar();
+            }, 2500);
+        }, 80);
+    }
+
+    return { VERSION: VERSION, HOJAS: HOJAS, hojaDe: hojaDe, dominiosDe: dominiosDe,
+             avanceHTML: avanceHTML, evaluacionesHTML: evaluacionesHTML,
+             fichaHTML: fichaHTML, imprimir: imprimir, esc: esc };
+})();
+
 /* ══════════════ FIN DEL BLOQUE CANÓNICO DE CÁLCULO DE NOTAS ══════════════ */
 
 
@@ -2308,7 +2725,9 @@ async function cargarNotas() {
     // no con las del módulo filtrado: el filtro cambia lo que se muestra,
     // no la nota del año académico. El aviso de espera sigue puesto hasta que
     // llegan también las rotaciones, que es cuando ya se puede pintar todo.
-    pedirRotaciones().then(() => {
+    // Se devuelve la promesa: los botones de imprimir esperan a que las notas
+    // estén pintadas antes de armar el documento.
+    return pedirRotaciones().then(() => {
         if (!_vigente()) return;
         document.getElementById('msgNotasEstado').classList.add('hidden');
         renderNotas(residente, filasFiltr, filasConMod);
@@ -2327,6 +2746,69 @@ function mostrarMsgNotas(txt, esperando) {
     if (sp) sp.classList.toggle('hidden', !esperando);
     document.getElementById('msgNotasEstado').classList.remove('hidden');
     document.getElementById('secNotas').classList.add('hidden');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  IMPRIMIR EL EXPEDIENTE
+//  --------------------------------------------------------------------
+//  Dos documentos: el avance académico (componentes, subcomponentes y la
+//  nota que sale de ellos) y las evaluaciones una por una con todos los
+//  dominios de su hoja. Los dos respetan el módulo elegido arriba.
+//
+//  Se imprime lo que ya está en pantalla; si no hay nada cargado todavía,
+//  se cargan las notas primero en vez de mandar una hoja en blanco.
+// ══════════════════════════════════════════════════════════════════════
+var _ULTIMAS_NOTAS = null;
+
+function _avisoImpresion(txt, error) {
+    const el = document.getElementById('avisoImpresion');
+    if (!el) return;
+    el.textContent = txt || '';
+    el.style.color = error ? '#dc2626' : '#4f46e5';
+    el.classList.toggle('hidden', !txt);
+    if (txt && !error) setTimeout(() => { el.classList.add('hidden'); }, 4000);
+}
+
+async function _notasParaImprimir() {
+    const residente = (document.getElementById('selResidente').value || '').trim();
+    const modulo    = (document.getElementById('selModulo').value    || '').trim();
+    if (!residente) { _avisoImpresion('Seleccione primero un residente.', true); return null; }
+
+    const u = _ULTIMAS_NOTAS;
+    if (!u || u.residente !== residente || u.modulo !== modulo) {
+        _avisoImpresion('Preparando el documento…');
+        await cargarNotas();
+    }
+    if (!_ULTIMAS_NOTAS || _ULTIMAS_NOTAS.residente !== residente) {
+        _avisoImpresion('No hay notas que imprimir para ese residente.', true);
+        return null;
+    }
+    _avisoImpresion('');
+    return _ULTIMAS_NOTAS;
+}
+
+async function imprimirAvance() {
+    const u = await _notasParaImprimir();
+    if (!u) return;
+    // Con un módulo elegido el desglose se calcula solo con las evaluaciones de
+    // ese módulo; sin filtro es el del curso entero, el mismo de la pantalla.
+    const base  = u.modulo ? u.filas : u.filasTodas;
+    const anual = u.modulo
+        ? NOTAS_CANON.notaFinalAnual(base, r => r._modulo, _rotacionesDatos, u.residente)
+        : u.anual;
+    IMPRESION.imprimir(IMPRESION.avanceHTML({
+        residente: u.residente, anio: u.anio, modulo: u.modulo,
+        anual: anual, finalAnio: u.anual.final, nEvaluaciones: base.length
+    }));
+}
+
+async function imprimirEvaluaciones() {
+    const u = await _notasParaImprimir();
+    if (!u) return;
+    IMPRESION.imprimir(IMPRESION.evaluacionesHTML({
+        residente: u.residente, anio: u.anio, modulo: u.modulo,
+        filas: u.modulo ? u.filas : u.filasTodas
+    }));
 }
 
 function renderNotas(residente, filas, filasTodas) {
@@ -2355,6 +2837,18 @@ function renderNotas(residente, filas, filasTodas) {
                                               _rotacionesDatos, residente);
     const notaModulo = _RES.final !== null ? _RES.final : 0;
     const notaF = _ANUAL.final !== null ? _ANUAL.final : notaModulo;
+
+    // Lo último que se pintó, tal cual, para que los botones de imprimir
+    // saquen en papel exactamente lo que hay en pantalla y no un segundo
+    // cálculo que podría no coincidir.
+    _ULTIMAS_NOTAS = {
+        residente: residente,
+        anio:      RESIDENTE_ANIO[residente] || '',
+        modulo:    (document.getElementById('selModulo').value || '').trim(),
+        filas:     filas,
+        filasTodas: filasTodas || filas,
+        anual:     _ANUAL
+    };
 
     document.getElementById('kpiCards').innerHTML=[
         {label:"Evaluaciones",val:filas.length,color:"bg-indigo-50 text-indigo-700"},
