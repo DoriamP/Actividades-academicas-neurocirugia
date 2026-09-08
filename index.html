@@ -233,7 +233,12 @@
                         </div>
                     </div>
                     <p id="avisoExamenes" class="hidden text-xs font-semibold text-red-700 bg-red-50 border border-red-200 px-4 py-2.5 leading-relaxed"></p>
-                <div id="fechasImportantesList" class="divide-y divide-slate-100" style="max-height:340px;overflow-y:auto;"></div>
+                <!-- El dedo desplaza esta lista como cualquier otra: desplazamiento
+                     nativo del navegador. «overscroll-behavior:contain» evita que al
+                     llegar al final se arrastre la página entera, y «touch-action»
+                     deja los toques en los botones a los botones. -->
+                <div id="fechasImportantesList" class="divide-y divide-slate-100"
+                     style="max-height:340px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;"></div>
                     <div class="px-4 py-2.5 border-t border-slate-100">
                         <p class="text-xs text-slate-400 italic">Exámenes y presentaciones de avances</p>
                     </div>
@@ -1265,8 +1270,7 @@ window.addEventListener('load', function () {
 
         var clasesOrdenadas = [];
         var claseOffset  = 0;
-        var fechasOffset = 0;
-        var FECHAS_POR_PAGINA = 5;
+
         var filtroAnio = 'ALL';
 
         // Colores de filtro por año (activo = sólido, inactivo = claro)
@@ -1369,9 +1373,8 @@ window.addEventListener('load', function () {
                                     .sort(function(a,b) { return a.dateObj - b.dateObj; });
             claseOffset = _idxClasesHoy();
 
-            // Arranca en las fechas próximas a hoy, sin pasarse del final
-            fechasOffset = Math.min(_fechasMaxOffset(), _fechasIdxHoy());
-
+            // La lista arranca en las fechas próximas a hoy: lo hace
+            // renderFechasImportantes al pintarla por primera vez.
             renderCarousel();
             renderFechasImportantes(hoy);
         }
@@ -1952,34 +1955,20 @@ window.addEventListener('load', function () {
                 .sort(function (a, b) { return a.dateObj - b.dateObj; });
         }
 
-        // Índice de la primera fecha que aún no ha pasado
-        function _fechasIdxHoy() {
-            var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-            var todas = _fechasOrdenadas();
-            var i = todas.findIndex(function (fi) { return fi.dateObj >= hoy; });
-            return i >= 0 ? i : Math.max(0, todas.length - FECHAS_POR_PAGINA);
-        }
-
-        // Desplazamiento máximo: deja siempre la última página completa
-        function _fechasMaxOffset() {
-            return Math.max(0, FECHAS_IMPORTANTES.length - FECHAS_POR_PAGINA);
-        }
-
         /**
-         * Avanza o retrocede UNA PÁGINA completa, no una fecha.
-         * Antes se movía de una en una mostrando cinco, así que recorrer las 36
-         * fechas del curso costaba 31 clics y volver atrás parecía no funcionar.
+         * Las flechas desplazan una pantalla, sin repintar nada: quien esté
+         * leyendo con el dedo no ve saltar la lista.
          */
         function scrollFechas(dir) {
-            fechasOffset = Math.max(0, Math.min(_fechasMaxOffset(),
-                                                fechasOffset + dir * FECHAS_POR_PAGINA));
-            renderFechasImportantes(new Date());
+            var lista = document.getElementById('fechasImportantesList');
+            if (!lista) return;
+            var paso = Math.max(120, lista.clientHeight - 40);
+            _fechasDesplazar(lista, lista.scrollTop + dir * paso, true);
         }
 
         /** Vuelve de un salto a las fechas próximas a hoy */
         function irAFechasHoy() {
-            fechasOffset = Math.min(_fechasMaxOffset(), _fechasIdxHoy());
-            renderFechasImportantes(new Date());
+            _fechasIrAHoy(true);
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -2866,22 +2855,18 @@ window.addEventListener('load', function () {
             var todas = _fechasOrdenadas();
             if (!todas.length) { lista.innerHTML = '<p class="text-sm text-slate-400 italic p-4">Sin fechas.</p>'; return; }
             var total = todas.length;
-            fechasOffset = Math.max(0, Math.min(_fechasMaxOffset(), fechasOffset));
-            var visibles = todas.slice(fechasOffset, fechasOffset + FECHAS_POR_PAGINA);
+            var visibles = todas;   // se pintan todas: la lista se desplaza sola
 
             var pasadas = todas.filter(function (fi) { return fi.dateObj < hoy; }).length;
-            contador.textContent = (fechasOffset + 1) + '–' + Math.min(fechasOffset + FECHAS_POR_PAGINA, total) + ' / ' + total;
+            contador.textContent = total + ' fechas';
             contador.title = pasadas + ' fecha' + (pasadas === 1 ? '' : 's') + ' ya pasada' +
                              (pasadas === 1 ? '' : 's') + ' · ' + (total - pasadas) + ' por venir';
 
-            var arriba = fechasOffset === 0;
-            var abajo  = fechasOffset >= _fechasMaxOffset();
-            btnUp.disabled = arriba;   btnUp.classList.toggle('opacity-40', arriba);
-            btnDown.disabled = abajo;  btnDown.classList.toggle('opacity-40', abajo);
-            // El botón «Hoy» solo tiene sentido si no estamos ya ahí
-            var enHoy = fechasOffset === Math.min(_fechasMaxOffset(), _fechasIdxHoy());
-            var btnHoy = document.getElementById('btnFechasHoy');
-            if (btnHoy) { btnHoy.disabled = enHoy; btnHoy.classList.toggle('opacity-40', enHoy); }
+            // Al repintar (llegan las reprogramaciones, los exámenes pendientes…)
+            // se conserva dónde estaba mirando el usuario. Sin esto la lista
+            // saltaba al principio sola, que es la mitad de la queja.
+            var _scrollPrevio = lista.scrollTop;
+            var _yaPintada    = lista.children.length > 0;
 
             lista.innerHTML = visibles.map(function(fi) {
                 var diff  = Math.round((fi.dateObj - hoy) / 86400000);
@@ -2912,7 +2897,7 @@ window.addEventListener('load', function () {
                 if (fi.reprog) fs += ' <span style="text-decoration:line-through;color:#cbd5e1;">' + _invEsc(fi.fPlan) + '</span>';
                 var esExamen = fi.tipo==='examen' && _exModulo(fi.desc) && _exAnio(fi.desc);
                 var esTesis  = fi.tipo==='presentacion' && !!_tesisAnio(fi.desc);
-                return '<div style="padding:11px 16px;display:flex;align-items:center;gap:10px;'+(past?'opacity:.5;':'')+'border-bottom:1px solid #f1f5f9;">'
+                return '<div data-fecha-ms="'+fi.dateObj.getTime()+'" style="padding:11px 16px;display:flex;align-items:center;gap:10px;'+(past?'opacity:.5;':'')+'border-bottom:1px solid #f1f5f9;">'
                     + tri
                     + '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:2px;">'+lbl+'<span style="font-size:10px;color:#94a3b8;font-weight:500;">'+fs+'</span></div>'
                     + '<p style="font-size:12px;font-weight:700;color:#1e293b;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+fi.desc+'</p>'
@@ -2932,41 +2917,85 @@ window.addEventListener('load', function () {
                     + '</div></div>';
             }).join('');
             lucide.createIcons();
-            _activarGestosFechas(lista);
+            if (_yaPintada) lista.scrollTop = _scrollPrevio;
+            else            _fechasIrAHoy(false);
+            _activarSeguimientoFechas(lista);
+            _fechasEstadoBotones();
         }
 
         /**
-         * La rueda del ratón y el gesto vertical del dedo también recorren la
-         * lista. Con los botones bastaba, pero es el gesto que todo el mundo
-         * intenta primero al ver una lista con más elementos de los que caben.
+         * Antes esta lista no se desplazaba: se paginaba. El dedo hacía el gesto
+         * normal, el navegador movía el contenido, y al SOLTAR un «touchend»
+         * repintaba la lista con la página siguiente. El resultado era que todo
+         * saltaba justo al levantar el dedo y el botón que se iba a pulsar ya no
+         * estaba debajo. La rueda del ratón hacía lo mismo.
+         *
+         * Ahora se pintan todas las fechas y desplaza el navegador, como en
+         * cualquier lista. Aquí solo queda escuchar el desplazamiento para
+         * encender o apagar las flechas.
          */
-        var _gestosFechasListos = false;
-        function _activarGestosFechas(lista) {
-            if (_gestosFechasListos || !lista) return;
-            _gestosFechasListos = true;
+        var _seguimientoFechasListo = false;
+        function _activarSeguimientoFechas(lista) {
+            if (_seguimientoFechasListo || !lista) return;
+            _seguimientoFechasListo = true;
+            lista.addEventListener('scroll', _fechasEstadoBotones, { passive: true });
+        }
 
-            var acumulado = 0;
-            lista.addEventListener('wheel', function (ev) {
-                var antes = fechasOffset;
-                acumulado += ev.deltaY;
-                if (Math.abs(acumulado) < 40) return;
-                var pasos = acumulado > 0 ? 1 : -1;
-                acumulado = 0;
-                fechasOffset = Math.max(0, Math.min(_fechasMaxOffset(), fechasOffset + pasos));
-                if (fechasOffset !== antes) { ev.preventDefault(); renderFechasImportantes(new Date()); }
-            }, { passive: false });
+        /** Enciende o apaga ▲ ▼ y «Hoy» según dónde esté la lista */
+        function _fechasEstadoBotones() {
+            var lista = document.getElementById('fechasImportantesList');
+            if (!lista) return;
+            var margen = 4;   // holgura: el navegador redondea el scrollTop
+            var arriba = lista.scrollTop <= margen;
+            var abajo  = lista.scrollTop + lista.clientHeight >= lista.scrollHeight - margen;
+            [['btnFechasUp', arriba], ['btnFechasDown', abajo]].forEach(function (par) {
+                var b = document.getElementById(par[0]);
+                if (!b) return;
+                b.disabled = par[1];
+                b.classList.toggle('opacity-40', par[1]);
+            });
+            var btnHoy = document.getElementById('btnFechasHoy');
+            if (btnHoy) {
+                var enHoy = Math.abs(lista.scrollTop - _fechasTopDeHoy()) < 6;
+                btnHoy.disabled = enHoy;
+                btnHoy.classList.toggle('opacity-40', enHoy);
+            }
+        }
 
-            var yInicio = null;
-            lista.addEventListener('touchstart', function (ev) {
-                yInicio = ev.touches[0].clientY;
-            }, { passive: true });
-            lista.addEventListener('touchend', function (ev) {
-                if (yInicio === null) return;
-                var dy = yInicio - (ev.changedTouches[0] || {}).clientY;
-                yInicio = null;
-                if (Math.abs(dy) < 40) return;
-                scrollFechas(dy > 0 ? 1 : -1);
-            }, { passive: true });
+        /** A qué altura de la lista está la primera fecha que no ha pasado */
+        function _fechasTopDeHoy() {
+            var lista = document.getElementById('fechasImportantesList');
+            if (!lista) return 0;
+            var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+            var items = lista.querySelectorAll('[data-fecha-ms]');
+            var destino = null;
+            for (var i = 0; i < items.length; i++) {
+                if (+items[i].getAttribute('data-fecha-ms') >= hoy.getTime()) { destino = items[i]; break; }
+            }
+            if (!destino) destino = items[items.length - 1];
+            if (!destino) return 0;
+            // Medido con getBoundingClientRect y no con offsetTop: offsetTop se
+            // cuenta desde el ancestro posicionado, que aquí no es la lista.
+            var top = destino.getBoundingClientRect().top
+                    - lista.getBoundingClientRect().top + lista.scrollTop;
+            return Math.max(0, Math.min(top, lista.scrollHeight - lista.clientHeight));
+        }
+
+        function _fechasIrAHoy(suave) {
+            var lista = document.getElementById('fechasImportantesList');
+            if (!lista) return;
+            _fechasDesplazar(lista, _fechasTopDeHoy(), suave);
+        }
+
+        function _fechasDesplazar(lista, top, suave) {
+            top = Math.max(0, Math.min(top, lista.scrollHeight - lista.clientHeight));
+            if (suave && typeof lista.scrollTo === 'function') {
+                try { lista.scrollTo({ top: top, behavior: 'smooth' }); }
+                catch (e) { lista.scrollTop = top; }
+            } else {
+                lista.scrollTop = top;
+            }
+            setTimeout(_fechasEstadoBotones, 400);
         }
 
         // ─── Temas manuales desde Sheets ─────────────────────────────────────────
