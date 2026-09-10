@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagnóstico — Actividades académicas de Neurocirugía</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════
+  PÁGINA DE DIAGNÓSTICO
+  --------------------------------------------------------------------------
+  Para cuando alguien no puede entrar desde un aparato concreto y no hay
+  manera de saber por qué: en un teléfono no hay consola de desarrollo.
+
+  Reglas de esta página, y son a propósito:
+    • NO carga auth.js. Si el problema está ahí, esta página tiene que
+      seguir funcionando.
+    • NO usa nada que Safari no entendiera hace años: ni funciones flecha,
+      ni plantillas, ni clases. Si el iPhone es viejo y el problema es ese,
+      esta página lo dice en vez de morirse igual que las demás.
+    • NO necesita sesión. Todo lo que comprueba se puede comprobar sin
+      haber entrado.
+    • Carga config.js dentro de un try: si falta o está mal, lo dice.
+
+  Lo que sale aquí se puede copiar de un toque y mandarlo por mensaje.
+  ══════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  * { box-sizing: border-box; -webkit-text-size-adjust: 100%; }
+  body { margin: 0; padding: 18px 14px 40px; background: #0f172a; color: #e2e8f0;
+         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         font-size: 15px; line-height: 1.5; }
+  .caja { max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 19px; margin: 0 0 4px; font-weight: 800; color: #fff; }
+  .sub { font-size: 12.5px; color: #94a3b8; margin: 0 0 18px; }
+  .grupo { background: #1e293b; border: 1px solid #334155; border-radius: 12px;
+           padding: 12px 14px; margin-bottom: 12px; }
+  .grupo h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+              color: #94a3b8; margin: 0 0 9px; font-weight: 800; }
+  .fila { display: flex; gap: 9px; align-items: flex-start; padding: 5px 0;
+          border-top: 1px solid #273548; font-size: 13.5px; }
+  .grupo .fila:first-of-type { border-top: 0; }
+  .marca { flex-shrink: 0; font-weight: 800; width: 15px; }
+  .ok  { color: #34d399; } .mal { color: #f87171; } .duda { color: #fbbf24; }
+  .txt { flex: 1; min-width: 0; word-wrap: break-word; overflow-wrap: break-word; }
+  .txt b { color: #fff; }
+  .pista { display: block; color: #94a3b8; font-size: 12px; margin-top: 2px; }
+  button { width: 100%; padding: 13px; border: 0; border-radius: 11px; font-size: 15px;
+           font-weight: 700; cursor: pointer; margin-top: 9px; -webkit-appearance: none; }
+  .b1 { background: #4f46e5; color: #fff; }
+  .b2 { background: #b91c1c; color: #fff; }
+  .b3 { background: #334155; color: #e2e8f0; }
+  a { color: #a5b4fc; }
+  textarea { width: 100%; height: 150px; margin-top: 10px; background: #0b1220; color: #cbd5e1;
+             border: 1px solid #334155; border-radius: 10px; padding: 10px; font-size: 12px;
+             font-family: ui-monospace, Menlo, monospace; }
+</style>
+</head>
+<body>
+<div class="caja">
+  <h1>🩺 Diagnóstico de acceso</h1>
+  <p class="sub">Actividades académicas de Neurocirugía · esta página no necesita que haya entrado</p>
+
+  <div id="resultado"></div>
+
+  <button class="b1" id="btnCopiar" type="button">📋 Copiar el informe para enviarlo</button>
+  <button class="b2" id="btnBorrar" type="button">🧹 Borrar los datos guardados en este navegador</button>
+  <button class="b3" id="btnVolver" type="button">← Volver a la plataforma</button>
+
+  <textarea id="informe" readonly style="display:none"></textarea>
+</div>
+
+<script src="config.js" onerror="window.__configFallo = true;"></script>
+<script>
+(function () {
+  'use strict';
+
+  var grupos = [];
+  function grupo(titulo) { var g = { titulo: titulo, filas: [] }; grupos.push(g); return g; }
+  function fila(g, estado, texto, pista) { g.filas.push({ e: estado, t: texto, p: pista || '' }); pintar(); }
+
+  function esc(s) {
+    return String(s === null || s === undefined ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function pintar() {
+    var h = '';
+    for (var i = 0; i < grupos.length; i++) {
+      var g = grupos[i];
+      h += '<div class="grupo"><h2>' + esc(g.titulo) + '</h2>';
+      for (var j = 0; j < g.filas.length; j++) {
+        var f = g.filas[j];
+        var clase = f.e === 'ok' ? 'ok' : f.e === 'mal' ? 'mal' : 'duda';
+        var simbolo = f.e === 'ok' ? '✓' : f.e === 'mal' ? '✗' : '!';
+        h += '<div class="fila"><span class="marca ' + clase + '">' + simbolo + '</span>' +
+             '<span class="txt">' + f.t + (f.p ? '<span class="pista">' + f.p + '</span>' : '') + '</span></div>';
+      }
+      h += '</div>';
+    }
+    document.getElementById('resultado').innerHTML = h;
+    var texto = '';
+    for (var k = 0; k < grupos.length; k++) {
+      texto += '== ' + grupos[k].titulo + '\n';
+      for (var m = 0; m < grupos[k].filas.length; m++) {
+        var ff = grupos[k].filas[m];
+        texto += (ff.e === 'ok' ? '[OK] ' : ff.e === 'mal' ? '[FALLA] ' : '[AVISO] ') +
+                 ff.t.replace(/<[^>]*>/g, '') + '\n';
+      }
+      texto += '\n';
+    }
+    document.getElementById('informe').value = texto;
+  }
+
+  // ── 1. El aparato ────────────────────────────────────────────────────
+  var gA = grupo('Este aparato');
+  var ua = navigator.userAgent || '';
+  fila(gA, 'ok', 'Navegador: <b>' + esc(ua.length > 120 ? ua.slice(0, 120) + '…' : ua) + '</b>');
+
+  // La versión de iOS/iPadOS, si es un aparato de Apple
+  var mIOS = ua.match(/OS (\d+)[_.](\d+)/);
+  var esApple = /iPhone|iPad|iPod/.test(ua);
+  if (esApple && mIOS) {
+    var mayor = parseInt(mIOS[1], 10);
+    fila(gA, mayor >= 14 ? 'ok' : 'mal',
+      'Sistema: <b>iOS ' + mIOS[1] + '.' + mIOS[2] + '</b>',
+      mayor >= 14 ? 'Versión suficiente para la plataforma.'
+                  : 'Demasiado antiguo. Actualice el iPhone (Ajustes ▸ General ▸ ' +
+                    'Actualización de software): con esta versión hay partes de la ' +
+                    'plataforma que el navegador no entiende.');
+  }
+  if (esApple) {
+    fila(gA, 'duda', 'En el iPhone <b>todos los navegadores usan el mismo motor</b>',
+      'Safari, Chrome y Firefox comparten WebKit y los ajustes de Safari. Si falla en ' +
+      'uno, falla en todos: no es casualidad.');
+  }
+
+  // Lo más importante de todo: si esto se abrió desde un enlace de WhatsApp,
+  // del correo o de las notas, no estamos en Safari sino en el navegador de
+  // dentro de esa aplicación — y ahí Google se queda en blanco.
+  var incrustado = /FBAN|FBAV|FB_IAB|Instagram|Line\/|Twitter|WhatsApp|MicroMessenger|GSA\/|; wv\)/i.test(ua) ||
+                   (esApple && !/Safari\//i.test(ua));
+  fila(gA, incrustado ? 'mal' : 'ok',
+    incrustado ? 'Está dentro del <b>navegador de otra aplicación</b>, no en Safari'
+               : 'Está en un navegador de verdad, no dentro de otra aplicación.',
+    incrustado ? '<b>Es la causa más probable de que la página de Google se quede en ' +
+                 'blanco.</b> Toque el icono de compartir o los tres puntos y elija ' +
+                 '«Abrir en Safari», o escriba la dirección directamente en Safari.' : '');
+  fila(gA, 'ok', 'Hora del aparato: <b>' + new Date().toString().slice(0, 33) + '</b>');
+
+  // ── 2. Lo que el navegador permite ───────────────────────────────────
+  var gB = grupo('Lo que este navegador permite');
+
+  var guarda = false, errGuarda = '';
+  try {
+    localStorage.setItem('__prueba', '1');
+    guarda = localStorage.getItem('__prueba') === '1';
+    localStorage.removeItem('__prueba');
+  } catch (e) { errGuarda = e.name || String(e); }
+  fila(gB, guarda ? 'ok' : 'mal',
+    guarda ? 'Puede guardar la sesión.' : 'NO puede guardar nada' + (errGuarda ? ' (' + esc(errGuarda) + ')' : ''),
+    guarda ? '' : 'Casi siempre es una de dos: está en <b>navegación privada</b>, o tiene ' +
+                  '<b>Ajustes ▸ Safari ▸ Bloquear todas las cookies</b> activado. ' +
+                  'Sin esto no se puede iniciar sesión de ninguna manera.');
+
+  fila(gB, typeof fetch === 'function' ? 'ok' : 'mal',
+    typeof fetch === 'function' ? 'Sabe hablar con el servidor.' : 'Le falta «fetch»',
+    typeof fetch === 'function' ? '' : 'El navegador es demasiado antiguo.');
+
+  fila(gB, typeof Promise === 'function' && typeof Object.assign === 'function' ? 'ok' : 'mal',
+    'Entiende el código de la plataforma.');
+
+  // ── 3. Los archivos del sitio ────────────────────────────────────────
+  var gC = grupo('Los archivos del sitio');
+  var BASE = '';
+  if (window.__configFallo || !window.CONFIG) {
+    fila(gC, 'mal', 'No se cargó <b>config.js</b>',
+      'Falta el archivo en el servidor, o el navegador lo tiene guardado a medias.');
+  } else {
+    BASE = (window.CONFIG.URL_SCRIPT || '');
+    var puesta = BASE.indexOf('PEGAR_AQUI') === -1 && BASE.indexOf('/exec') !== -1;
+    fila(gC, puesta ? 'ok' : 'mal',
+      puesta ? 'config.js cargado, con la dirección del servidor.'
+             : 'config.js cargado, pero <b>sin la dirección real del servidor</b>',
+      puesta ? '' : 'Hay que pegar la URL del despliegue en config.js.');
+  }
+
+  // ¿Tiene la versión nueva de auth.js o una guardada de antes?
+  var sc = document.createElement('script');
+  sc.src = 'auth.js?v=' + Date.now();
+  sc.onload = function () {
+    var nuevo = window.AUTH && typeof window.AUTH.reiniciar === 'function';
+    fila(gC, nuevo ? 'ok' : 'duda',
+      nuevo ? 'auth.js es la versión nueva.' : 'auth.js es una versión <b>anterior</b>',
+      nuevo ? '' : 'El servidor todavía sirve el auth.js viejo, o este navegador lo tiene ' +
+                   'guardado. Sin el nuevo, «?reset» no hace nada.');
+  };
+  sc.onerror = function () {
+    fila(gC, 'mal', 'No se pudo cargar <b>auth.js</b>',
+      'Sin ese archivo no hay pantalla de acceso en ninguna página.');
+  };
+  document.body.appendChild(sc);
+
+  // ── 4. La sesión guardada ────────────────────────────────────────────
+  var gD = grupo('La sesión guardada en este navegador');
+  var ses = null;
+  try { ses = JSON.parse(localStorage.getItem('neuro_sesion_v1') || 'null'); } catch (e2) {}
+  if (!ses || !ses.token) {
+    fila(gD, 'ok', 'No hay ninguna sesión guardada.',
+      'Es lo normal si nunca entró en este navegador o si ya la borró.');
+  } else {
+    var dias = ses.caduca ? Math.round((ses.caduca - Date.now()) / 86400000) : null;
+    fila(gD, 'ok', 'Hay una sesión de <b>' + esc(ses.email || '(sin correo)') + '</b>' +
+      (ses.rol ? ' — perfil ' + esc(ses.rol) : ''));
+    if (dias !== null) {
+      fila(gD, dias >= 0 ? 'ok' : 'mal',
+        dias >= 0 ? 'Según este aparato, caduca en <b>' + dias + ' días</b>.'
+                  : 'Según este aparato, <b>caducó hace ' + Math.abs(dias) + ' días</b>.');
+    }
+  }
+
+  // ── 5. El servidor ───────────────────────────────────────────────────
+  var gE = grupo('El servidor');
+  if (!BASE || BASE.indexOf('/exec') === -1) {
+    fila(gE, 'mal', 'No se puede probar: falta la dirección del servidor.');
+  } else {
+    var t0 = new Date().getTime();
+    fetch(BASE + '?action=ping&_c=' + t0, { cache: 'no-store' })
+      .then(function (r) { return r.text(); })
+      .then(function (txt) {
+        fila(gE, 'ok', 'El servidor responde (<b>' + (new Date().getTime() - t0) + ' ms</b>).');
+        var datos = null;
+        try { datos = JSON.parse(txt); } catch (e3) {}
+        if (datos && datos.hora) {
+          var desfase = Math.abs(datos.hora - new Date().getTime());
+          fila(gE, desfase < 300000 ? 'ok' : 'mal',
+            desfase < 300000 ? 'La hora de este aparato es correcta.'
+                             : 'La hora de este aparato va <b>desfasada ' +
+                               Math.round(desfase / 60000) + ' minutos</b>',
+            desfase < 300000 ? '' : 'Póngala en automático: Ajustes ▸ General ▸ Fecha y hora ' +
+                                    '▸ Ajustar automáticamente.');
+        } else if (datos === null) {
+          fila(gE, 'duda', 'Responde algo que no se entiende.',
+            'Puede que el despliegue sea antiguo. Vuelva a publicar el Apps Script.');
+        } else {
+          fila(gE, 'duda', 'Responde, pero sin la hora: el despliegue es <b>anterior</b>.',
+            'Publique una versión nueva del Apps Script para la comprobación completa.');
+        }
+        if (ses && ses.token) probarSesion();
+      })
+      .catch(function () {
+        fila(gE, 'mal', 'No se llega al servidor desde este aparato.',
+          'Pruebe con <b>datos móviles</b> en vez del wifi: algunas redes de hospital ' +
+          'bloquean script.google.com. Si con datos sí funciona, es la red.');
+      });
+  }
+
+  function probarSesion() {
+    fetch(BASE + '?action=getArranque&_t=' + encodeURIComponent(ses.token) + '&_c=' + new Date().getTime(),
+          { cache: 'no-store' })
+      .then(function (r) { return r.text(); })
+      .then(function (txt) {
+        var mala = /"code"\s*:\s*"AUTH"|Sesi[oó]n no v[aá]lida/i.test(txt);
+        fila(gE, mala ? 'mal' : 'ok',
+          mala ? 'El servidor <b>no acepta</b> la sesión guardada aquí.'
+               : 'El servidor acepta la sesión guardada aquí.',
+          mala ? 'Es la causa. Pulse «Borrar los datos guardados» abajo y vuelva a entrar.' : '');
+      })
+      .catch(function () {});
+  }
+
+  // ── 6. El acceso con Google ──────────────────────────────────────────
+  var gF = grupo('El acceso con Google');
+  var idc = (window.CONFIG && window.CONFIG.GOOGLE_CLIENT_ID) || '';
+  fila(gF, idc ? 'ok' : 'mal',
+    idc ? 'Hay un identificador de Google configurado.' : 'Falta GOOGLE_CLIENT_ID en config.js',
+    idc ? '' : 'Sin él solo se puede entrar con código.');
+
+  fila(gF, 'duda', 'Si la página de Google <b>se queda en blanco</b> tras aceptar la cuenta',
+    'No es que falle el acceso: es que esa ventana no puede devolver la respuesta ni ' +
+    'cerrarse sola. Pasa en el iPhone cuando la plataforma se abrió desde un enlace ' +
+    'dentro de otra aplicación. Soluciones: abrir la plataforma en <b>Safari</b>, usar ' +
+    '<b>«Entrar sin ventana emergente»</b> en la pantalla de acceso, o entrar con ' +
+    '<b>código</b>.');
+
+  var g1 = document.createElement('script');
+  g1.src = 'https://accounts.google.com/gsi/client';
+  g1.async = true;
+  g1.onload = function () {
+    fila(gF, 'ok', 'El botón de Google se puede cargar.',
+      'Si aun así al pulsarlo no pasa nada, suele ser <b>Ajustes ▸ Safari ▸ ' +
+      'Bloquear todas las cookies</b>, o «Impedir seguimiento entre sitios» junto con ' +
+      'un bloqueador de contenido.');
+  };
+  g1.onerror = function () {
+    fila(gF, 'mal', '<b>No se puede cargar el acceso con Google en este aparato.</b>',
+      'Lo está bloqueando algo del propio iPhone: un <b>bloqueador de contenido</b> ' +
+      '(Ajustes ▸ Safari ▸ Extensiones), un antivirus o VPN, o la red del hospital. ' +
+      'Esto explica que falle en todos los navegadores del teléfono y no en el ordenador. ' +
+      'Mientras tanto, se puede entrar con <b>código de acceso</b>, que no pasa por Google.');
+  };
+  document.body.appendChild(g1);
+
+  // ── Botones ──────────────────────────────────────────────────────────
+  document.getElementById('btnCopiar').onclick = function () {
+    var ta = document.getElementById('informe');
+    ta.style.display = 'block';
+    ta.focus();
+    ta.setSelectionRange(0, ta.value.length);
+    var copiado = false;
+    try { copiado = document.execCommand('copy'); } catch (e4) {}
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ta.value)['catch'](function () {});
+      copiado = true;
+    }
+    this.textContent = copiado ? '✓ Copiado — ya puede pegarlo en un mensaje'
+                               : 'Seleccione el texto de abajo y cópielo a mano';
+  };
+
+  document.getElementById('btnBorrar').onclick = function () {
+    var n = 0;
+    try {
+      var fuera = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (/^(neuro_|manual_tema_|plan_edit_)/.test(k)) fuera.push(k);
+      }
+      for (var j = 0; j < fuera.length; j++) { localStorage.removeItem(fuera[j]); n++; }
+      try { sessionStorage.removeItem('neuro_sesion_v1'); } catch (e5) {}
+    } catch (e6) {
+      this.textContent = '✗ Este navegador no deja borrar nada (modo privado)';
+      return;
+    }
+    this.textContent = '✓ Borrado (' + n + ' elementos). Vuelva a la plataforma y entre.';
+    this.className = 'b1';
+  };
+
+  document.getElementById('btnVolver').onclick = function () { location.href = 'index.html'; };
+})();
+</script>
+</body>
+</html>
