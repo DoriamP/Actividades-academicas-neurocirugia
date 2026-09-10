@@ -33,16 +33,85 @@
     }
 
     // ── Sesión guardada ──────────────────────────────────────────────────
-    function sesion() {
+    // Nada de esto puede lanzar una excepción. En iOS, localStorage falla en
+    // navegación privada y con «Bloquear todas las cookies», y un setItem que
+    // lanza dentro del inicio de sesión dejaba la pantalla en «Verificando su
+    // cuenta…» para siempre, sin decir nada. Si no se puede guardar, se sigue
+    // con la sesión en memoria: se trabaja igual, solo que hay que volver a
+    // entrar al recargar.
+    var _sesionEnMemoria = null;
+
+    function _leerCrudo() {
         try {
-            var s = JSON.parse(localStorage.getItem(CLAVE_SESION) || 'null');
+            var v = localStorage.getItem(CLAVE_SESION);
+            if (v) return v;
+        } catch (e) {}
+        try {
+            var v2 = sessionStorage.getItem(CLAVE_SESION);
+            if (v2) return v2;
+        } catch (e2) {}
+        return null;
+    }
+
+    // Margen antes de dar una sesión por caducada con el reloj del aparato.
+    // El que decide de verdad es el servidor: si el teléfono tiene la hora
+    // adelantada, borrar aquí la sesión dejaba a la persona en un bucle —entra,
+    // se guarda, se recarga, se descarta por «caducada», vuelta a la pantalla
+    // de acceso— sin ningún mensaje que explicara nada.
+    var MARGEN_RELOJ = 48 * 3600 * 1000;
+
+    function sesion() {
+        if (_sesionEnMemoria) return _sesionEnMemoria;
+        try {
+            var s = JSON.parse(_leerCrudo() || 'null');
             if (!s || !s.token) return null;
-            if (s.caduca && s.caduca < Date.now()) { localStorage.removeItem(CLAVE_SESION); return null; }
+            if (s.caduca && s.caduca + MARGEN_RELOJ < Date.now()) { borrarSesion(); return null; }
             return s;
         } catch (e) { return null; }
     }
-    function guardarSesion(s) { localStorage.setItem(CLAVE_SESION, JSON.stringify(s)); }
-    function borrarSesion()   { localStorage.removeItem(CLAVE_SESION); }
+
+    /** Guarda la sesión. Devuelve false si no se pudo dejar por escrito. */
+    function guardarSesion(s) {
+        _sesionEnMemoria = s;
+        var txt = JSON.stringify(s), ok = false;
+        try { localStorage.setItem(CLAVE_SESION, txt); ok = true; } catch (e) {}
+        if (!ok) { try { sessionStorage.setItem(CLAVE_SESION, txt); ok = true; } catch (e2) {} }
+        return ok;
+    }
+
+    function borrarSesion() {
+        _sesionEnMemoria = null;
+        try { localStorage.removeItem(CLAVE_SESION); } catch (e) {}
+        try { sessionStorage.removeItem(CLAVE_SESION); } catch (e2) {}
+    }
+
+    // ── La sesión dejó de valer ──────────────────────────────────────────
+    // El servidor responde {status:"error", code:"AUTH"} cuando el token ya no
+    // sirve. Nadie miraba esa respuesta: la sesión muerta se quedaba guardada,
+    // arrancar() la daba por buena y no pintaba la pantalla de acceso, así que
+    // la plataforma cargaba entera y TODO fallaba, cada pantalla con un error
+    // distinto y ninguna forma de volver a entrar desde ese aparato. Por eso
+    // podía pasar en el teléfono y no en el ordenador: son sesiones distintas.
+    var _avisandoCaducada = false;
+    function sesionCaducada(motivo) {
+        if (_avisandoCaducada) return;
+        _avisandoCaducada = true;
+        borrarSesion();
+        pintarPantalla(motivo || 'Su sesión ha caducado. Vuelva a iniciarla.');
+    }
+
+    var _RE_AUTH = /"code"\s*:\s*"AUTH"|Sesi[oó]n no v[aá]lida o caducada/i;
+    function _vigilarSesion(res) {
+        // Se mira una copia: leer el cuerpo del original dejaría a quien llamó
+        // sin respuesta que leer.
+        try {
+            res.clone().text().then(function (t) {
+                if (t && _RE_AUTH.test(t)) {
+                    sesionCaducada('Su sesión ya no es válida en este dispositivo. Vuelva a entrar.');
+                }
+            }).catch(function () {});
+        } catch (e) {}
+    }
 
     // ── Interceptor: añade el token a toda llamada al Apps Script ─────────
     // Se hace aquí y no en cada punto de llamada para que ninguna se quede
@@ -79,7 +148,17 @@
                     if (typeof input === 'string') input = url;
                 }
             } catch (e) { /* ante la duda, se deja pasar tal cual */ }
-            return _fetch(input, init);
+
+            var url2 = (typeof input === 'string') ? input : (input && input.url) || '';
+            var esDelScript = BASE && url2.indexOf(BASE) === 0 &&
+                              url2.indexOf('action=login') === -1 &&
+                              url2.indexOf('action=logout') === -1;
+            var p = _fetch(input, init);
+            if (!esDelScript) return p;
+            // Una sola vigilancia para las 23 llamadas repartidas por el código:
+            // si el servidor dice que la sesión no vale, se pide entrar otra vez
+            // en vez de dejar la pantalla llena de errores sueltos.
+            return p.then(function (res) { _vigilarSesion(res); return res; });
         };
     }
 
@@ -184,12 +263,42 @@
             '</div>' +
 
             '<p style="font-size:10.5px;color:#64748b;margin:16px 0 0;text-align:center;line-height:1.5;">' +
-              'Use la cuenta de Google que registró en la coordinación.</p>' +
+              'Use la cuenta de Google que registró en la coordinación.<br>' +
+              '<a href="#" id="authDiagLink" style="color:#a5b4fc;text-decoration:underline;">' +
+                '¿Problemas para entrar?</a></p>' +
+            '<div id="authDiag" style="display:none;background:#111827;border:1px solid #374151;' +
+                 'border-radius:12px;padding:12px 14px;margin-top:12px;">' +
+              '<p style="font-size:11px;font-weight:800;color:#e5e7eb;margin:0 0 8px;' +
+                 'text-transform:uppercase;letter-spacing:.05em;">Comprobación</p>' +
+              '<div id="authDiagCuerpo" style="font-size:11.5px;color:#cbd5e1;line-height:1.6;">' +
+                 'Comprobando…</div>' +
+              '<button id="authDiagReset" type="button" ' +
+                 'style="width:100%;margin-top:11px;padding:9px;border:0;border-radius:9px;' +
+                 'background:#b91c1c;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">' +
+                 'Borrar los datos guardados y empezar de cero</button>' +
+              '<p style="font-size:10px;color:#6b7280;margin:8px 0 0;line-height:1.45;">' +
+                 'No borra ninguna evaluación: solo la sesión y los datos que este ' +
+                 'navegador guarda para ir más rápido.</p>' +
+            '</div>' +
           '</div>';
 
         document.body.appendChild(ov);
 
         if (mensajeInicial) mostrarMsg(mensajeInicial, 'err');
+
+        var enlaceDiag = document.getElementById('authDiagLink');
+        if (enlaceDiag) enlaceDiag.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            var caja = document.getElementById('authDiag');
+            caja.style.display = caja.style.display === 'none' ? 'block' : 'none';
+            if (caja.style.display === 'block') diagnosticar();
+        });
+        var btnReset = document.getElementById('authDiagReset');
+        if (btnReset) btnReset.addEventListener('click', function () {
+            btnReset.disabled = true; btnReset.textContent = 'Borrando…';
+            limpiarTodo();
+            location.replace(location.pathname);
+        });
 
         var inp = document.getElementById('authCodigo');
         var btn = document.getElementById('authCodigoBtn');
@@ -226,8 +335,15 @@
     }
 
     function aceptar(res) {
-        guardarSesion({ token: res.token, email: res.email, nombre: res.nombre,
-                        rol: res.rol, caduca: res.caduca });
+        var guardada = guardarSesion({ token: res.token, email: res.email, nombre: res.nombre,
+                                       rol: res.rol, caduca: res.caduca });
+        if (!guardada) {
+            // Antes esto lanzaba y la pantalla se quedaba en «Verificando su
+            // cuenta…» sin más. Ahora se entra igual y se dice qué va a pasar.
+            mostrarMsg('Ha entrado, pero este navegador no deja guardar la sesión ' +
+                       '(modo privado o cookies bloqueadas): tendrá que volver a ' +
+                       'entrar si recarga la página.', 'err');
+        }
         // Cada perfil aterriza directamente donde le corresponde. Antes se
         // recargaba la misma página y, si era un residente en el portal
         // docente, se le mostraba un aviso y se le redirigía después: dos
@@ -313,6 +429,104 @@
         document.head.appendChild(sc);
     }
 
+    // ── Rescate ──────────────────────────────────────────────────────────
+    // Cuando alguien no puede entrar desde un aparato concreto, no hay forma de
+    // saber por qué sin una consola de desarrollo — y en un teléfono no la hay.
+    // Esto lo dice en la propia pantalla, y deja borrarlo todo sin depender de
+    // los ajustes del navegador.
+
+    /** Borra la sesión y todo lo que la plataforma guarda en este navegador */
+    function limpiarTodo() {
+        borrarSesion();
+        try {
+            var fuera = [];
+            for (var i = 0; i < localStorage.length; i++) {
+                var k = localStorage.key(i);
+                if (/^(neuro_|manual_tema_|plan_edit_)/.test(k)) fuera.push(k);
+            }
+            fuera.forEach(function (k) { localStorage.removeItem(k); });
+        } catch (e) {}
+    }
+
+    function _lineaDiag(ok, txt) {
+        return '<div style="margin-bottom:4px;">' +
+               '<span style="color:' + (ok ? '#34d399' : '#f87171') + ';font-weight:800;">' +
+               (ok ? '✓' : '✗') + '</span> ' + txt + '</div>';
+    }
+
+    function diagnosticar() {
+        var caja = document.getElementById('authDiagCuerpo');
+        if (!caja) return;
+        var lineas = [];
+
+        // ¿Se puede guardar algo en este navegador?
+        var almacena = false;
+        try {
+            localStorage.setItem('neuro_prueba', '1');
+            almacena = localStorage.getItem('neuro_prueba') === '1';
+            localStorage.removeItem('neuro_prueba');
+        } catch (e) { almacena = false; }
+        lineas.push(_lineaDiag(almacena, almacena
+            ? 'Este navegador guarda la sesión.'
+            : 'Este navegador NO deja guardar nada. Suele ser el modo privado, ' +
+              'o «Bloquear todas las cookies» en Ajustes ▸ Safari.'));
+
+        // ¿Hay una sesión guardada y qué dice?
+        var s = null;
+        try { s = JSON.parse(_leerCrudo() || 'null'); } catch (e2) {}
+        if (s && s.token) {
+            var quedan = s.caduca ? Math.round((s.caduca - Date.now()) / 86400000) : null;
+            lineas.push(_lineaDiag(true, 'Hay una sesión guardada de ' +
+                (s.email || 'una cuenta') +
+                (quedan === null ? '' : quedan >= 0 ? ' (caduca en ' + quedan + ' días).'
+                                                    : ' (caducó hace ' + Math.abs(quedan) + ' días).')));
+        } else {
+            lineas.push(_lineaDiag(true, 'No hay ninguna sesión guardada: hay que entrar.'));
+        }
+        caja.innerHTML = lineas.join('');
+
+        // ¿Responde el servidor? ¿Y va bien la hora de este aparato?
+        if (!BASE) {
+            caja.innerHTML += _lineaDiag(false, 'Falta la dirección del servidor en config.js.');
+            return;
+        }
+        var t0 = Date.now();
+        _fetch(BASE + '?action=ping&_c=' + t0, { cache: 'no-store' }).then(function (res) {
+            var extra = _lineaDiag(true, 'El servidor responde (' + (Date.now() - t0) + ' ms).');
+            // La hora del servidor: del cuerpo si la manda, y si no, de la
+            // cabecera Date, que también sirve.
+            return res.text().then(function (txt) {
+                var hora = null;
+                try { hora = (JSON.parse(txt) || {}).hora || null; } catch (e3) {}
+                if (!hora) { try { hora = new Date(res.headers.get('date')).getTime() || null; } catch (e4) {} }
+                if (hora) {
+                    var desfase = Math.abs(hora - Date.now());
+                    extra += _lineaDiag(desfase < 5 * 60000, desfase < 5 * 60000
+                        ? 'La hora de este aparato coincide con la del servidor.'
+                        : 'La hora de este aparato va desfasada ' + Math.round(desfase / 60000) +
+                          ' minutos. Póngala en automático (Ajustes ▸ General ▸ Fecha y hora): ' +
+                          'con la hora mal, la sesión se descarta sola.');
+                }
+                caja.innerHTML += extra;
+            });
+        }).catch(function () {
+            caja.innerHTML += _lineaDiag(false,
+                'No se llega al servidor desde este aparato. Pruebe con otra red ' +
+                '(datos móviles en vez del wifi del hospital).');
+        });
+    }
+
+    // Salida de emergencia: abrir la plataforma con «?reset» al final de la
+    // dirección la deja como recién instalada en este navegador. Es lo que se
+    // le puede dictar por teléfono a quien se ha quedado fuera.
+    function _rescatePorURL() {
+        if (!/(^|[?&#])reset\b/.test(location.search + location.hash)) return false;
+        limpiarTodo();
+        try { history.replaceState(null, '', location.pathname); } catch (e) {}
+        pintarPantalla('Se borraron los datos guardados en este navegador. Vuelva a entrar.');
+        return true;
+    }
+
     // ── Qué páginas puede abrir cada perfil ──────────────────────────────
     // Esto NO es una medida de seguridad: los datos ya los protege el servidor,
     // que filtra por rol en cada petición. Es para que un residente que abra
@@ -370,18 +584,22 @@
     // ── Arranque ─────────────────────────────────────────────────────────
     function arrancar() {
         if (!BASE) return;   // sin config.js ya se avisa por otra vía
-        if (!sesion()) { pintarPantalla(null); return; }
-        comprobarAccesoPagina();
+        try {
+            if (_rescatePorURL()) return;
+            if (!sesion()) { pintarPantalla(null); return; }
+            comprobarAccesoPagina();
+        } catch (e) {
+            // Pase lo que pase, que quede una pantalla de acceso: sin esto, un
+            // fallo aquí deja la página cargada a medias y sin manera de entrar.
+            try { pintarPantalla('No se pudo comprobar la sesión. Vuelva a entrar.'); } catch (e2) {}
+        }
     }
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', arrancar);
     } else { arrancar(); }
 
     // Si el servidor rechaza la sesión en cualquier momento, se vuelve a pedir
-    window.addEventListener('neuro:sesion-caducada', function () {
-        borrarSesion();
-        pintarPantalla('Su sesión ha caducado. Vuelva a iniciarla.');
-    });
+    window.addEventListener('neuro:sesion-caducada', function () { sesionCaducada(); });
 
     // ── API pública ──────────────────────────────────────────────────────
     window.AUTH = {
@@ -392,6 +610,8 @@
         email:  function () { var s = sesion(); return s ? s.email : null; },
         es:     function (r) { var s = sesion(); return !!s && s.rol === r; },
         caducada: function () { window.dispatchEvent(new Event('neuro:sesion-caducada')); },
+        // AUTH.reiniciar() desde la consola, o «?reset» en la dirección
+        reiniciar: function () { limpiarTodo(); location.replace(location.pathname); },
         paginaResidente: _destinoResidente
     };
 })();
