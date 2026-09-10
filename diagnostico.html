@@ -62,6 +62,19 @@
 
   <div id="resultado"></div>
 
+  <div id="cajaSitio" class="grupo" style="display:none">
+    <h2>¿Dónde está la plataforma?</h2>
+    <p style="font-size:12.5px;color:#cbd5e1;margin:0 0 9px;line-height:1.5;">
+      Esta página está <b>suelta</b>: no encuentra los archivos de la plataforma al lado.
+      Escriba aquí la dirección donde sí está y se comprueba todo lo demás.</p>
+    <input id="dirSitio" type="url" inputmode="url" autocapitalize="off" autocorrect="off"
+      spellcheck="false" placeholder="https://usuario.github.io/repositorio/"
+      style="width:100%;padding:11px;border-radius:10px;border:1px solid #334155;
+             background:#0b1220;color:#e2e8f0;font-size:14px;">
+    <button class="b1" id="btnSitio" type="button">Comprobar esa dirección</button>
+  </div>
+
+  <button class="b1" id="btnVentana" type="button">🪟 Probar si el iPhone bloquea las ventanas emergentes</button>
   <button class="b1" id="btnCopiar" type="button">📋 Copiar el informe para enviarlo</button>
   <button class="b2" id="btnBorrar" type="button">🧹 Borrar los datos guardados en este navegador</button>
   <button class="b3" id="btnVolver" type="button">← Volver a la plataforma</button>
@@ -172,9 +185,18 @@
   // ── 3. Los archivos del sitio ────────────────────────────────────────
   var gC = grupo('Los archivos del sitio');
   var BASE = '';
+  var SITIO = '';                       // dirección de la plataforma, si hay que decirla
+  try { SITIO = localStorage.getItem('neuro_dir_sitio') || ''; } catch (eS) {}
+
   if (window.__configFallo || !window.CONFIG) {
-    fila(gC, 'mal', 'No se cargó <b>config.js</b>',
-      'Falta el archivo en el servidor, o el navegador lo tiene guardado a medias.');
+    // Ojo: esto NO significa que la plataforma esté rota. Significa que esta
+    // página está en otro sitio, sin config.js ni auth.js al lado.
+    fila(gC, 'duda', 'Esta página está <b>suelta</b>: no hay config.js a su lado',
+      'No es un fallo de la plataforma. Lo suyo es subir <b>diagnostico.html</b> al mismo ' +
+      'repositorio que el resto, junto a config.js y auth.js. Mientras tanto, escriba abajo ' +
+      'la dirección de la plataforma y se comprueba igual.');
+    document.getElementById('cajaSitio').style.display = 'block';
+    if (SITIO) { document.getElementById('dirSitio').value = SITIO; cargarConfigDe(SITIO); }
   } else {
     BASE = (window.CONFIG.URL_SCRIPT || '');
     var puesta = BASE.indexOf('PEGAR_AQUI') === -1 && BASE.indexOf('/exec') !== -1;
@@ -195,8 +217,10 @@
                    'guardado. Sin el nuevo, «?reset» no hace nada.');
   };
   sc.onerror = function () {
-    fila(gC, 'mal', 'No se pudo cargar <b>auth.js</b>',
-      'Sin ese archivo no hay pantalla de acceso en ninguna página.');
+    fila(gC, (window.CONFIG ? 'mal' : 'duda'),
+      'No se pudo cargar <b>auth.js</b> desde aquí',
+      window.CONFIG ? 'Sin ese archivo no hay pantalla de acceso en ninguna página.'
+                    : 'Esperable: esta página está suelta, fuera del repositorio de la plataforma.');
   };
   document.body.appendChild(sc);
 
@@ -221,7 +245,8 @@
   // ── 5. El servidor ───────────────────────────────────────────────────
   var gE = grupo('El servidor');
   if (!BASE || BASE.indexOf('/exec') === -1) {
-    fila(gE, 'mal', 'No se puede probar: falta la dirección del servidor.');
+    fila(gE, 'duda', 'Todavía no se puede probar: falta saber dónde está la plataforma.',
+      'Escriba su dirección en el recuadro de arriba.');
   } else {
     var t0 = new Date().getTime();
     fetch(BASE + '?action=ping&_c=' + t0, { cache: 'no-store' })
@@ -271,9 +296,10 @@
   // ── 6. El acceso con Google ──────────────────────────────────────────
   var gF = grupo('El acceso con Google');
   var idc = (window.CONFIG && window.CONFIG.GOOGLE_CLIENT_ID) || '';
-  fila(gF, idc ? 'ok' : 'mal',
-    idc ? 'Hay un identificador de Google configurado.' : 'Falta GOOGLE_CLIENT_ID en config.js',
-    idc ? '' : 'Sin él solo se puede entrar con código.');
+  fila(gF, idc ? 'ok' : 'duda',
+    idc ? 'Hay un identificador de Google configurado.'
+        : 'Aún no se conoce el identificador de Google',
+    idc ? '' : 'Se sabrá al cargar el config.js de la plataforma.');
 
   fila(gF, 'duda', 'Si la página de Google <b>se queda en blanco</b> tras aceptar la cuenta',
     'No es que falle el acceso: es que esa ventana no puede devolver la respuesta ni ' +
@@ -300,7 +326,104 @@
   };
   document.body.appendChild(g1);
 
+  // ── Cargar el config.js de la plataforma desde otra dirección ────────
+  // Un archivo de guion sí se puede traer de otra dirección, así que aunque
+  // esta página esté suelta se puede comprobar la plataforma de verdad.
+  function cargarConfigDe(dir) {
+    dir = String(dir || '').trim();
+    if (!dir) return;
+    if (dir.indexOf('http') !== 0) dir = 'https://' + dir;
+    if (dir.charAt(dir.length - 1) !== '/') dir += '/';
+    try { localStorage.setItem('neuro_dir_sitio', dir); } catch (e) {}
+
+    var gS = grupo('La plataforma en ' + esc(dir));
+    var s1 = document.createElement('script');
+    s1.src = dir + 'config.js?v=' + new Date().getTime();
+    s1.onload = function () {
+      if (!window.CONFIG || !window.CONFIG.URL_SCRIPT) {
+        fila(gS, 'mal', 'Ahí hay un <b>config.js</b>, pero sin la dirección del servidor.');
+        return;
+      }
+      fila(gS, 'ok', 'config.js encontrado.');
+      BASE = window.CONFIG.URL_SCRIPT;
+      var puesta = BASE.indexOf('PEGAR_AQUI') === -1 && BASE.indexOf('/exec') !== -1;
+      fila(gS, puesta ? 'ok' : 'mal',
+        puesta ? 'Lleva la dirección del Apps Script.'
+               : 'La dirección del Apps Script <b>está sin poner</b>.');
+      fila(gS, window.CONFIG.GOOGLE_CLIENT_ID ? 'ok' : 'mal',
+        window.CONFIG.GOOGLE_CLIENT_ID ? 'Y el identificador de Google.'
+                                       : 'Le falta GOOGLE_CLIENT_ID.');
+      // auth.js de ese sitio: ¿está y es el nuevo?
+      var s2 = document.createElement('script');
+      s2.src = dir + 'auth.js?v=' + new Date().getTime();
+      s2.onload = function () {
+        var nuevo = window.AUTH && typeof window.AUTH.reiniciar === 'function';
+        fila(gS, nuevo ? 'ok' : 'mal',
+          nuevo ? 'auth.js es la versión nueva.' : 'auth.js es <b>la versión anterior</b>',
+          nuevo ? '' : 'Todavía no subió el auth.js corregido: sin él no existen ' +
+                       '«?reset» ni «Entrar sin ventana emergente».');
+      };
+      s2.onerror = function () { fila(gS, 'mal', 'No hay <b>auth.js</b> en esa dirección.'); };
+      document.body.appendChild(s2);
+      if (puesta) probarServidor(gS);
+    };
+    s1.onerror = function () {
+      fila(gS, 'mal', 'No se encontró <b>config.js</b> en esa dirección.',
+        'Compruebe que la dirección es la de la plataforma y termina en «/».');
+    };
+    document.body.appendChild(s1);
+  }
+
+  function probarServidor(g) {
+    var t = new Date().getTime();
+    fetch(BASE + '?action=ping&_c=' + t, { cache: 'no-store' })
+      .then(function (r) { return r.text(); })
+      .then(function (txt) {
+        fila(g, 'ok', 'El servidor responde (<b>' + (new Date().getTime() - t) + ' ms</b>).');
+        var d = null; try { d = JSON.parse(txt); } catch (e) {}
+        if (d && d.hora) {
+          var des = Math.abs(d.hora - new Date().getTime());
+          fila(g, des < 300000 ? 'ok' : 'mal',
+            des < 300000 ? 'La hora de este aparato es correcta.'
+                         : 'La hora va desfasada ' + Math.round(des / 60000) + ' minutos.');
+        } else {
+          fila(g, 'duda', 'Responde, pero el despliegue es <b>anterior</b>.',
+            'Publique una versión nueva del Apps Script.');
+        }
+      })
+      .catch(function () {
+        fila(g, 'mal', 'No se llega al servidor desde este aparato.',
+          'Pruebe con <b>datos móviles</b> en vez del wifi.');
+      });
+  }
+
   // ── Botones ──────────────────────────────────────────────────────────
+  document.getElementById('btnSitio').onclick = function () {
+    this.disabled = true; this.textContent = 'Comprobando…';
+    cargarConfigDe(document.getElementById('dirSitio').value);
+  };
+
+  // La prueba decisiva del acceso con Google: hace falta un toque de la
+  // persona, porque una ventana que se abre sola la bloquea cualquiera.
+  document.getElementById('btnVentana').onclick = function () {
+    var gV = grupo('Ventanas emergentes');
+    var v = null;
+    try { v = window.open('about:blank', 'neuroPrueba', 'width=420,height=520'); } catch (e) {}
+    if (!v || v.closed || typeof v.closed === 'undefined') {
+      fila(gV, 'mal', 'Este iPhone <b>bloquea las ventanas emergentes</b>.',
+        '<b>Es la causa de que la página de Google se quede en blanco</b>: el botón de ' +
+        'Google necesita abrir una ventana para devolver la respuesta. ' +
+        'Ajustes ▸ Apps ▸ Safari ▸ <b>desactivar «Bloquear ventanas emergentes»</b>. ' +
+        'O use «Entrar sin ventana emergente» en la pantalla de acceso, que no la necesita.');
+    } else {
+      try { v.close(); } catch (e2) {}
+      fila(gV, 'ok', 'Las ventanas emergentes están permitidas.',
+        'Si aun así Google se queda en blanco, la ventana se abre pero no puede devolver ' +
+        'la respuesta. Use «Entrar sin ventana emergente» o entre con código.');
+    }
+    this.style.display = 'none';
+  };
+
   document.getElementById('btnCopiar').onclick = function () {
     var ta = document.getElementById('informe');
     ta.style.display = 'block';
