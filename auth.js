@@ -19,6 +19,136 @@
 (function () {
     'use strict';
 
+    // ══════════════════════════════════════════════════════════════════
+    //  QUE UNA LIBRERÍA EXTERNA NO TUMBE LA PÁGINA
+    //  ----------------------------------------------------------------
+    //  Las páginas cargan Tailwind, Lucide (unpkg) y Chart.js (cdnjs)
+    //  desde internet. Si una no llega —una red de hospital que filtra,
+    //  un DNS lento, unpkg caído—, la primera línea que la usa lanza
+    //  «lucide is not defined», y como todo el guion de la página es un
+    //  solo bloque, MUERE ENTERO: se queda una página en blanco, sin un
+    //  mensaje, sin nada. En el ordenador de casa la librería carga y no
+    //  pasa nada; en el teléfono con otra red, no.
+    //
+    //  auth.js se carga ANTES que esas librerías, así que aquí se deja
+    //  un sustituto que no hace nada. Si la de verdad llega, la
+    //  sobrescribe y no se nota; si no llega, se pierden los iconos o
+    //  las gráficas, pero la plataforma funciona.
+    // ══════════════════════════════════════════════════════════════════
+    if (!window.lucide) {
+        window.lucide = { createIcons: function () {}, _sustituto: true };
+    }
+    if (!window.Chart) {
+        window.Chart = function () {
+            return { destroy: function () {}, update: function () {},
+                     resize: function () {}, data: {}, options: {} };
+        };
+        window.Chart._sustituto = true;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  UNA PÁGINA EN BLANCO TIENE QUE DECIR POR QUÉ
+    //  ----------------------------------------------------------------
+    //  Sin esto, cualquier error de guion deja la pantalla vacía y no
+    //  hay forma de saber qué pasó desde un teléfono: no hay consola.
+    // ══════════════════════════════════════════════════════════════════
+    var _errores = [];
+    window.addEventListener('error', function (ev) {
+        if (ev && ev.target && ev.target.tagName === 'SCRIPT' && ev.target.src) {
+            _errores.push('No se pudo cargar: ' + ev.target.src);
+            return;
+        }
+        var m = (ev && ev.message) || 'Error desconocido';
+        var d = (ev && ev.filename) ? ' — ' + String(ev.filename).split('/').pop() +
+                                      ':' + (ev.lineno || '?') : '';
+        _errores.push(m + d);
+    }, true);
+    window.addEventListener('unhandledrejection', function (ev) {
+        var r = ev && ev.reason;
+        _errores.push('Promesa sin atender: ' + ((r && r.message) || r || '?'));
+    });
+
+    function _avisoTecnico(texto, grave) {
+        var id = 'authAvisoTecnico';
+        var el = document.getElementById(id);
+        if (!el) {
+            el = document.createElement('div');
+            el.id = id;
+            el.setAttribute('style',
+                'position:fixed;left:0;right:0;bottom:0;z-index:2147483646;' +
+                'background:' + (grave ? '#7f1d1d' : '#78350f') + ';color:#fff;' +
+                'font:13px/1.5 -apple-system,system-ui,sans-serif;padding:12px 14px;' +
+                'max-height:55vh;overflow:auto;box-shadow:0 -4px 16px rgba(0,0,0,.4);');
+            document.body.appendChild(el);
+        }
+        el.innerHTML = '<div style="max-width:620px;margin:0 auto;">' +
+            '<b style="display:block;margin-bottom:5px;">' +
+            (grave ? '⚠ La página no pudo cargarse' : '⚠ Aviso') + '</b>' +
+            '<div style="white-space:pre-wrap;word-break:break-word;">' +
+            String(texto).replace(/</g, '&lt;') + '</div>' +
+            '<button type="button" id="' + id + 'Copiar" style="margin-top:9px;padding:8px 12px;' +
+            'border:0;border-radius:8px;background:#fff;color:#111;font-weight:700;' +
+            'font-size:12px;">Copiar este mensaje</button> ' +
+            '<button type="button" id="' + id + 'Cerrar" style="margin-top:9px;padding:8px 12px;' +
+            'border:1px solid rgba(255,255,255,.4);border-radius:8px;background:transparent;' +
+            'color:#fff;font-size:12px;">Cerrar</button></div>';
+        var bc = document.getElementById(id + 'Copiar');
+        if (bc) bc.onclick = function () {
+            var t = String(texto);
+            try { navigator.clipboard.writeText(t); } catch (e) {}
+            this.textContent = '✓ Copiado';
+        };
+        var bx = document.getElementById(id + 'Cerrar');
+        if (bx) bx.onclick = function () { el.parentNode.removeChild(el); };
+    }
+
+    /** Qué librerías externas no llegaron */
+    function _librariasQueFaltan() {
+        var f = [];
+        if (window.lucide && window.lucide._sustituto) f.push('los iconos (unpkg.com)');
+        if (window.Chart  && window.Chart._sustituto)  f.push('las gráficas (cdnjs.com)');
+        return f;
+    }
+
+    // Un solo repaso al terminar de cargar. Si la pantalla quedó vacía, se
+    // cuenta todo lo que se sabe; si se ve bien, un aviso discreto y ya.
+    var _repasoHecho = false;
+    window.addEventListener('load', function () {
+        if (_repasoHecho) return;
+        _repasoHecho = true;
+        setTimeout(function () {
+            if (document.getElementById('authOverlay')) return;   // la pantalla de acceso ya está
+            if (document.getElementById('authAvisoTecnico')) return;
+
+            var faltan = _librariasQueFaltan();
+            var texto = (document.body ? (document.body.innerText ||
+                                          document.body.textContent || '') : '').trim();
+
+            if (texto.length > 120) {
+                // La página se ve. Solo se avisa de lo que se perdió por el camino.
+                if (faltan.length) {
+                    _avisoTecnico('No se pudieron cargar ' + faltan.join(' ni ') +
+                        '. La plataforma funciona igual, pero se ve peor. ' +
+                        'Suele ser la red: pruebe con otra.', false);
+                } else if (_errores.length) {
+                    _avisoTecnico('Hubo ' + _errores.length + ' error(es) al cargar:\n• ' +
+                                  _errores.slice(0, 5).join('\n• '), false);
+                }
+                return;
+            }
+
+            // Pantalla vacía: aquí hay que decirlo todo.
+            var partes = [];
+            if (_errores.length) partes.push('Errores:\n• ' + _errores.slice(0, 6).join('\n• '));
+            if (faltan.length)   partes.push('No llegaron ' + faltan.join(' ni ') + '.');
+            if (!partes.length)  partes.push('No se registró ningún error: la página cargó pero ' +
+                                             'quedó vacía. Suele ser falta de memoria en el ' +
+                                             'teléfono. Cierre otras pestañas y vuelva a abrirla.');
+            partes.push('Navegador: ' + navigator.userAgent);
+            _avisoTecnico(partes.join('\n\n'), true);
+        }, 3500);
+    });
+
     var CLAVE_SESION = 'neuro_sesion_v1';
     var BASE = (window.CONFIG && window.CONFIG.URL_SCRIPT) || '';
     var CLIENT_ID = (window.CONFIG && window.CONFIG.GOOGLE_CLIENT_ID) || _clientIdDelHtml();
@@ -198,6 +328,46 @@
     // así cada persona reconoce de un vistazo cuál es la suya y aterriza
     // directamente donde le toca, sin mensajes de «esta sección no es para
     // usted» ni redirecciones a media carga.
+    function _esIOS() {
+        return /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+    }
+    function _esAndroid() {
+        return /Android/i.test(navigator.userAgent || '');
+    }
+    /**
+     * En CUALQUIER teléfono, no solo en el iPhone. El botón normal de Google
+     * abre una ventana aparte que tiene que devolver la respuesta y cerrarse
+     * sola; en el móvil eso falla de dos maneras distintas:
+     *
+     *   • iPhone: la ventana se queda en blanco en accounts.google.com porque
+     *     no encuentra a quién contestar.
+     *   • Android: si la plataforma se abrió desde un enlace de WhatsApp o del
+     *     correo, se abre en el navegador incrustado de esa aplicación, y
+     *     Google RECHAZA iniciar sesión ahí (error «disallowed_useragent»).
+     *
+     * Los dos se arreglan igual: sin ventana emergente. Así que en el móvil
+     * esta vía deja de ser «la alternativa» y pasa a ser la primera opción.
+     */
+    function _esMovil() { return _esIOS() || _esAndroid(); }
+
+    function _botonSinVentana(color) {
+        if (_esMovil()) {
+            var motivo = _esIOS()
+                ? 'Recomendado en el móvil: el botón de arriba deja la página de Google en blanco.'
+                : 'Recomendado en el móvil: el botón de arriba puede quedarse a medias, sobre todo ' +
+                  'si abrió la plataforma desde un enlace de WhatsApp o del correo.';
+            return '<button type="button" class="authSinVentana" ' +
+                     'style="width:100%;margin-top:10px;padding:11px;border:0;border-radius:10px;' +
+                     'background:' + color + ';color:#fff;font-size:13.5px;font-weight:700;' +
+                     'cursor:pointer;">Entrar con Google sin ventana emergente</button>' +
+                   '<p style="font-size:10.5px;color:#64748b;margin:6px 0 0;text-align:center;' +
+                     'line-height:1.4;">' + motivo + '</p>';
+        }
+        return '<p style="text-align:center;margin:9px 0 0;">' +
+                 '<a href="#" class="authSinVentana" style="font-size:11px;color:' + color + ';">' +
+                 'Entrar sin ventana emergente</a></p>';
+    }
+
     function pintarPantalla(mensajeInicial) {
         if (document.getElementById('authOverlay')) return;
 
@@ -235,6 +405,7 @@
               '<div id="authGoogleWrapDocente">' +
                 '<div id="authGoogleBtnDocente" style="display:flex;justify-content:center;min-height:44px;"></div>' +
               '</div>' +
+              _botonSinVentana('#4f46e5') +
               '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 12px;">' +
                 '<div style="flex:1;height:1px;background:#e2e8f0;"></div>' +
                 '<span style="font-size:10px;color:#94a3b8;font-weight:700;">O CON CÓDIGO</span>' +
@@ -260,6 +431,7 @@
               '<div id="authGoogleWrapResidente">' +
                 '<div id="authGoogleBtnResidente" style="display:flex;justify-content:center;min-height:44px;"></div>' +
               '</div>' +
+              _botonSinVentana('#0d9488') +
             '</div>' +
 
             '<p style="font-size:10.5px;color:#64748b;margin:16px 0 0;text-align:center;line-height:1.5;">' +
@@ -285,6 +457,26 @@
         document.body.appendChild(ov);
 
         if (mensajeInicial) mostrarMsg(mensajeInicial, 'err');
+
+        var sinVentana = document.querySelectorAll('.authSinVentana');
+        for (var i = 0; i < sinVentana.length; i++) {
+            sinVentana[i].addEventListener('click', function (ev) {
+                ev.preventDefault();
+                mostrarMsg('Llevándole a Google…', 'ok');
+                entrarConGoogleSinVentana();
+            });
+        }
+
+        // Si la plataforma se abrió desde un enlace de otra aplicación, el
+        // botón normal de Google se va a quedar en blanco. Más vale decirlo
+        // antes que después.
+        if (_navegadorIncrustado()) {
+            mostrarMsg('Ha abierto la plataforma desde un enlace dentro de otra aplicación ' +
+                       '(WhatsApp, el correo, las notas). Ahí el acceso con Google no ' +
+                       'funciona: en Android lo rechaza y en iPhone se queda en blanco. ' +
+                       'Abra esta dirección en ' + (_esAndroid() ? 'Chrome' : 'Safari') +
+                       ', o use «Entrar sin ventana emergente».', 'err');
+        }
 
         var enlaceDiag = document.getElementById('authDiagLink');
         if (enlaceDiag) enlaceDiag.addEventListener('click', function (ev) {
@@ -349,8 +541,16 @@
         // docente, se le mostraba un aviso y se le redirigía después: dos
         // pasos y un mensaje innecesario para algo que ya se sabe aquí.
         var destino = _destinoSegunRol(res.rol);
+        // Si no hay destino por rol —un docente— y veníamos de otra página de
+        // la plataforma, se vuelve allí en vez de dejarlo en el índice.
+        if (!destino && _origenDeVuelta && _origenDeVuelta !== _paginaActual()) {
+            destino = _origenDeVuelta;
+        }
         if (destino) location.replace(destino); else location.reload();
     }
+
+    // Página desde la que se pulsó «entrar sin ventana emergente»
+    var _origenDeVuelta = '';
 
     /** Página que corresponde a un rol, o null si ya está donde debe */
     function _destinoSegunRol(rol) {
@@ -361,6 +561,124 @@
         return destino;
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    //  ENTRAR CON GOOGLE SIN VENTANA EMERGENTE
+    //  ----------------------------------------------------------------
+    //  El botón normal de Google abre una ventana aparte, recoge ahí la
+    //  identidad y se la pasa a la ventana de origen. En el iPhone eso
+    //  falla de una forma muy reconocible: se acepta la cuenta y la
+    //  ventana de accounts.google.com SE QUEDA EN BLANCO, porque no
+    //  puede devolver nada ni cerrarse sola. Pasa sobre todo cuando la
+    //  plataforma se abrió desde un enlace de WhatsApp, del correo o de
+    //  las notas: eso no abre Safari, abre un navegador incrustado
+    //  dentro de esa aplicación, y ahí Google no completa el paso.
+    //
+    //  Esta vía no abre ninguna ventana: lleva a Google en la MISMA
+    //  página y vuelve con la identidad en la dirección. Funciona donde
+    //  la otra no.
+    //
+    //  Requiere que la dirección de vuelta esté dada de alta en Google
+    //  Cloud Console ▸ Credenciales ▸ URI de redirección autorizados.
+    // ══════════════════════════════════════════════════════════════════
+
+    /** La dirección de vuelta: siempre la misma, para dar de alta una sola */
+    function _direccionDeVuelta() {
+        var ruta = (location.pathname || '/').replace(/[^/]*$/, '');
+        return location.origin + ruta + 'index.html';
+    }
+
+    // Las páginas de la plataforma. Sirve de lista blanca: la vuelta de Google
+    // solo puede llevar a una de estas, y nunca a una dirección de fuera. Sin
+    // esto, «state» sería un redirector abierto —cualquiera podría fabricar un
+    // enlace que pasa por la plataforma y acaba en otro sitio.
+    var PAGINAS = ['index.html', 'dashboard.html', 'dashboard_residentes.html',
+                   'dashboard_residentes2.html', 'clases_programadas.html',
+                   'casos_clinicos_y_articulos.html', 'sesiones_diarias.html',
+                   'practica_quirurgica.html', 'clases_investigacion.html',
+                   'avances_tesis.html', 'examen_modulo.html', 'diagnostico.html'];
+
+    function entrarConGoogleSinVentana() {
+        if (!CLIENT_ID) { mostrarMsg('Falta GOOGLE_CLIENT_ID en config.js.', 'err'); return; }
+        var nonce = String(Date.now()) + Math.random().toString(36).slice(2);
+        try { sessionStorage.setItem('neuro_nonce', nonce); } catch (e) {}
+        // Google devuelve «state» tal cual: se usa para volver a la página
+        // desde la que se pulsó, ya que la dirección de vuelta es siempre
+        // index.html (una sola que dar de alta en Cloud Console).
+        var u = 'https://accounts.google.com/o/oauth2/v2/auth' +
+                '?client_id='     + encodeURIComponent(CLIENT_ID) +
+                '&response_type=' + encodeURIComponent('id_token') +
+                '&scope='         + encodeURIComponent('openid email profile') +
+                '&redirect_uri='  + encodeURIComponent(_direccionDeVuelta()) +
+                '&nonce='         + encodeURIComponent(nonce) +
+                '&state='         + encodeURIComponent(_paginaActual()) +
+                '&prompt='        + encodeURIComponent('select_account');
+        location.assign(u);
+    }
+
+    /** ¿Venimos de Google por esa vía? Entonces la identidad está en la dirección. */
+    function _volviendoDeGoogle() {
+        var h = location.hash || '';
+        if (h.indexOf('id_token=') === -1 && h.indexOf('error=') === -1) return false;
+
+        var datos = {};
+        h.replace(/^#/, '').split('&').forEach(function (par) {
+            var i = par.indexOf('=');
+            if (i > 0) datos[par.slice(0, i)] = decodeURIComponent(par.slice(i + 1).replace(/\+/g, ' '));
+        });
+        // La dirección se limpia enseguida: el id_token no tiene por qué
+        // quedarse en el historial ni en lo que se comparte.
+        try { history.replaceState(null, '', location.pathname + location.search); }
+        catch (e) { location.hash = ''; }
+
+        pintarPantalla(null);
+        if (!datos.id_token) {
+            // Los tres errores que de verdad salen aquí, explicados. Un código
+            // suelto de Google no le dice nada a nadie.
+            var e = String(datos.error || '');
+            var explica =
+                /redirect_uri_mismatch/i.test(e)
+                  ? 'Falta dar de alta esta dirección en Google Cloud Console ▸ Credenciales ▸ ' +
+                    'URI de redirección autorizados:\n' + _direccionDeVuelta()
+              : /invalid_client|unauthorized_client/i.test(e)
+                  ? 'El identificador de Google de config.js no es válido para esta dirección. ' +
+                    'Avise a la coordinación.'
+              : /disallowed_useragent/i.test(e)
+                  ? 'Google no permite iniciar sesión dentro del navegador de otra aplicación. ' +
+                    'Abra la plataforma en Chrome o en Safari, no desde el enlace de WhatsApp ' +
+                    'o del correo.'
+              : /access_denied/i.test(e)
+                  ? 'Se canceló el acceso, o esa cuenta no tiene permiso.'
+                  : 'Inténtelo de nuevo, o entre con código.';
+            mostrarMsg('Google no completó el acceso' + (e ? ' (' + e + ')' : '') + '. ' + explica, 'err');
+            return true;
+        }
+        // Solo se acepta como origen una página de la propia plataforma.
+        _origenDeVuelta = (PAGINAS.indexOf(String(datos.state || '').toLowerCase()) !== -1)
+                            ? String(datos.state).toLowerCase() : '';
+
+        mostrarMsg('Verificando su cuenta…', 'ok');
+        entrarConGoogle(datos.id_token).then(function (r) {
+            if (r && r.status === 'success') { aceptar(r); return; }
+            mostrarMsg((r && r.message) || 'Cuenta no autorizada.', 'err');
+        }).catch(function () {
+            mostrarMsg('No se pudo conectar con el servidor.', 'err');
+        });
+        return true;
+    }
+
+    /**
+     * ¿Estamos dentro del navegador incrustado de otra aplicación?
+     * Es donde el acceso con Google se queda en blanco, así que conviene
+     * decirlo ANTES de que la persona lo intente y se quede colgada.
+     */
+    function _navegadorIncrustado() {
+        var ua = navigator.userAgent || '';
+        if (/FBAN|FBAV|FB_IAB|Instagram|Line\/|Twitter|WhatsApp|MicroMessenger|GSA\/|; wv\)/i.test(ua)) return true;
+        // En iOS, el navegador de dentro de una app no pone «Safari» en su firma
+        if (/iPhone|iPad|iPod/i.test(ua) && !/Safari\//i.test(ua)) return true;
+        return false;
+    }
+
     // ── Botones de Google ────────────────────────────────────────────────
     // Se inicializa una sola vez y se dibuja el botón en las dos tarjetas.
     // Ambos hacen lo mismo: quién es cada uno lo decide el servidor a partir
@@ -368,6 +686,7 @@
     // toca, entra igual y va a su sitio. Es a propósito: separar las tarjetas
     // orienta, no restringe.
     var CONTENEDORES_GOOGLE = ['authGoogleBtnDocente', 'authGoogleBtnResidente'];
+    var _vigilanteGoogle = null;
 
     function cargarGoogle() {
         if (!CLIENT_ID) {
@@ -390,6 +709,7 @@
                 google.accounts.id.initialize({
                     client_id: CLIENT_ID,
                     callback: function (resp) {
+                        clearTimeout(_vigilanteGoogle);
                         mostrarMsg('Verificando su cuenta…', 'ok');
                         entrarConGoogle(resp.credential).then(function (r) {
                             if (r && r.status === 'success') { aceptar(r); return; }
@@ -405,6 +725,17 @@
                     google.accounts.id.renderButton(el,
                         { theme: 'outline', size: 'large', width: 300,
                           text: 'signin_with', locale: 'es' });
+                    // Si se pulsa y no vuelve nada, es que la ventana de Google
+                    // se quedó en blanco. Sin esto la persona se queda mirando
+                    // una pantalla muerta sin saber que hay otra vía.
+                    el.addEventListener('click', function () {
+                        clearTimeout(_vigilanteGoogle);
+                        _vigilanteGoogle = setTimeout(function () {
+                            mostrarMsg('¿Se quedó en blanco la página de Google? Es un problema ' +
+                                       'conocido del iPhone. Use «Entrar sin ventana emergente», ' +
+                                       'aquí abajo, o abra la plataforma en Safari.', 'err');
+                        }, 40000);
+                    });
                 });
             } catch (e) {
                 CONTENEDORES_GOOGLE.forEach(function (id) {
@@ -585,6 +916,7 @@
     function arrancar() {
         if (!BASE) return;   // sin config.js ya se avisa por otra vía
         try {
+            if (_volviendoDeGoogle()) return;
             if (_rescatePorURL()) return;
             if (!sesion()) { pintarPantalla(null); return; }
             comprobarAccesoPagina();
