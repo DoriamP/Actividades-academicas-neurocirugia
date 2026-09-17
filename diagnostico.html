@@ -14,9 +14,11 @@
   Reglas de esta página, y son a propósito:
     • NO carga auth.js. Si el problema está ahí, esta página tiene que
       seguir funcionando.
-    • NO usa nada que Safari no entendiera hace años: ni funciones flecha,
-      ni plantillas, ni clases. Si el iPhone es viejo y el problema es ese,
-      esta página lo dice en vez de morirse igual que las demás.
+    • NO usa nada que un navegador de hace años no entendiera: ni funciones
+      flecha, ni plantillas, ni clases. Si el teléfono es viejo y el problema
+      es ese, esta página lo dice en vez de morirse igual que las demás.
+    • Sirve igual para iPhone y para Android: las causas son distintas, pero
+      el desenlace —no se puede entrar— es el mismo.
     • NO necesita sesión. Todo lo que comprueba se puede comprobar sin
       haber entrado.
     • Carga config.js dentro de un try: si falta o está mal, lo dice.
@@ -74,7 +76,7 @@
     <button class="b1" id="btnSitio" type="button">Comprobar esa dirección</button>
   </div>
 
-  <button class="b1" id="btnVentana" type="button">🪟 Probar si el iPhone bloquea las ventanas emergentes</button>
+  <button class="b1" id="btnVentana" type="button">🪟 Probar si este teléfono bloquea las ventanas emergentes</button>
   <button class="b1" id="btnCopiar" type="button">📋 Copiar el informe para enviarlo</button>
   <button class="b2" id="btnBorrar" type="button">🧹 Borrar los datos guardados en este navegador</button>
   <button class="b3" id="btnVolver" type="button">← Volver a la plataforma</button>
@@ -141,6 +143,21 @@
                     'Actualización de software): con esta versión hay partes de la ' +
                     'plataforma que el navegador no entiende.');
   }
+  // Android: versión y navegador
+  var esAndroid = /Android/i.test(ua);
+  var mAnd = ua.match(/Android (\d+)(?:\.(\d+))?/);
+  if (esAndroid && mAnd) {
+    var mayorA = parseInt(mAnd[1], 10);
+    fila(gA, mayorA >= 9 ? 'ok' : 'mal',
+      'Sistema: <b>Android ' + mAnd[1] + (mAnd[2] ? '.' + mAnd[2] : '') + '</b>',
+      mayorA >= 9 ? 'Versión suficiente para la plataforma.'
+                  : 'Demasiado antiguo: hay partes de la plataforma que el navegador no entiende.');
+    var mCh = ua.match(/Chrome\/(\d+)/);
+    if (mCh) fila(gA, parseInt(mCh[1], 10) >= 90 ? 'ok' : 'mal',
+      'Navegador: <b>Chrome ' + mCh[1] + '</b>',
+      parseInt(mCh[1], 10) >= 90 ? '' : 'Conviene actualizarlo desde Google Play.');
+  }
+
   if (esApple) {
     fila(gA, 'duda', 'En el iPhone <b>todos los navegadores usan el mismo motor</b>',
       'Safari, Chrome y Firefox comparten WebKit y los ajustes de Safari. Si falla en ' +
@@ -152,12 +169,16 @@
   // dentro de esa aplicación — y ahí Google se queda en blanco.
   var incrustado = /FBAN|FBAV|FB_IAB|Instagram|Line\/|Twitter|WhatsApp|MicroMessenger|GSA\/|; wv\)/i.test(ua) ||
                    (esApple && !/Safari\//i.test(ua));
+  var navReal = esAndroid ? 'Chrome' : 'Safari';
   fila(gA, incrustado ? 'mal' : 'ok',
-    incrustado ? 'Está dentro del <b>navegador de otra aplicación</b>, no en Safari'
+    incrustado ? 'Está dentro del <b>navegador de otra aplicación</b>, no en ' + navReal
                : 'Está en un navegador de verdad, no dentro de otra aplicación.',
-    incrustado ? '<b>Es la causa más probable de que la página de Google se quede en ' +
-                 'blanco.</b> Toque el icono de compartir o los tres puntos y elija ' +
-                 '«Abrir en Safari», o escriba la dirección directamente en Safari.' : '');
+    incrustado ? '<b>Es la causa más probable de que el acceso con Google no termine.</b> ' +
+                 (esAndroid ? 'En Android, Google <b>rechaza</b> iniciar sesión ahí ' +
+                              '(error «disallowed_useragent»). '
+                            : 'En iPhone la ventana de Google se queda en blanco. ') +
+                 'Toque los tres puntos o el icono de compartir y elija «Abrir en ' +
+                 navReal + '», o escriba la dirección directamente ahí.' : '');
   fila(gA, 'ok', 'Hora del aparato: <b>' + new Date().toString().slice(0, 33) + '</b>');
 
   // ── 2. Lo que el navegador permite ───────────────────────────────────
@@ -301,12 +322,12 @@
         : 'Aún no se conoce el identificador de Google',
     idc ? '' : 'Se sabrá al cargar el config.js de la plataforma.');
 
-  fila(gF, 'duda', 'Si la página de Google <b>se queda en blanco</b> tras aceptar la cuenta',
-    'No es que falle el acceso: es que esa ventana no puede devolver la respuesta ni ' +
-    'cerrarse sola. Pasa en el iPhone cuando la plataforma se abrió desde un enlace ' +
-    'dentro de otra aplicación. Soluciones: abrir la plataforma en <b>Safari</b>, usar ' +
-    '<b>«Entrar sin ventana emergente»</b> en la pantalla de acceso, o entrar con ' +
-    '<b>código</b>.');
+  fila(gF, 'duda', 'Si el acceso con Google <b>no termina</b> tras aceptar la cuenta',
+    'No falla la cuenta ni los permisos: falla la ventana que Google abre y que luego ' +
+    'tiene que devolver la respuesta. En iPhone se queda en blanco; en Android, si se ' +
+    'abrió desde otra aplicación, Google lo rechaza. Las tres salidas, iguales para ' +
+    'ambos: abrir la plataforma en <b>' + navReal + '</b>, usar <b>«Entrar sin ventana ' +
+    'emergente»</b> en la pantalla de acceso, o entrar con <b>código</b>.');
 
   var g1 = document.createElement('script');
   g1.src = 'https://accounts.google.com/gsi/client';
@@ -410,10 +431,11 @@
     var v = null;
     try { v = window.open('about:blank', 'neuroPrueba', 'width=420,height=520'); } catch (e) {}
     if (!v || v.closed || typeof v.closed === 'undefined') {
-      fila(gV, 'mal', 'Este iPhone <b>bloquea las ventanas emergentes</b>.',
+      fila(gV, 'mal', 'Este navegador <b>bloquea las ventanas emergentes</b>.',
         '<b>Es la causa de que la página de Google se quede en blanco</b>: el botón de ' +
         'Google necesita abrir una ventana para devolver la respuesta. ' +
-        'Ajustes ▸ Apps ▸ Safari ▸ <b>desactivar «Bloquear ventanas emergentes»</b>. ' +
+        (esAndroid ? 'Chrome ▸ ⋮ ▸ Ajustes ▸ Configuración del sitio ▸ <b>Ventanas emergentes</b>. '
+                   : 'Ajustes ▸ Apps ▸ Safari ▸ <b>desactivar «Bloquear ventanas emergentes»</b>. ') +
         'O use «Entrar sin ventana emergente» en la pantalla de acceso, que no la necesita.');
     } else {
       try { v.close(); } catch (e2) {}
