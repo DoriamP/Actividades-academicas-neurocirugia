@@ -9,7 +9,10 @@
     <script src="config.js"></script>
     <!-- Autenticación: pantalla de acceso y token en todas las llamadas -->
     <script src="auth.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Si el navegador no puede traer los iconos —red que filtra, o el
+         servidor caído— se usa la copia guardada en el propio sitio. Se
+         repintan al llegar, porque para entonces la página ya se dibujó. -->
+    <script src="https://unpkg.com/lucide@latest" onerror="var s=document.createElement('script');s.src='lib/lucide.min.js';s.onload=function(){try{if(window.lucide&&lucide.createIcons)lucide.createIcons();}catch(e){}};document.head.appendChild(s);"></script>
     <!-- Google Identity Services -->
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
@@ -299,29 +302,89 @@
         });
 
         // ─── 1. Fetch de Google Sheets ──────────────────────────────────────
+        //
+        // Antes, cualquier fallo aquí —de red, de datos o de pintado— acababa
+        // en el mismo cartel: «Error de sincronización. Verifica que tu Apps
+        // Script tenga doGet(e)». Eso culpaba al servidor sin haberlo
+        // comprobado, y mandaba a revisar algo que casi nunca era el problema.
+        // Ahora cada fallo dice lo suyo, y un error al dibujar no se disfraza
+        // de error de conexión: los datos ya están, se enseñan igual.
+        function _falloPanel(titulo, detalle, consejo) {
+            var el = document.getElementById('loadingState');
+            if (!el) return;
+            el.classList.remove('hidden');
+            el.innerHTML =
+                '<div class="text-center max-w-lg mx-auto">' +
+                  '<p class="font-bold text-lg text-red-600">' + titulo + '</p>' +
+                  '<p class="text-sm text-slate-700 mt-2" style="word-break:break-word;">' +
+                    String(detalle || '').replace(/</g, '&lt;') + '</p>' +
+                  (consejo ? '<p class="text-xs text-slate-500 mt-3">' + consejo + '</p>' : '') +
+                  '<button type="button" id="btnCopiarFallo" class="mt-4 px-4 py-2 bg-slate-800 ' +
+                    'text-white text-xs font-bold rounded-lg">Copiar este error</button>' +
+                '</div>';
+            var b = document.getElementById('btnCopiarFallo');
+            if (b) b.onclick = function () {
+                var t = titulo + '\n' + detalle + '\n' + navigator.userAgent;
+                try { navigator.clipboard.writeText(t); } catch (e) {}
+                this.textContent = '✓ Copiado';
+            };
+        }
+
         function fetchDataFromSheets() {
             fetch(`${URL_SCRIPT_GOOGLE}?action=getEvaluations`)
-                .then(r => r.json())
-                .then(data => {
+                .then(r => r.text())
+                .then(txt => {
+                    var data;
+                    try { data = JSON.parse(txt); }
+                    catch (e) {
+                        _falloPanel('El servidor no devolvió datos legibles',
+                            String(txt).slice(0, 200),
+                            'Suele pasar cuando el despliegue del Apps Script está caducado: ' +
+                            'vuelva a publicarlo (Implementar ▸ Administrar implementaciones ▸ Nueva versión).');
+                        return;
+                    }
+                    // El servidor contesta bien, pero diciendo que no
+                    if (data && data.status === 'error') {
+                        _falloPanel('El servidor rechazó la petición',
+                            data.message || '(sin motivo)',
+                            /AUTH/i.test(data.code || '')
+                              ? 'Su sesión ya no vale en este navegador: salga y vuelva a entrar.'
+                              : 'Si dice que el perfil no tiene permiso, revise su rol en configurarUsuarios.');
+                        return;
+                    }
+                    if (!Array.isArray(data)) {
+                        _falloPanel('Respuesta inesperada del servidor',
+                            'Se esperaba una lista de evaluaciones y llegó: ' +
+                            (typeof data) + ' — ' + String(txt).slice(0, 120));
+                        return;
+                    }
+
                     dbMasterData = data;
                     // Detectar si el backend nuevo está publicado: solo la versión
                     // nueva de getEvaluations incluye el campo "_row".
-                    NEW_BACKEND = Array.isArray(data) && data.some(r => r && r._row !== undefined);
+                    NEW_BACKEND = data.some(r => r && r._row !== undefined);
                     document.getElementById('loadingState').classList.add('hidden');
                     document.getElementById('dashboardContent').classList.remove('hidden');
-                    populateFilterOptions();
-                    applyFiltersAndRender();
-                    lucide.createIcons();
+
+                    // Los datos ya están. Si algo falla al dibujarlos, se dice,
+                    // pero no se esconde el panel entero ni se culpa a la red.
+                    try {
+                        populateFilterOptions();
+                        applyFiltersAndRender();
+                    } catch (e) {
+                        console.error(e);
+                        _falloPanel('Los datos llegaron, pero no se pudieron dibujar',
+                            (e && e.message) || String(e),
+                            'Las evaluaciones están cargadas: pruebe a recargar la página.');
+                    }
+                    try { lucide.createIcons(); } catch (e) {}
                 })
                 .catch(err => {
                     console.error(err);
-                    document.getElementById('loadingState').innerHTML = `
-                        <div class="text-red-500">
-                            <i data-lucide="alert-triangle" class="w-12 h-12 mx-auto mb-2"></i>
-                            <p class="font-bold text-lg">Error de sincronización</p>
-                            <p class="text-xs text-slate-500 mt-2 max-w-md mx-auto">Verifica que tu Google Apps Script tenga la función <code class="bg-red-50 px-1 rounded">doGet(e)</code> publicada correctamente.</p>
-                        </div>`;
-                    lucide.createIcons();
+                    _falloPanel('No se pudo conectar con el servidor',
+                        (err && err.message) || String(err),
+                        'Pruebe con otra red —algunas del hospital bloquean script.google.com— ' +
+                        'o compruebe que config.js lleva la dirección del despliegue.');
                 });
         }
 
