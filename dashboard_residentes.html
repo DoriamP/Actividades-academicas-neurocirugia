@@ -901,10 +901,17 @@ var NOTAS_CANON = (function () {
                     return { nombre: t.comp, promedio: t.promedio, peso: t.peso,
                              aporta: t.pond, evaluaciones: t.count };
                 });
+            // Quién evaluó la práctica quirúrgica de este módulo y con qué nota.
+            // La nota práctica es el promedio de los promedios POR ESPECIALISTA,
+            // no de las evaluaciones sueltas: sin esta lista la cifra no se
+            // puede comprobar. En pantalla ya se enseña; faltaba en el papel.
+            var detPract = (res.practicaPorModulo && res.practicaPorModulo[0]) || null;
             modulos.push({
                 modulo: m, nota: res.final,
                 teorica: res.teorica, practica: res.practica,
-                subTeoria: teoria, subPractica: pract
+                subTeoria: teoria, subPractica: pract,
+                practicaEsp:   detPract ? detPract.especialistas : [],
+                practicaEvals: detPract ? detPract.evals : 0
             });
         });
         var notaModulos = modulos.length
@@ -976,7 +983,8 @@ var NOTAS_CANON = (function () {
             componentes.push({
                 tipo: 'modulo', nombre: 'Módulo ' + m.modulo + ' de neurocirugía',
                 nota: m.nota, teorica: m.teorica, practica: m.practica,
-                subTeoria: m.subTeoria, subPractica: m.subPractica
+                subTeoria: m.subTeoria, subPractica: m.subPractica,
+                practicaEsp: m.practicaEsp, practicaEvals: m.practicaEvals
             });
         });
         componentes.push({ tipo: 'investigacion', nombre: 'Investigación',
@@ -1255,6 +1263,29 @@ var IMPRESION = (function () {
                 filas += '<tr><td class="imp-sub"><b>b) Práctica quirúrgica</b></td>'
                       +  '<td style="text-align:right;font-weight:800;color:' + color(c.practica) + ';">'
                       +  pct(c.practica) + '</td></tr>';
+
+                // Quién evaluó la práctica y con qué nota. La nota práctica del
+                // módulo es el promedio de los promedios POR ESPECIALISTA: uno
+                // que evaluó diecisiete veces pesa lo mismo que otro que evaluó
+                // cuatro. Sin esta lista, la cifra hay que creérsela.
+                var esp = c.practicaEsp || [];
+                esp.forEach(function (e) {
+                    filas += '<tr><td class="imp-sub2" style="padding-left:34px !important;">'
+                          +  esc(e.nombre)
+                          +  ' <span style="color:#cbd5e1;">· ' + plural(e.n, 'evaluación', 'evaluaciones')
+                          +  '</span></td>'
+                          +  '<td style="text-align:right;color:' + color(e.promedio) + ';font-weight:700;">'
+                          +  pct(e.promedio) + '</td></tr>';
+                });
+                if (esp.length) {
+                    filas += '<tr><td class="imp-sub2" colspan="2" style="padding-left:34px !important;'
+                          +  'color:#94a3b8;font-size:9px;">('
+                          +  esp.map(function (e) { return e.promedio + '%'; }).join(' + ')
+                          +  ') ÷ ' + plural(esp.length, 'especialista', 'especialistas')
+                          +  ' = <b style="color:#475569;">' + pct(c.practica) + '</b> · '
+                          +  plural(c.practicaEvals || 0, 'evaluación en total', 'evaluaciones en total')
+                          +  '</td></tr>';
+                }
             } else {
                 (c.sub || []).forEach(function (s) {
                     var det = [];
