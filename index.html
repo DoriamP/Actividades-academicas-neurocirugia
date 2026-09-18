@@ -9,11 +9,14 @@
     <script src="config.js"></script>
     <!-- Autenticación: pantalla de acceso y token en todas las llamadas -->
     <script src="auth.js"></script>
-    <!-- Versión fija y en cdnjs: «unpkg.com/lucide@latest» resuelve por redirección,
-         cambia sin avisar y es lo primero que cae en una red que filtra. Si aun
-         así no llega, auth.js deja un sustituto y la página no se cae. -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.460.0/lucide.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <!-- Si el navegador no puede traer los iconos —red que filtra, o el
+         servidor caído— se usa la copia guardada en el propio sitio. Se
+         repintan al llegar, porque para entonces la página ya se dibujó. -->
+    <script src="https://unpkg.com/lucide@latest" onerror="var s=document.createElement('script');s.src='lib/lucide.min.js';s.onload=function(){try{if(window.lucide&&lucide.createIcons)lucide.createIcons();}catch(e){}};document.head.appendChild(s);"></script>
+    <!-- Si la red bloquea el CDN —pasa en el hospital— se usa la copia
+         guardada en el propio sitio (lib/). Los iconos se repintan al
+         llegar, porque para entonces la página ya se dibujó una vez. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" onerror="var s=document.createElement('script');s.src='lib/chart.umd.min.js';s.onload=function(){try{if(window.lucide&&lucide.createIcons)lucide.createIcons();}catch(e){}};document.head.appendChild(s);"></script>
     <!-- Google Identity Services -->
     <style>
         .scroll-snap-x { scroll-snap-type: x mandatory; }
