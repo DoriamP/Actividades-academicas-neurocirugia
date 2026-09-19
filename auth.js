@@ -39,10 +39,17 @@
         window.lucide = { createIcons: function () {}, _sustituto: true };
     }
     if (!window.Chart) {
+        // Se imita lo justo para que el código que pinta gráficas no lance:
+        // «data.datasets[0].data = …» es lo primero que se hace con una gráfica.
         window.Chart = function () {
             return { destroy: function () {}, update: function () {},
-                     resize: function () {}, data: {}, options: {} };
+                     resize: function () {}, render: function () {},
+                     data: { labels: [], datasets: [{ data: [] }] },
+                     options: { scales: {}, plugins: {} },
+                     canvas: null, ctx: null };
         };
+        window.Chart.register = function () {};
+        window.Chart.defaults = { font: {}, plugins: {}, scale: {}, scales: {} };
         window.Chart._sustituto = true;
     }
 
@@ -52,10 +59,11 @@
     //  Sin esto, cualquier error de guion deja la pantalla vacía y no
     //  hay forma de saber qué pasó desde un teléfono: no hay consola.
     // ══════════════════════════════════════════════════════════════════
-    var _errores = [];
+    var _errores = [], _scriptsCaidos = [];
     window.addEventListener('error', function (ev) {
         if (ev && ev.target && ev.target.tagName === 'SCRIPT' && ev.target.src) {
             _errores.push('No se pudo cargar: ' + ev.target.src);
+            if (_scriptsCaidos.indexOf(ev.target.src) === -1) _scriptsCaidos.push(ev.target.src);
             return;
         }
         var m = (ev && ev.message) || 'Error desconocido';
@@ -68,7 +76,25 @@
         _errores.push('Promesa sin atender: ' + ((r && r.message) || r || '?'));
     });
 
+    /**
+     * Un aviso que no impide trabajar no debe salir en cada pantalla. El de
+     * las librerías aparece UNA vez por visita, y quien ya sepa que su red
+     * filtra ese servidor puede callarlo del todo: repetirlo en cada página
+     * no añade nada y acaba enseñando a ignorar los avisos, incluidos los
+     * que sí importan. Los graves —la página no cargó— salen siempre.
+     */
+    function _avisoSilenciado(grave) {
+        if (grave) return false;
+        try { if (localStorage.getItem('neuro_sin_avisos') === '1') return true; } catch (e) {}
+        try {
+            if (sessionStorage.getItem('neuro_aviso_visto') === '1') return true;
+            sessionStorage.setItem('neuro_aviso_visto', '1');
+        } catch (e2) {}
+        return false;
+    }
+
     function _avisoTecnico(texto, grave) {
+        if (_avisoSilenciado(grave)) return;
         var id = 'authAvisoTecnico';
         var el = document.getElementById(id);
         if (!el) {
@@ -91,7 +117,12 @@
             'font-size:12px;">Copiar este mensaje</button> ' +
             '<button type="button" id="' + id + 'Cerrar" style="margin-top:9px;padding:8px 12px;' +
             'border:1px solid rgba(255,255,255,.4);border-radius:8px;background:transparent;' +
-            'color:#fff;font-size:12px;">Cerrar</button></div>';
+            'color:#fff;font-size:12px;">Cerrar</button>' +
+            (grave ? '' :
+              ' <button type="button" id="' + id + 'Nunca" style="margin-top:9px;padding:8px 12px;' +
+              'border:1px solid rgba(255,255,255,.4);border-radius:8px;background:transparent;' +
+              'color:#fff;font-size:12px;">No volver a avisar</button>') +
+            '</div>';
         var bc = document.getElementById(id + 'Copiar');
         if (bc) bc.onclick = function () {
             var t = String(texto);
@@ -100,13 +131,33 @@
         };
         var bx = document.getElementById(id + 'Cerrar');
         if (bx) bx.onclick = function () { el.parentNode.removeChild(el); };
+        var bn = document.getElementById(id + 'Nunca');
+        if (bn) bn.onclick = function () {
+            try { localStorage.setItem('neuro_sin_avisos', '1'); } catch (e) {}
+            el.parentNode.removeChild(el);
+        };
     }
 
-    /** Qué librerías externas no llegaron */
+    /**
+     * Qué librerías externas pidió ESTA página y no llegaron.
+     *
+     * Antes se miraba si el sustituto seguía puesto, y eso avisaba de más: el
+     * panel de calificaciones no usa Chart.js, así que el sustituto no se
+     * tocaba nunca y la página se quejaba de unas gráficas que jamás pidió.
+     * Ahora se mira lo único que no engaña: qué archivos fallaron al cargarse.
+     */
     function _librariasQueFaltan() {
         var f = [];
-        if (window.lucide && window.lucide._sustituto) f.push('los iconos (unpkg.com)');
-        if (window.Chart  && window.Chart._sustituto)  f.push('las gráficas (cdnjs.com)');
+        for (var i = 0; i < _scriptsCaidos.length; i++) {
+            var u = _scriptsCaidos[i];
+            var nombre = /lucide/i.test(u)   ? 'los iconos'
+                       : /chart/i.test(u)    ? 'las gráficas'
+                       : /tailwind/i.test(u) ? 'los estilos'
+                       : 'un componente';
+            var origen = '';
+            try { origen = u.split('/')[2] || ''; } catch (e) {}
+            f.push(nombre + (origen ? ' (' + origen + ')' : ''));
+        }
         return f;
     }
 
@@ -128,8 +179,10 @@
                 // La página se ve. Solo se avisa de lo que se perdió por el camino.
                 if (faltan.length) {
                     _avisoTecnico('No se pudieron cargar ' + faltan.join(' ni ') +
-                        '. La plataforma funciona igual, pero se ve peor. ' +
-                        'Suele ser la red: pruebe con otra.', false);
+                        '. La plataforma funciona igual: solo se ve peor. ' +
+                        'Puede ser su red o que ese servidor esté caído. ' +
+                        'Si le pasa siempre, avise a la coordinación para guardar una ' +
+                        'copia en el propio sitio.', false);
                 } else if (_errores.length) {
                     _avisoTecnico('Hubo ' + _errores.length + ' error(es) al cargar:\n• ' +
                                   _errores.slice(0, 5).join('\n• '), false);
