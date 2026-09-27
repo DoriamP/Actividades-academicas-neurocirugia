@@ -1170,9 +1170,12 @@ var IMPRESION = (function () {
 '  letter-spacing: .05em; color: #334155; margin: 15px 0 6px; border-bottom: 1px solid #cbd5e1;',
 '  padding-bottom: 3px; overflow: hidden; }',
 '#zonaImpresion .imp-comp { border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }',
-'#zonaImpresion .imp-comp-cab { background: #f1f5f9; padding: 6px 10px; display: flex;',
+// El total del componente manda sobre todo lo que lleva debajo: el
+// resaltado más marcado y la letra más grande de la ficha, salvo la
+// nota del año, que tiene su propio recuadro.
+'#zonaImpresion .imp-comp-cab { background: #c7d2fe; padding: 8px 11px; display: flex;',
 '  justify-content: space-between; align-items: baseline; gap: 10px; }',
-'#zonaImpresion .imp-comp-cab b { font-size: 11.5px; }',
+'#zonaImpresion .imp-comp-cab b { font-size: 13.5px; color: #1e1b4b; }',
 '#zonaImpresion td, #zonaImpresion th { padding: 4px 10px; font-size: 10px; vertical-align: top; }',
 '#zonaImpresion tbody tr + tr td { border-top: 1px solid #f1f5f9; }',
 '#zonaImpresion .imp-sub { color: #475569; }',
@@ -1180,7 +1183,7 @@ var IMPRESION = (function () {
 // primero al leer el papel. Destacan por el tamaño, la negrita y un
 // resaltado suave, sin rayas: las líneas partían el bloque en trozos y
 // hacían más ruido del que quitaban.
-'#zonaImpresion .imp-total td { background: #eef2ff; border-top: 0 !important;',
+'#zonaImpresion .imp-total td { background: #e0e7ff; border-top: 0 !important;',
 '  font-size: 12.5px; font-weight: 800; color: #1e1b4b;',
 '  padding-top: 7px; padding-bottom: 7px; }',
 '#zonaImpresion .imp-sub2 { color: #64748b; padding-left: 22px !important; }',
@@ -1320,7 +1323,8 @@ var IMPRESION = (function () {
 
             h += '<div class="imp-comp imp-junto">'
               +  '<div class="imp-comp-cab"><b>' + c.n + ') ' + esc(c.nombre) + '</b>'
-              +  '<span style="font-weight:800;color:' + color(c.nota) + ';">' + pct(c.nota) + '</span></div>'
+              +  '<span style="font-weight:900;font-size:15px;color:' + color(c.nota) + ';">'
+              +  pct(c.nota) + '</span></div>'
               +  '<table><tbody>' + filas + '</tbody></table></div>';
         });
 
