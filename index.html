@@ -4924,6 +4924,12 @@ var IMPRESION = (function () {
 '#zonaImpresion td, #zonaImpresion th { padding: 4px 10px; font-size: 10px; vertical-align: top; }',
 '#zonaImpresion tbody tr + tr td { border-top: 1px solid #f1f5f9; }',
 '#zonaImpresion .imp-sub { color: #475569; }',
+// Los totales de teoría y de práctica son las dos cifras que se buscan
+// primero al leer el papel: renglón gris, línea encima y letra más
+// grande y oscura, para separarlos de los subcomponentes que suman.
+'#zonaImpresion .imp-total td { background: #eef2f7; border-top: 1.5px solid #94a3b8 !important;',
+'  font-size: 11.5px; color: #0f172a; padding-top: 6px; padding-bottom: 6px; }',
+'#zonaImpresion .imp-total td:first-child { letter-spacing: .01em; }',
 '#zonaImpresion .imp-sub2 { color: #64748b; padding-left: 22px !important; }',
 '#zonaImpresion .imp-final { border: 2px solid #1e293b; border-radius: 8px; margin-top: 10px;',
 '  padding: 9px 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }',
@@ -5002,8 +5008,8 @@ var IMPRESION = (function () {
                           +  '<td style="text-align:right;color:' + color(s.promedio) + ';font-weight:700;">'
                           +  pct(s.promedio) + '</td></tr>';
                 });
-                filas += '<tr><td class="imp-sub"><b>a) Teoría</b></td>'
-                      +  '<td style="text-align:right;font-weight:800;color:' + color(c.teorica) + ';">'
+                filas += '<tr class="imp-total"><td><b>a) Teoría</b></td>'
+                      +  '<td style="text-align:right;font-weight:900;color:' + color(c.teorica) + ';">'
                       +  pct(c.teorica) + '</td></tr>';
                 (c.subPractica || []).forEach(function (s) {
                     filas += '<tr><td class="imp-sub2">' + esc(s.nombre)
@@ -5011,8 +5017,8 @@ var IMPRESION = (function () {
                           +  '</td><td style="text-align:right;color:' + color(s.promedio) + ';font-weight:700;">'
                           +  pct(s.promedio) + '</td></tr>';
                 });
-                filas += '<tr><td class="imp-sub"><b>b) Práctica quirúrgica</b></td>'
-                      +  '<td style="text-align:right;font-weight:800;color:' + color(c.practica) + ';">'
+                filas += '<tr class="imp-total"><td><b>b) Práctica quirúrgica</b></td>'
+                      +  '<td style="text-align:right;font-weight:900;color:' + color(c.practica) + ';">'
                       +  pct(c.practica) + '</td></tr>';
 
                 // Quién evaluó la práctica y con qué nota. La nota práctica del
