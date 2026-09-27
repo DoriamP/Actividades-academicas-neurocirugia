@@ -4999,24 +4999,37 @@ var IMPRESION = (function () {
                      + pie() + '</div>';
         }
 
-        // Investigación y la rotación externa NO cuelgan de ningún módulo: son
-        // componentes del año, igual que cada módulo de neurocirugía. Al pedir
-        // un módulo concreto se enseña solo ese, porque verlos debajo hacía
-        // pensar que formaban parte de él.
+        // Los componentes del año, en este orden: primero los módulos de
+        // neurocirugía y debajo la investigación y la rotación externa. No
+        // cuelgan de ningún módulo —son componentes por derecho propio— pero
+        // tienen que estar, porque la nota del año se calcula con todos.
+        //
+        // Al pedir un módulo suelto, los módulos se filtran a ese; la
+        // investigación y la rotación se toman del CURSO COMPLETO, que es lo
+        // que son: no pertenecen a ningún periodo del filtro.
         var soloEsteModulo = !!o.modulo;
-        if (soloEsteModulo) comps = comps.filter(function (c) { return c.tipo === 'modulo'; });
+        var completo = o.anualCompleto || a;
+        var otros = (completo.componentes || []).filter(function (c) {
+            return c.tipo !== 'modulo';
+        });
+        comps = comps.filter(function (c) { return c.tipo === 'modulo'; }).concat(otros);
 
-        h += '<h2 class="imp-tit">' +
-             (soloEsteModulo ? 'Módulo ' + esc(o.modulo)
-                             : 'Componentes del año académico') + '</h2>';
-        if (!soloEsteModulo) {
-            h += '<p style="font-size:9.5px;color:#64748b;margin:-2px 0 8px;line-height:1.45;">'
-              +  'La nota del año es el promedio de estos componentes. Cada módulo de '
-              +  'neurocirugía, la investigación y la rotación externa cuentan por igual: '
-              +  'ninguno depende de otro.</p>';
-        }
+        h += '<h2 class="imp-tit">Componentes del año académico</h2>'
+          +  '<p style="font-size:9.5px;color:#334155;margin:-2px 0 8px;line-height:1.45;">'
+          +  'La nota del año es el promedio de estos componentes. Cada módulo de '
+          +  'neurocirugía, la investigación y la rotación externa cuentan por igual: '
+          +  'ninguno depende de otro.'
+          +  (soloEsteModulo
+                ? ' De los módulos se muestra solo el <b>' + esc(o.modulo) + '</b>, que es el '
+                  + 'pedido; la investigación y la rotación externa se muestran completas.'
+                : '')
+          +  '</p>';
 
+        // Se renumera aquí: la lista mezcla el cálculo del filtro con el del
+        // curso completo, así que los números originales no servirían.
+        var nOrden = 0;
         comps.forEach(function (c) {
+            nOrden++;
             var filas = '';
             if (c.tipo === 'modulo') {
                 // Primero el total, y debajo lo que lo compone. Al revés se leía
@@ -5089,7 +5102,7 @@ var IMPRESION = (function () {
             }
 
             h += '<div class="imp-comp imp-junto">'
-              +  '<div class="imp-comp-cab"><b>' + c.n + ') ' + esc(c.nombre) + '</b>'
+              +  '<div class="imp-comp-cab"><b>' + nOrden + ') ' + esc(c.nombre) + '</b>'
               +  '<span style="font-weight:900;font-size:16px;color:#111827;">'
               +  pct(c.nota) + '</span></div>'
               +  '<table><tbody>' + filas + '</tbody></table></div>';
@@ -5120,12 +5133,11 @@ var IMPRESION = (function () {
                     return c.tipo === 'modulo' ? c.nombre.replace(' de neurocirugía', '') : c.nombre;
                 }).join(', ')
             : 'Sin componentes evaluados todavía';
-        if (soloEsteModulo) {
-            explica += '<br>Se calcula con todo el curso, no solo con este módulo.';
-        }
+        explica += '<br>Provisional: se recalcula conforme se evalúan los componentes '
+                 + 'que faltan.';
 
         h += '<div class="imp-final imp-junto"><div><b style="font-size:12px;">'
-          +  'NOTA FINAL DEL AÑO 2026-2027</b>'
+          +  'NOTA DEL AÑO 2026-2027 · PROVISIONAL</b>'
           +  '<div style="font-size:9px;color:#64748b;margin-top:2px;">' + explica + '</div></div>'
           +  '<div style="font-size:20px;font-weight:900;color:' + color(anualAnio.final) + ';">'
           +  pct(anualAnio.final) + '</div></div>';
