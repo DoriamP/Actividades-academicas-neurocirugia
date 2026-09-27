@@ -4917,26 +4917,24 @@ var IMPRESION = (function () {
 '#zonaImpresion h2.imp-tit { font-size: 11.5px; font-weight: 800; text-transform: uppercase;',
 '  letter-spacing: .05em; color: #334155; margin: 15px 0 6px; border-bottom: 1px solid #cbd5e1;',
 '  padding-bottom: 3px; overflow: hidden; }',
-'#zonaImpresion .imp-comp { border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }',
-// El total del componente manda sobre todo lo que lleva debajo: el
-// resaltado más marcado y la letra más grande de la ficha, salvo la
-// nota del año, que tiene su propio recuadro.
-'#zonaImpresion .imp-comp-cab { background: #c7d2fe; padding: 8px 11px; display: flex;',
-'  justify-content: space-between; align-items: baseline; gap: 10px; }',
-'#zonaImpresion .imp-comp-cab b { font-size: 13.5px; color: #1e1b4b; }',
-'#zonaImpresion td, #zonaImpresion th { padding: 4px 10px; font-size: 10px; vertical-align: top; }',
-'#zonaImpresion tbody tr + tr td { border-top: 1px solid #f1f5f9; }',
+'#zonaImpresion .imp-comp { border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 14px; overflow: hidden; padding-bottom: 4px; }',
+// Cada componente del año, con su franja verde a todo lo ancho; dentro,
+// sus dos mitades con franja azul. Los subcomponentes van limpios, sin
+// fondo ni líneas, con aire entre ellos: es lo que hace que la vista
+// caiga primero en los totales.
+'#zonaImpresion .imp-comp-cab { background: #dcfce7; padding: 10px 12px; display: flex;',
+'  justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px; }',
+'#zonaImpresion .imp-comp-cab b { font-size: 14px; color: #111827; }',
+'#zonaImpresion td, #zonaImpresion th { padding: 6px 10px; font-size: 11px; vertical-align: top; }',
+'#zonaImpresion tbody tr + tr td { border-top: 0; }',
 '#zonaImpresion .imp-sub { color: #475569; }',
-// Los totales de teoría y de práctica son las dos cifras que se buscan
-// primero al leer el papel. Destacan por el tamaño, la negrita y un
-// resaltado suave, sin rayas: las líneas partían el bloque en trozos y
-// hacían más ruido del que quitaban.
-'#zonaImpresion .imp-total td { background: #e0e7ff; border-top: 0 !important;',
-'  font-size: 12.5px; font-weight: 800; color: #1e1b4b;',
-'  padding-top: 7px; padding-bottom: 7px; }',
+// Las dos mitades del módulo: franja azul, letra grande y negrita.
+'#zonaImpresion .imp-total td { background: #dbeafe; border-top: 0 !important;',
+'  font-size: 13px; font-weight: 800; color: #111827;',
+'  padding-top: 8px; padding-bottom: 8px; }',
 // El desglose va claramente metido hacia dentro respecto a su total:
 // así se ve de un vistazo qué cuelga de qué.
-'#zonaImpresion .imp-sub2 { color: #475569; padding-left: 42px !important; }',
+'#zonaImpresion .imp-sub2 { color: #111827; padding-left: 46px !important; }',
 '#zonaImpresion .imp-final { border: 2px solid #1e293b; border-radius: 8px; margin-top: 10px;',
 '  padding: 9px 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }',
 '#zonaImpresion .imp-ficha { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 11px; margin-bottom: 7px; }',
@@ -5025,14 +5023,14 @@ var IMPRESION = (function () {
                 // una lista de notas sueltas y al final aparecía un número que
                 // no se sabía de dónde salía hasta llegar a él.
                 filas += '<tr class="imp-total"><td><b>a) Teoría</b></td>'
-                      +  '<td style="text-align:right;font-weight:900;font-size:13.5px;color:'
-                      +  color(c.teorica) + ';">' + pct(c.teorica) + '</td></tr>';
+                      +  '<td style="text-align:right;font-weight:900;font-size:14px;color:#111827;">'
+                      +  pct(c.teorica) + '</td></tr>';
                 (c.subTeoria || []).forEach(function (s) {
                     filas += '<tr><td class="imp-sub2">' + esc(s.nombre)
-                          +  ' <span style="color:#94a3b8;">· peso ' + s.peso + '%'
+                          +  ' <span style="color:#334155;">· peso ' + s.peso + '%'
                           +  (s.evaluaciones ? ' · ' + plural(s.evaluaciones, 'evaluación', 'evaluaciones') : '')
                           +  '</span></td>'
-                          +  '<td style="text-align:right;color:' + color(s.promedio) + ';font-weight:700;">'
+                          +  '<td style="text-align:right;color:#111827;font-weight:600;">'
                           +  pct(s.promedio) + '</td></tr>';
                 });
 
@@ -5040,8 +5038,8 @@ var IMPRESION = (function () {
                 // exactamente la misma nota que el total de abajo, y repetirla
                 // solo hacía dudar de si eran dos cosas distintas.
                 filas += '<tr class="imp-total"><td><b>b) Práctica quirúrgica</b></td>'
-                      +  '<td style="text-align:right;font-weight:900;font-size:13.5px;color:'
-                      +  color(c.practica) + ';">' + pct(c.practica) + '</td></tr>';
+                      +  '<td style="text-align:right;font-weight:900;font-size:14px;color:#111827;">'
+                      +  pct(c.practica) + '</td></tr>';
 
                 // Quién evaluó la práctica y con qué nota. La nota práctica del
                 // módulo es el promedio de los promedios POR ESPECIALISTA: uno
@@ -5052,16 +5050,16 @@ var IMPRESION = (function () {
                 // en azul claro sobre papel apenas se leían.
                 var esp = c.practicaEsp || [];
                 esp.forEach(function (e) {
-                    filas += '<tr><td class="imp-sub2" style="color:#111827;">'
+                    filas += '<tr><td class="imp-sub2" style="color:#000;font-weight:600;">'
                           +  esc(e.nombre)
-                          +  ' <span style="color:#94a3b8;">· ' + plural(e.n, 'evaluación', 'evaluaciones')
-                          +  '</span></td>'
-                          +  '<td style="text-align:right;color:#111827;font-weight:700;">'
+                          +  ' <span style="color:#334155;font-weight:400;">· '
+                          +  plural(e.n, 'evaluación', 'evaluaciones') + '</span></td>'
+                          +  '<td style="text-align:right;color:#000;font-weight:700;">'
                           +  pct(e.promedio) + '</td></tr>';
                 });
                 if (esp.length) {
                     filas += '<tr><td class="imp-sub2" colspan="2" '
-                          +  'style="color:#64748b;font-size:9px;">('
+                          +  'style="color:#334155;font-size:10px;">('
                           +  esp.map(function (e) { return e.promedio + '%'; }).join(' + ')
                           +  ') ÷ ' + plural(esp.length, 'especialista', 'especialistas')
                           +  ' = <b style="color:#111827;">' + pct(c.practica) + '</b> · '
@@ -5092,7 +5090,7 @@ var IMPRESION = (function () {
 
             h += '<div class="imp-comp imp-junto">'
               +  '<div class="imp-comp-cab"><b>' + c.n + ') ' + esc(c.nombre) + '</b>'
-              +  '<span style="font-weight:900;font-size:15px;color:' + color(c.nota) + ';">'
+              +  '<span style="font-weight:900;font-size:16px;color:#111827;">'
               +  pct(c.nota) + '</span></div>'
               +  '<table><tbody>' + filas + '</tbody></table></div>';
         });
@@ -5103,39 +5101,34 @@ var IMPRESION = (function () {
         // añade al lado la del curso completo.
         // «cuentan» que devuelve NOTAS_CANON es un NÚMERO, no una lista: la
         // operación se arma con los componentes que tienen nota.
-        var cuentan = comps.filter(function (c) { return c.nota !== null && c.nota !== undefined; });
+        // El recuadro del final es SIEMPRE la nota del año, también cuando se
+        // imprime un módulo suelto: la del módulo ya está arriba, en su franja,
+        // y repetirla abajo hacía creer que el año se calculaba con ella sola.
+        //
+        // Se usa el cálculo del CURSO COMPLETO, no el del filtro: la nota de
+        // fin de año es el promedio de todos los módulos evaluados, la
+        // investigación y la rotación externa.
+        var anualAnio = o.anualCompleto || a;
+        var compsAnio = (anualAnio.componentes || []).filter(function (c) {
+            return c.nota !== null && c.nota !== undefined;
+        });
 
-        // Con un módulo pedido, la cifra del recuadro es la nota de ESE módulo,
-        // no un promedio de componentes: antes se sumaba investigación y
-        // rotación bajo el rótulo «componentes del módulo», que es justo lo que
-        // no son.
-        var cifra = soloEsteModulo
-            ? (cuentan.length ? cuentan[0].nota : null)
-            : a.final;
-        var titulo = soloEsteModulo ? 'NOTA DEL MÓDULO ' + esc(o.modulo)
-                                    : 'NOTA FINAL DEL AÑO 2026-2027';
-
-        var explica;
+        var explica = compsAnio.length
+            ? '(' + compsAnio.map(function (c) { return c.nota + '%'; }).join(' + ')
+              + ') ÷ ' + compsAnio.length + ' — promedio de los componentes con nota: '
+              + compsAnio.map(function (c) {
+                    return c.tipo === 'modulo' ? c.nombre.replace(' de neurocirugía', '') : c.nombre;
+                }).join(', ')
+            : 'Sin componentes evaluados todavía';
         if (soloEsteModulo) {
-            explica = cuentan.length
-                ? 'Media de la teoría y de la práctica quirúrgica de este módulo.'
-                : 'Este módulo aún no tiene ninguna nota.';
-            explica += '<br>Es <b>uno</b> de los componentes del año: los demás módulos, la '
-                     + 'investigación y la rotación externa se evalúan aparte.';
-            if (o.finalAnio !== undefined) {
-                explica += '<br>Nota del año con todo el curso: <b>' + pct(o.finalAnio) + '</b>';
-            }
-        } else {
-            explica = cuentan.length
-                ? '(' + cuentan.map(function (c) { return c.nota + '%'; }).join(' + ') + ') ÷ ' + cuentan.length
-                  + ' — promedio de los componentes que ya tienen nota'
-                : 'Sin componentes evaluados todavía';
+            explica += '<br>Se calcula con todo el curso, no solo con este módulo.';
         }
 
-        h += '<div class="imp-final imp-junto"><div><b style="font-size:12px;">' + titulo + '</b>'
+        h += '<div class="imp-final imp-junto"><div><b style="font-size:12px;">'
+          +  'NOTA FINAL DEL AÑO 2026-2027</b>'
           +  '<div style="font-size:9px;color:#64748b;margin-top:2px;">' + explica + '</div></div>'
-          +  '<div style="font-size:20px;font-weight:900;color:' + color(cifra) + ';">' + pct(cifra) + '</div>'
-          +  '</div>';
+          +  '<div style="font-size:20px;font-weight:900;color:' + color(anualAnio.final) + ';">'
+          +  pct(anualAnio.final) + '</div></div>';
 
         return h + pie() + '</div>';
     }
@@ -5783,7 +5776,7 @@ var IMPRESION = (function () {
                 var d = _datosImpresion(x.res, x.anio, selMod);
                 return IMPRESION.avanceHTML({
                     residente: d.residente, anio: d.anio, modulo: d.modulo,
-                    anual: d.anual, finalAnio: d.anualTodo.final,
+                    anual: d.anual, anualCompleto: d.anualTodo,
                     nEvaluaciones: d.filas.length
                 });
             }).join('');
@@ -5810,7 +5803,7 @@ var IMPRESION = (function () {
             IMPRESION.imprimir(
                 IMPRESION.avanceHTML({
                     residente: d.residente, anio: d.anio, modulo: d.modulo,
-                    anual: d.anual, finalAnio: d.anualTodo.final,
+                    anual: d.anual, anualCompleto: d.anualTodo,
                     nEvaluaciones: d.filas.length }) +
                 IMPRESION.evaluacionesHTML({
                     residente: d.residente, anio: d.anio, modulo: d.modulo, filas: d.filas })
