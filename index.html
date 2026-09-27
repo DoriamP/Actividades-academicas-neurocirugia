@@ -4934,7 +4934,9 @@ var IMPRESION = (function () {
 '#zonaImpresion .imp-total td { background: #e0e7ff; border-top: 0 !important;',
 '  font-size: 12.5px; font-weight: 800; color: #1e1b4b;',
 '  padding-top: 7px; padding-bottom: 7px; }',
-'#zonaImpresion .imp-sub2 { color: #64748b; padding-left: 22px !important; }',
+// El desglose va claramente metido hacia dentro respecto a su total:
+// así se ve de un vistazo qué cuelga de qué.
+'#zonaImpresion .imp-sub2 { color: #475569; padding-left: 42px !important; }',
 '#zonaImpresion .imp-final { border: 2px solid #1e293b; border-radius: 8px; margin-top: 10px;',
 '  padding: 9px 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }',
 '#zonaImpresion .imp-ficha { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 11px; margin-bottom: 7px; }',
@@ -4999,28 +5001,44 @@ var IMPRESION = (function () {
                      + pie() + '</div>';
         }
 
-        h += '<h2 class="imp-tit">Componentes evaluados</h2>';
+        // Investigación y la rotación externa NO cuelgan de ningún módulo: son
+        // componentes del año, igual que cada módulo de neurocirugía. Al pedir
+        // un módulo concreto se enseña solo ese, porque verlos debajo hacía
+        // pensar que formaban parte de él.
+        var soloEsteModulo = !!o.modulo;
+        if (soloEsteModulo) comps = comps.filter(function (c) { return c.tipo === 'modulo'; });
+
+        h += '<h2 class="imp-tit">' +
+             (soloEsteModulo ? 'Módulo ' + esc(o.modulo)
+                             : 'Componentes del año académico') + '</h2>';
+        if (!soloEsteModulo) {
+            h += '<p style="font-size:9.5px;color:#64748b;margin:-2px 0 8px;line-height:1.45;">'
+              +  'La nota del año es el promedio de estos componentes. Cada módulo de '
+              +  'neurocirugía, la investigación y la rotación externa cuentan por igual: '
+              +  'ninguno depende de otro.</p>';
+        }
 
         comps.forEach(function (c) {
             var filas = '';
             if (c.tipo === 'modulo') {
+                // Primero el total, y debajo lo que lo compone. Al revés se leía
+                // una lista de notas sueltas y al final aparecía un número que
+                // no se sabía de dónde salía hasta llegar a él.
+                filas += '<tr class="imp-total"><td><b>a) Teoría</b></td>'
+                      +  '<td style="text-align:right;font-weight:900;font-size:13.5px;color:'
+                      +  color(c.teorica) + ';">' + pct(c.teorica) + '</td></tr>';
                 (c.subTeoria || []).forEach(function (s) {
                     filas += '<tr><td class="imp-sub2">' + esc(s.nombre)
-                          +  ' <span style="color:#cbd5e1;">· peso ' + s.peso + '%'
+                          +  ' <span style="color:#94a3b8;">· peso ' + s.peso + '%'
                           +  (s.evaluaciones ? ' · ' + plural(s.evaluaciones, 'evaluación', 'evaluaciones') : '')
                           +  '</span></td>'
                           +  '<td style="text-align:right;color:' + color(s.promedio) + ';font-weight:700;">'
                           +  pct(s.promedio) + '</td></tr>';
                 });
-                filas += '<tr class="imp-total"><td><b>a) Teoría</b></td>'
-                      +  '<td style="text-align:right;font-weight:900;font-size:13.5px;color:'
-                      +  color(c.teorica) + ';">' + pct(c.teorica) + '</td></tr>';
-                (c.subPractica || []).forEach(function (s) {
-                    filas += '<tr><td class="imp-sub2">' + esc(s.nombre)
-                          +  (s.evaluaciones ? ' <span style="color:#cbd5e1;">· ' + plural(s.evaluaciones, 'evaluación', 'evaluaciones') + '</span>' : '')
-                          +  '</td><td style="text-align:right;color:' + color(s.promedio) + ';font-weight:700;">'
-                          +  pct(s.promedio) + '</td></tr>';
-                });
+
+                // La lista de «subPractica» no se pinta: es un solo elemento con
+                // exactamente la misma nota que el total de abajo, y repetirla
+                // solo hacía dudar de si eran dos cosas distintas.
                 filas += '<tr class="imp-total"><td><b>b) Práctica quirúrgica</b></td>'
                       +  '<td style="text-align:right;font-weight:900;font-size:13.5px;color:'
                       +  color(c.practica) + ';">' + pct(c.practica) + '</td></tr>';
@@ -5029,21 +5047,24 @@ var IMPRESION = (function () {
                 // módulo es el promedio de los promedios POR ESPECIALISTA: uno
                 // que evaluó diecisiete veces pesa lo mismo que otro que evaluó
                 // cuatro. Sin esta lista, la cifra hay que creérsela.
+                //
+                // En negro, no en el color de la nota: son nombres de personas y
+                // en azul claro sobre papel apenas se leían.
                 var esp = c.practicaEsp || [];
                 esp.forEach(function (e) {
-                    filas += '<tr><td class="imp-sub2" style="padding-left:34px !important;">'
+                    filas += '<tr><td class="imp-sub2" style="color:#111827;">'
                           +  esc(e.nombre)
-                          +  ' <span style="color:#cbd5e1;">· ' + plural(e.n, 'evaluación', 'evaluaciones')
+                          +  ' <span style="color:#94a3b8;">· ' + plural(e.n, 'evaluación', 'evaluaciones')
                           +  '</span></td>'
-                          +  '<td style="text-align:right;color:' + color(e.promedio) + ';font-weight:700;">'
+                          +  '<td style="text-align:right;color:#111827;font-weight:700;">'
                           +  pct(e.promedio) + '</td></tr>';
                 });
                 if (esp.length) {
-                    filas += '<tr><td class="imp-sub2" colspan="2" style="padding-left:34px !important;'
-                          +  'color:#94a3b8;font-size:9px;">('
+                    filas += '<tr><td class="imp-sub2" colspan="2" '
+                          +  'style="color:#64748b;font-size:9px;">('
                           +  esp.map(function (e) { return e.promedio + '%'; }).join(' + ')
                           +  ') ÷ ' + plural(esp.length, 'especialista', 'especialistas')
-                          +  ' = <b style="color:#475569;">' + pct(c.practica) + '</b> · '
+                          +  ' = <b style="color:#111827;">' + pct(c.practica) + '</b> · '
                           +  plural(c.practicaEvals || 0, 'evaluación en total', 'evaluaciones en total')
                           +  '</td></tr>';
                 }
@@ -5083,19 +5104,37 @@ var IMPRESION = (function () {
         // «cuentan» que devuelve NOTAS_CANON es un NÚMERO, no una lista: la
         // operación se arma con los componentes que tienen nota.
         var cuentan = comps.filter(function (c) { return c.nota !== null && c.nota !== undefined; });
-        var titulo = o.modulo ? 'PROMEDIO DE LOS COMPONENTES DEL MÓDULO ' + esc(o.modulo)
-                              : 'NOTA FINAL DEL AÑO 2026-2027';
-        h += '<div class="imp-final imp-junto"><div><b style="font-size:12px;">' + titulo + '</b>'
-          +  '<div style="font-size:9px;color:#64748b;margin-top:2px;">'
-          +  (cuentan.length
+
+        // Con un módulo pedido, la cifra del recuadro es la nota de ESE módulo,
+        // no un promedio de componentes: antes se sumaba investigación y
+        // rotación bajo el rótulo «componentes del módulo», que es justo lo que
+        // no son.
+        var cifra = soloEsteModulo
+            ? (cuentan.length ? cuentan[0].nota : null)
+            : a.final;
+        var titulo = soloEsteModulo ? 'NOTA DEL MÓDULO ' + esc(o.modulo)
+                                    : 'NOTA FINAL DEL AÑO 2026-2027';
+
+        var explica;
+        if (soloEsteModulo) {
+            explica = cuentan.length
+                ? 'Media de la teoría y de la práctica quirúrgica de este módulo.'
+                : 'Este módulo aún no tiene ninguna nota.';
+            explica += '<br>Es <b>uno</b> de los componentes del año: los demás módulos, la '
+                     + 'investigación y la rotación externa se evalúan aparte.';
+            if (o.finalAnio !== undefined) {
+                explica += '<br>Nota del año con todo el curso: <b>' + pct(o.finalAnio) + '</b>';
+            }
+        } else {
+            explica = cuentan.length
                 ? '(' + cuentan.map(function (c) { return c.nota + '%'; }).join(' + ') + ') ÷ ' + cuentan.length
                   + ' — promedio de los componentes que ya tienen nota'
-                : 'Sin componentes evaluados todavía')
-          +  (o.modulo && o.finalAnio !== undefined
-                ? '<br>Nota final del año con todo el curso: <b>' + pct(o.finalAnio) + '</b>'
-                : '')
-          +  '</div></div>'
-          +  '<div style="font-size:20px;font-weight:900;color:' + color(a.final) + ';">' + pct(a.final) + '</div>'
+                : 'Sin componentes evaluados todavía';
+        }
+
+        h += '<div class="imp-final imp-junto"><div><b style="font-size:12px;">' + titulo + '</b>'
+          +  '<div style="font-size:9px;color:#64748b;margin-top:2px;">' + explica + '</div></div>'
+          +  '<div style="font-size:20px;font-weight:900;color:' + color(cifra) + ';">' + pct(cifra) + '</div>'
           +  '</div>';
 
         return h + pie() + '</div>';
