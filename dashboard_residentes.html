@@ -1103,6 +1103,23 @@ var IMPRESION = (function () {
         return v >= 80 ? '#047857' : v >= 70 ? '#1d4ed8' : v >= 60 ? '#b45309' : '#b91c1c';
     }
     function pct(v) { return (v === null || v === undefined) ? '—' : v + '%'; }
+
+    // Una nota por debajo de 70 no puede pasar desapercibida en un papel que se
+    // firma y se archiva: va en rojo y con una flecha al lado. Todo el que la
+    // pinta pasa por aquí, así que no puede quedarse ninguna sin marcar.
+    var MINIMO = 70;
+    function bajoMinimo(v) {
+        return v !== null && v !== undefined && !isNaN(v) && Number(v) < MINIMO;
+    }
+    /** El color que le toca a una nota: rojo si va baja, gris si no existe */
+    function tinta(v) {
+        if (v === null || v === undefined) return '#94a3b8';
+        return bajoMinimo(v) ? '#b91c1c' : '#000';
+    }
+    /** La nota, con su flecha delante si está por debajo del mínimo */
+    function nota(v) {
+        return (bajoMinimo(v) ? '▼ ' : '') + pct(v);
+    }
     function plural(n, sing, pl) { return n === 1 ? '1 ' + sing : n + ' ' + pl; }
 
     function esTesis(r) {
@@ -1288,23 +1305,23 @@ var IMPRESION = (function () {
                 // una lista de notas sueltas y al final aparecía un número que
                 // no se sabía de dónde salía hasta llegar a él.
                 filas += '<tr class="imp-total"><td><b>a) Teoría</b></td>'
-                      +  '<td style="text-align:right;font-weight:900;font-size:14px;color:#111827;">'
-                      +  pct(c.teorica) + '</td></tr>';
+                      +  '<td style="text-align:right;font-weight:900;font-size:14px;color:'
+                      +  tinta(c.teorica) + ';">' + nota(c.teorica) + '</td></tr>';
                 (c.subTeoria || []).forEach(function (s) {
                     filas += '<tr><td class="imp-sub2">' + esc(s.nombre)
                           +  ' <span style="color:#334155;">· peso ' + s.peso + '%'
                           +  (s.evaluaciones ? ' · ' + plural(s.evaluaciones, 'evaluación', 'evaluaciones') : '')
                           +  '</span></td>'
-                          +  '<td style="text-align:right;color:#111827;font-weight:600;">'
-                          +  pct(s.promedio) + '</td></tr>';
+                          +  '<td style="text-align:right;font-weight:600;color:'
+                          +  tinta(s.promedio) + ';">' + nota(s.promedio) + '</td></tr>';
                 });
 
                 // La lista de «subPractica» no se pinta: es un solo elemento con
                 // exactamente la misma nota que el total de abajo, y repetirla
                 // solo hacía dudar de si eran dos cosas distintas.
                 filas += '<tr class="imp-total"><td><b>b) Práctica quirúrgica</b></td>'
-                      +  '<td style="text-align:right;font-weight:900;font-size:14px;color:#111827;">'
-                      +  pct(c.practica) + '</td></tr>';
+                      +  '<td style="text-align:right;font-weight:900;font-size:14px;color:'
+                      +  tinta(c.practica) + ';">' + nota(c.practica) + '</td></tr>';
 
                 // Quién evaluó la práctica y con qué nota. La nota práctica del
                 // módulo es el promedio de los promedios POR ESPECIALISTA: uno
@@ -1319,15 +1336,15 @@ var IMPRESION = (function () {
                           +  esc(e.nombre)
                           +  ' <span style="color:#334155;font-weight:400;">· '
                           +  plural(e.n, 'evaluación', 'evaluaciones') + '</span></td>'
-                          +  '<td style="text-align:right;color:#000;font-weight:700;">'
-                          +  pct(e.promedio) + '</td></tr>';
+                          +  '<td style="text-align:right;font-weight:700;color:'
+                          +  tinta(e.promedio) + ';">' + nota(e.promedio) + '</td></tr>';
                 });
                 if (esp.length) {
                     filas += '<tr><td class="imp-sub2" colspan="2" '
                           +  'style="color:#334155;font-size:10px;">('
                           +  esp.map(function (e) { return e.promedio + '%'; }).join(' + ')
                           +  ') ÷ ' + plural(esp.length, 'especialista', 'especialistas')
-                          +  ' = <b style="color:#111827;">' + pct(c.practica) + '</b> · '
+                          +  ' = <b style="color:' + tinta(c.practica) + ';">' + nota(c.practica) + '</b> · '
                           +  plural(c.practicaEvals || 0, 'evaluación en total', 'evaluaciones en total')
                           +  '</td></tr>';
                 }
@@ -1339,9 +1356,9 @@ var IMPRESION = (function () {
                     if (s.teorica !== undefined && s.teorica !== null) det.push('teórica ' + s.teorica + '%');
                     if (s.practica !== undefined && s.practica !== null) det.push('práctica ' + s.practica + '%');
                     filas += '<tr><td class="imp-sub2">' + esc(s.nombre)
-                          +  (det.length ? ' <span style="color:#cbd5e1;">· ' + det.join(' · ') + '</span>' : '')
-                          +  '</td><td style="text-align:right;color:' + color(s.nota) + ';font-weight:700;">'
-                          +  pct(s.nota) + '</td></tr>';
+                          +  (det.length ? ' <span style="color:#334155;">· ' + det.join(' · ') + '</span>' : '')
+                          +  '</td><td style="text-align:right;font-weight:700;color:'
+                          +  tinta(s.nota) + ';">' + nota(s.nota) + '</td></tr>';
                 });
                 if (c.tipo === 'rotacion' && c.ajenas && c.ajenas.length) {
                     filas += '<tr><td class="imp-sub2" colspan="2" style="color:#b45309;">'
@@ -1355,8 +1372,8 @@ var IMPRESION = (function () {
 
             h += '<div class="imp-comp imp-junto">'
               +  '<div class="imp-comp-cab"><b>' + nOrden + ') ' + esc(c.nombre) + '</b>'
-              +  '<span style="font-weight:900;font-size:16px;color:#111827;">'
-              +  pct(c.nota) + '</span></div>'
+              +  '<span style="font-weight:900;font-size:16px;color:' + tinta(c.nota) + ';">'
+              +  nota(c.nota) + '</span></div>'
               +  '<table><tbody>' + filas + '</tbody></table></div>';
         });
 
@@ -1391,8 +1408,8 @@ var IMPRESION = (function () {
         h += '<div class="imp-final imp-junto"><div><b style="font-size:12px;">'
           +  'NOTA DEL AÑO 2026-2027 · PROVISIONAL</b>'
           +  '<div style="font-size:9px;color:#64748b;margin-top:2px;">' + explica + '</div></div>'
-          +  '<div style="font-size:20px;font-weight:900;color:' + color(anualAnio.final) + ';">'
-          +  pct(anualAnio.final) + '</div></div>';
+          +  '<div style="font-size:20px;font-weight:900;color:' + tinta(anualAnio.final) + ';">'
+          +  nota(anualAnio.final) + '</div></div>';
 
         return h + pie() + '</div>';
     }
