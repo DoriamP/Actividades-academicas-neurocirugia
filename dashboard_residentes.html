@@ -1060,30 +1060,30 @@ var IMPRESION = (function () {
     // uno. Esto es lo que hace que la ficha impresa diga exactamente lo mismo
     // que el formulario en el que se evaluó, y no un porcentaje suelto.
     var HOJAS = {
-        'Clases Programadas': { total: 30, dominios: [
+        'Clases Programadas': { titulo: 'Evaluación de Clase Programada', total: 30, dominios: [
             ['Estructura y organización de la presentación', 10],
             ['Literatura científica variada y pertinente',   10],
             ['Dominio del tema y manejo de preguntas',       10]] },
-        'Casos Clínicos y Artículos': { total: 20, dominios: [
+        'Casos Clínicos y Artículos': { titulo: 'Presentación de Caso Clínico y Revisión de Artículos', total: 20, dominios: [
             ['Estructura y organización de la presentación',  7],
             ['Literatura científica variada y pertinente',    6],
             ['Dominio del tema y manejo de preguntas',        7]] },
-        'Sesiones Diarias': { total: 20, dominios: [
+        'Sesiones Diarias': { titulo: 'Participación en Sesiones Clínicas Diarias', total: 20, dominios: [
             ['Profundidad y calidad del conocimiento neuroquirúrgico',    10],
             ['Análisis crítico y contribución a la estrategia de manejo', 10]] },
-        'Práctica Quirúrgica': { total: 100, dominios: [
+        'Práctica Quirúrgica': { titulo: 'Evaluación de Práctica Quirúrgica', total: 100, dominios: [
             ['Adecuada preparación académica y clínica para el caso', 40],
             ['Habilidad técnica y destreza con instrumentos',         30],
             ['Comportamiento adecuado dentro y fuera del quirófano',  30]] },
-        'Clases de Investigación': { total: 100, dominios: [
+        'Clases de Investigación': { titulo: 'Clase de Investigación', total: 100, dominios: [
             ['Estructura y organización de la presentación', 35],
             ['Dominio del tema y manejo de preguntas',       35],
             ['Sabe cómo aplicar conocimientos a la práctica clínica e investigación', 30]] },
-        'Avances de Tesis': { total: 100, dominios: [
+        'Avances de Tesis': { titulo: 'Presentación de Avances de Tesis', total: 100, dominios: [
             ['Estructura y organización de la presentación',     25],
             ['Dominio del tema y manejo de preguntas',           25],
             ['Calidad y utilidad de la investigación realizada', 50]] },
-        'Examen': { total: 100, dominios: [
+        'Examen': { titulo: 'Examen de Módulo', total: 100, dominios: [
             ['Examen escrito del módulo', 100]] }
     };
 
@@ -1166,8 +1166,15 @@ var IMPRESION = (function () {
 '@media print {',
 '  body.imprimiendo > *:not(#zonaImpresion) { display: none !important; }',
 '  body.imprimiendo #zonaImpresion { display: block !important; }',
-'  @page { size: A4 portrait; margin: 13mm 11mm 15mm; }',
-'  .imp-hoja { page-break-after: always; }',
+// Sin margen de página NO hay sitio para el encabezado y el pie que el
+// navegador añade por su cuenta —el título, la fecha, la dirección del
+// sitio y «Página 1 de 22»—, así que deja de dibujarlos. Un expediente
+// que se archiva y se firma no debe llevar la dirección de un repositorio
+// impresa al pie.
+//
+// El margen se recupera dentro de cada hoja, que es también cada página.
+'  @page { size: A4 portrait; margin: 0; }',
+'  .imp-hoja { page-break-after: always; padding: 14mm 13mm; }',
 '  .imp-hoja:last-child { page-break-after: auto; }',
 '  .imp-junto { page-break-inside: avoid; }',
 '  thead { display: table-header-group; }',
@@ -1206,9 +1213,13 @@ var IMPRESION = (function () {
 '#zonaImpresion .imp-sub2 { color: #111827; padding-left: 46px !important; }',
 '#zonaImpresion .imp-final { border: 2px solid #1e293b; border-radius: 8px; margin-top: 10px;',
 '  padding: 9px 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }',
-'#zonaImpresion .imp-ficha { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 11px; margin-bottom: 7px; }',
-'#zonaImpresion .imp-ficha-cab { display: flex; justify-content: space-between; gap: 10px;',
-'  align-items: baseline; margin-bottom: 5px; }',
+'#zonaImpresion .imp-ficha { border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden;',
+'  margin-bottom: 10px; padding-bottom: 2px; }',
+'#zonaImpresion .imp-ficha-tit { background: #1e293b; color: #fff; font-weight: 800;',
+'  font-size: 11.5px; padding: 7px 11px; }',
+'#zonaImpresion .imp-ficha-pts { display: flex; justify-content: space-between;',
+'  align-items: baseline; background: #f1f5f9; padding: 7px 11px; margin-top: 7px; }',
+'#zonaImpresion .imp-ficha table td { border-top: 0; }',
 '#zonaImpresion .imp-chip { font-size: 8.5px; font-weight: 800; text-transform: uppercase;',
 '  letter-spacing: .04em; background: #eef2ff; color: #3730a3; padding: 2px 7px; border-radius: 99px; }',
 '#zonaImpresion .imp-firma { margin-top: 26px; display: flex; gap: 40px; }',
@@ -1383,33 +1394,11 @@ var IMPRESION = (function () {
         // añade al lado la del curso completo.
         // «cuentan» que devuelve NOTAS_CANON es un NÚMERO, no una lista: la
         // operación se arma con los componentes que tienen nota.
-        // El recuadro del final es SIEMPRE la nota del año, también cuando se
-        // imprime un módulo suelto: la del módulo ya está arriba, en su franja,
-        // y repetirla abajo hacía creer que el año se calculaba con ella sola.
-        //
-        // Se usa el cálculo del CURSO COMPLETO, no el del filtro: la nota de
-        // fin de año es el promedio de todos los módulos evaluados, la
-        // investigación y la rotación externa.
-        var anualAnio = o.anualCompleto || a;
-        var compsAnio = (anualAnio.componentes || []).filter(function (c) {
-            return c.nota !== null && c.nota !== undefined;
-        });
-
-        var explica = compsAnio.length
-            ? '(' + compsAnio.map(function (c) { return c.nota + '%'; }).join(' + ')
-              + ') ÷ ' + compsAnio.length + ' — promedio de los componentes con nota: '
-              + compsAnio.map(function (c) {
-                    return c.tipo === 'modulo' ? c.nombre.replace(' de neurocirugía', '') : c.nombre;
-                }).join(', ')
-            : 'Sin componentes evaluados todavía';
-        explica += '<br>Provisional: se recalcula conforme se evalúan los componentes '
-                 + 'que faltan.';
-
-        h += '<div class="imp-final imp-junto"><div><b style="font-size:12px;">'
-          +  'NOTA DEL AÑO 2026-2027 · PROVISIONAL</b>'
-          +  '<div style="font-size:9px;color:#64748b;margin-top:2px;">' + explica + '</div></div>'
-          +  '<div style="font-size:20px;font-weight:900;color:' + tinta(anualAnio.final) + ';">'
-          +  nota(anualAnio.final) + '</div></div>';
+        // Aquí iba un recuadro con la nota del año. Se quitó a propósito: este
+        // papel recoge el avance por componentes, y una cifra de cierre en un
+        // documento que se firma invita a leerla como definitiva cuando el curso
+        // todavía va por la mitad. La nota del año vive en el Resumen Académico
+        // de la plataforma, que se actualiza sola.
 
         return h + pie() + '</div>';
     }
@@ -1417,38 +1406,62 @@ var IMPRESION = (function () {
     // ── DOCUMENTO 2 · Evaluaciones con todos sus dominios ─────────────────
     function fichaHTML(r) {
         var d = dominiosDe(r);
-        var filas = '', suma = 0, hayPuntos = false;
-        d.def.dominios.forEach(function (dom, i) {
+        var suma = 0, hayPuntos = false, dom = '';
+
+        d.def.dominios.forEach(function (def, i) {
             var v = d.vals[i];
             if (v === null) return;
             hayPuntos = true; suma += v;
-            filas += '<tr><td>' + String.fromCharCode(97 + i) + ') ' + esc(dom[0]) + '</td>'
-                  +  '<td style="text-align:right;white-space:nowrap;font-weight:700;">'
-                  +  v + ' <span style="color:#94a3b8;font-weight:400;">/ ' + dom[1] + '</span></td></tr>';
+            dom += '<tr>'
+                +  '<td style="width:26px;vertical-align:top;color:#334155;font-weight:700;">'
+                +    (i + 1) + '</td>'
+                +  '<td style="color:#000;">' + esc(def[0]) + '</td>'
+                +  '<td style="text-align:right;white-space:nowrap;font-weight:700;color:'
+                +    tinta(Math.round((v / def[1]) * 100)) + ';">'
+                +    v + ' <span style="color:#334155;font-weight:400;">/ ' + def[1] + ' pts</span></td>'
+                +  '</tr>';
         });
 
         var p = NOTAS_CANON.pct(r);
-        var totalTxt = hayPuntos ? suma + ' / ' + d.def.total
-                                 : (num(r.total) !== null ? num(r.total) + ' / ' + d.def.total : '—');
+        var totalPts = hayPuntos ? suma : num(r.total);
         var com = String(r.comentarios || r.observaciones || '').trim();
         if (/^(ninguno|ninguna|n\/a|-)$/i.test(com)) com = '';
 
+        // Qué se evaluó: en práctica quirúrgica es el procedimiento; en el resto,
+        // el tema de la clase o del caso.
+        var queCosa = (d.hoja === 'Práctica Quirúrgica') ? 'Procedimiento' : 'Tema';
+        var dato = function (et, val) {
+            return '<tr><td style="width:40%;color:#334155;text-transform:uppercase;'
+                 + 'font-size:8.5px;letter-spacing:.04em;padding:3px 10px;">' + et + '</td>'
+                 + '<td style="color:#000;font-weight:600;padding:3px 10px;">' + esc(val || '—')
+                 + '</td></tr>';
+        };
+
         return '<div class="imp-ficha imp-junto">'
-             + '<div class="imp-ficha-cab"><div>'
-             +   '<span class="imp-chip">' + esc(d.hoja) + '</span> '
-             +   '<b style="font-size:11px;">' + esc(r.tema || r.surgeryType || 'Evaluación académica') + '</b>'
-             +   '<div style="font-size:9px;color:#64748b;margin-top:2px;">'
-             +     esc(r.fecha || 's/f')
-             +     (r.especialista ? ' · evaluó ' + esc(r.especialista) : '') + '</div>'
+             + '<div class="imp-ficha-tit">' + esc(d.def.titulo || d.hoja) + '</div>'
+             + '<table style="margin-bottom:6px;"><tbody>'
+             +   dato('Fecha de la evaluación', r.fecha)
+             +   dato('Año de residencia', r.anoResidencia)
+             +   dato('Residente', r.nombreResidente)
+             +   dato('Especialista evaluador', r.especialista)
+             +   dato(queCosa, r.tema || r.surgeryType)
+             + '</tbody></table>'
+             + (dom
+                 ? '<table style="border-top:1px solid #e2e8f0;"><tbody>' + dom + '</tbody></table>'
+                 : '<p style="font-size:9.5px;color:#334155;font-style:italic;margin:4px 10px;">'
+                   + 'Esta evaluación se registró solo con la nota global.</p>')
+             + (com ? '<div style="margin:6px 10px 0;font-size:10px;color:#000;">'
+                      + '<span style="color:#334155;text-transform:uppercase;font-size:8.5px;'
+                      + 'letter-spacing:.04em;">Observaciones</span><br>' + esc(com) + '</div>' : '')
+             + '<div class="imp-ficha-pts">'
+             +   '<span style="text-transform:uppercase;font-size:8.5px;letter-spacing:.06em;'
+             +     'color:#334155;">Puntuación</span>'
+             +   '<span><b style="font-size:14px;color:' + tinta(p) + ';">'
+             +     (totalPts === null ? '—' : totalPts) + '</b>'
+             +     '<span style="color:#334155;"> / ' + d.def.total + ' pts</span>'
+             +     '<b style="margin-left:14px;font-size:14px;color:' + tinta(p) + ';">'
+             +     nota(p) + '</b></span>'
              + '</div>'
-             + '<div style="text-align:right;white-space:nowrap;"><b style="font-size:14px;color:' + color(p) + ';">'
-             +   pct(p) + '</b><div style="font-size:9px;color:#64748b;">' + totalTxt + ' pts</div></div>'
-             + '</div>'
-             + (filas ? '<table><tbody>' + filas + '</tbody></table>'
-                      : '<p style="font-size:9.5px;color:#94a3b8;font-style:italic;margin:0;">'
-                        + 'Esta evaluación se registró solo con la nota global.</p>')
-             + (com ? '<div style="margin-top:5px;font-size:9.5px;color:#475569;">'
-                      + '<b>Comentarios:</b> ' + esc(com) + '</div>' : '')
              + '</div>';
     }
 
