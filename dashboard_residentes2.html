@@ -9,7 +9,10 @@
     <script src="config.js"></script>
     <!-- Autenticación: pantalla de acceso y token en todas las llamadas -->
     <script src="auth.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <!-- Si la red bloquea el CDN —pasa en el hospital— se usa la copia
+         guardada en el propio sitio (lib/). Los iconos se repintan al
+         llegar, porque para entonces la página ya se dibujó una vez. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" onerror="var s=document.createElement('script');s.src='lib/chart.umd.min.js';s.onload=function(){try{if(window.lucide&&lucide.createIcons)lucide.createIcons();}catch(e){}};document.head.appendChild(s);"></script>
     <!-- Google Identity Services -->
 </head>
 <body class="bg-slate-100 min-h-screen">
@@ -1074,7 +1077,24 @@ var NOTAS_CANON = (function () {
 
     var VERSION = '4.0';
 
-    var PESOS = {
+    /* ─────────────────────────────────────────────────────────────────────
+     *  EL REPARTO DE LA NOTA TEÓRICA CAMBIÓ A MITAD DE CURSO
+     *  -------------------------------------------------------------------
+     *  Hasta el cambio:   clases 30 · casos 20 · sesiones 20 · examen 30
+     *  Desde el cambio:   clases y casos JUNTOS 35 · sesiones 35 · examen 30
+     *
+     *  Los módulos que ya se cerraron con su examen conservan el reparto con
+     *  el que se calificaron —una nota firmada no se recalcula—: el Módulo I
+     *  de todos los años y el Módulo II de los de I año. Del resto en
+     *  adelante rige el nuevo.
+     *
+     *  «Clases y Casos Clínicos» no es la media de dos medias: es el promedio
+     *  de TODAS esas actividades juntas, que es lo acordado. Se consigue
+     *  metiéndolas en el mismo saco antes de promediar por componente.
+     * ───────────────────────────────────────────────────────────────────── */
+    var COMP_FUSION = "Clases y Casos Clínicos";
+
+    var PESOS_ANTIGUO = {
         "Clases Programadas":          { peso: 30,  tipo: "Teórico" },
         "Clases de Investigación":     { peso: 0,   tipo: "Informativo" },
         "Casos Clínicos y Artículos":  { peso: 20,  tipo: "Teórico" },
@@ -1082,6 +1102,46 @@ var NOTAS_CANON = (function () {
         "Examen":                      { peso: 30,  tipo: "Teórico" },
         "Práctica Quirúrgica":         { peso: 100, tipo: "Práctico" }
     };
+
+    var PESOS_NUEVO = {
+        "Clases y Casos Clínicos":     { peso: 35,  tipo: "Teórico" },
+        "Clases de Investigación":     { peso: 0,   tipo: "Informativo" },
+        "Sesiones Diarias":            { peso: 35,  tipo: "Teórico" },
+        "Examen":                      { peso: 30,  tipo: "Teórico" },
+        "Práctica Quirúrgica":         { peso: 100, tipo: "Práctico" }
+    };
+
+    // Se mantiene «PESOS» para lo que ya lo usaba: es el reparto vigente.
+    var PESOS = PESOS_NUEVO;
+
+    /** «R2», «2», «II año» → «II» */
+    function anioRomano(v) {
+        var s = String(v == null ? "" : v).trim().toUpperCase();
+        if (!s) return "";
+        var ROM = ["I", "II", "III", "IV", "V"];
+        var m = s.match(/^R\s*([1-5])$/) || s.match(/^([1-5])$/);
+        if (m) return ROM[+m[1] - 1];
+        var r = s.match(/\b(I{1,3}|IV|V)\b/);
+        if (r) return r[1];
+        var d = s.match(/\b([1-5])\b/);   // «2 año», «año 3», «R 4»
+        return d ? ROM[+d[1] - 1] : "";
+    }
+
+    /**
+     * Qué reparto le toca a un módulo concreto de un año concreto.
+     * Devuelve "antigua" o "nueva".
+     */
+    function formulaTeorica(anio, modulo) {
+        var m = String(modulo == null ? "" : modulo).trim().toUpperCase();
+        var a = anioRomano(anio);
+        if (m === "I") return "antigua";                 // Módulo I: cerrado en todos los años
+        if (m === "II" && a === "I") return "antigua";   // y el II de I año, también cerrado
+        return "nueva";
+    }
+
+    function pesosDe(formula) {
+        return formula === "antigua" ? PESOS_ANTIGUO : PESOS_NUEVO;
+    }
 
     // Componentes que se agrupan por TEMA (una misma clase puede evaluarse en
     // varias fechas). El resto se agrupa por tema + fecha.
@@ -1161,7 +1221,22 @@ var NOTAS_CANON = (function () {
      * @returns {Object} { tabla, componentes, teorica, practica, final,
      *                     practicaPorModulo, conteo, totalEvaluaciones }
      */
-    function calcular(filas, fnModulo) {
+    /**
+     * @param formula  "antigua" | "nueva" | undefined.
+     *   Sin indicar, se deduce de las propias filas: si TODAS pertenecen a
+     *   módulos con el reparto antiguo, se usa ese; en cuanto hay una del
+     *   nuevo, manda el nuevo. Quien necesite exactitud —el cálculo por
+     *   módulo— lo pasa explícito, que es lo que hace notaFinalAnual.
+     */
+    function calcular(filas, fnModulo, formula) {
+        if (!formula) {
+            formula = "antigua";
+            (filas || []).forEach(function (r) {
+                var m = moduloDeFila(r, comp(r.tipo_evaluacion), fnModulo);
+                if (formulaTeorica(r.anoResidencia, m) === "nueva") formula = "nueva";
+            });
+        }
+        var PESOS_AQUI = pesosDe(formula);
         var porActividad = {};   // clave de actividad → {comp, sum, count, mods}
         var practPorMod  = {};   // módulo → { especialista → {sum, count, nombre} }
         var conteo = { teorico: 0, practico: 0, investigacion: 0, total: 0 };
@@ -1186,9 +1261,17 @@ var NOTAS_CANON = (function () {
                 return;
             }
 
+            // Con el reparto nuevo, clases programadas y casos clínicos van al
+            // mismo saco: así el 35 % sale del promedio de todas esas
+            // actividades, no de la media de dos medias.
+            if (formula === "nueva" &&
+                (c === "Clases Programadas" || c === "Casos Clínicos y Artículos")) {
+                c = COMP_FUSION;
+            }
+
             var tema = normTxt(r.tema || r.surgeryType || '');
             var fp   = ((r.fechaProg || '') + '').trim();
-            var k    = (COMPS_POR_TEMA.indexOf(c) !== -1)
+            var k    = (COMPS_POR_TEMA.indexOf(c) !== -1 || c === COMP_FUSION)
                      ? (c + '||' + tema + '||' + fp)
                      : (c + '||' + (fp || r.fecha || '') + '||' + tema);
             if (!porActividad[k]) porActividad[k] = { comp: c, sum: 0, count: 0, mods: {} };
@@ -1247,8 +1330,8 @@ var NOTAS_CANON = (function () {
 
         // Ponderación por componente
         var tabla = [], sumPT = 0, sumWT = 0, sumPP = 0, sumWP = 0;
-        Object.keys(PESOS).forEach(function (c) {
-            var cfg = PESOS[c], d = componentes[c];
+        Object.keys(PESOS_AQUI).forEach(function (c) {
+            var cfg = PESOS_AQUI[c], d = componentes[c];
             if (!d) return;
             var pond = Math.round(d.promedio * cfg.peso / 100);
             if      (cfg.tipo === "Teórico")  { sumWT += cfg.peso; sumPT += pond; }
@@ -1268,7 +1351,8 @@ var NOTAS_CANON = (function () {
             teorica: teorica, practica: practica, final: final,
             investigacion: componentes["Clases de Investigación"] ? componentes["Clases de Investigación"].promedio : null,
             practicaPorModulo: practicaPorModulo,
-            conteo: conteo, totalEvaluaciones: conteo.total
+            conteo: conteo, totalEvaluaciones: conteo.total,
+            formula: formula
         };
     }
 
@@ -1379,9 +1463,14 @@ var NOTAS_CANON = (function () {
             (porModulo[m] = porModulo[m] || []).push(r);
         });
 
+        // El año del residente decide, junto al módulo, qué reparto rige.
+        var anioRes = "";
+        filas.forEach(function (r) { if (!anioRes) anioRes = anioRomano(r.anoResidencia); });
+
         var modulos = [];
         Object.keys(porModulo).sort(ordenModulos).forEach(function (m) {
-            var res = calcular(porModulo[m], function () { return m; });
+            var frm = formulaTeorica(anioRes, m);
+            var res = calcular(porModulo[m], function () { return m; }, frm);
             if (res.final === null || res.final === undefined) return;
             // Los subcomponentes teóricos, con su peso y lo que aportan
             var teoria = res.tabla.filter(function (t) { return t.tipo === 'Teórico'; })
@@ -1394,10 +1483,18 @@ var NOTAS_CANON = (function () {
                     return { nombre: t.comp, promedio: t.promedio, peso: t.peso,
                              aporta: t.pond, evaluaciones: t.count };
                 });
+            // Quién evaluó la práctica quirúrgica de este módulo y con qué nota.
+            // La nota práctica es el promedio de los promedios POR ESPECIALISTA,
+            // no de las evaluaciones sueltas: sin esta lista la cifra no se
+            // puede comprobar. En pantalla ya se enseña; faltaba en el papel.
+            var detPract = (res.practicaPorModulo && res.practicaPorModulo[0]) || null;
             modulos.push({
                 modulo: m, nota: res.final,
                 teorica: res.teorica, practica: res.practica,
-                subTeoria: teoria, subPractica: pract
+                subTeoria: teoria, subPractica: pract,
+                practicaEsp:   detPract ? detPract.especialistas : [],
+                practicaEvals: detPract ? detPract.evals : 0,
+                formula: frm
             });
         });
         var notaModulos = modulos.length
@@ -1469,7 +1566,9 @@ var NOTAS_CANON = (function () {
             componentes.push({
                 tipo: 'modulo', nombre: 'Módulo ' + m.modulo + ' de neurocirugía',
                 nota: m.nota, teorica: m.teorica, practica: m.practica,
-                subTeoria: m.subTeoria, subPractica: m.subPractica
+                subTeoria: m.subTeoria, subPractica: m.subPractica,
+                practicaEsp: m.practicaEsp, practicaEvals: m.practicaEvals,
+                formula: m.formula
             });
         });
         componentes.push({ tipo: 'investigacion', nombre: 'Investigación',
@@ -1503,6 +1602,9 @@ var NOTAS_CANON = (function () {
     }
 
     return { VERSION: VERSION, PESOS: PESOS, pct: pct, comp: comp,
+             PESOS_ANTIGUO: PESOS_ANTIGUO, PESOS_NUEVO: PESOS_NUEVO,
+             COMP_FUSION: COMP_FUSION, formulaTeorica: formulaTeorica,
+             anioRomano: anioRomano,
              normTxt: normTxt, calcular: calcular,
              moduloDeExamen: moduloDeExamen, moduloDeFila: moduloDeFila,
              ROTACIONES_2026_2027: ROTACIONES_2026_2027,
@@ -1514,14 +1616,11 @@ var NOTAS_CANON = (function () {
 
 
 // PESOS se conserva por compatibilidad; la fuente de verdad es NOTAS_CANON.PESOS
-const PESOS = {
-    "Clases Programadas":          { peso: 30, tipo: "Teórico" },
-    "Clases de Investigación":     { peso: 0,  tipo: "Informativo" },
-    "Casos Clínicos y Artículos":  { peso: 20, tipo: "Teórico" },
-    "Sesiones Diarias":            { peso: 20, tipo: "Teórico" },
-    "Examen":                      { peso: 30, tipo: "Teórico" },
-    "Práctica Quirúrgica":         { peso: 100, tipo: "Práctico" },
-};
+// Ojo: el reparto de la nota teórica depende del módulo. Esta copia es la
+// del reparto VIGENTE, y está solo para lo que la usaba antes de que existiera
+// el bloque canónico. Para cualquier cálculo, la fuente son
+// NOTAS_CANON.PESOS_ANTIGUO / PESOS_NUEVO, que es lo que de verdad se aplica.
+const PESOS = NOTAS_CANON.PESOS_NUEVO;
 
 const COLORES_COMP = {
     "Clases Programadas":         "#6366f1",
@@ -3077,7 +3176,14 @@ function renderNotas(residente, filas, filasTodas) {
                 c2Suma: 0, c2Count: 0,
                 c3Suma: 0, c3Count: 0,
                 comentariosList: [],
-                maxPosible: r._comp === "Clases Programadas" ? 30 : (r._comp === "Clases de Investigación" ? 100 : (r._comp === "Casos Clínicos y Artículos" ? 20 : 20))
+                // Sesiones diarias pasó de 20 a 100 puntos (dos aspectos de 50,
+                // o una prueba escrita sobre 100). Los registros antiguos siguen
+                // leyéndose bien porque lo que se guarda y se usa es el
+                // porcentaje, no los puntos.
+                maxPosible: r._comp === "Clases Programadas" ? 30
+                          : (r._comp === "Clases de Investigación" ? 100
+                          : (r._comp === "Casos Clínicos y Artículos" ? 20
+                          : (r._comp === "Sesiones Diarias" ? 100 : 20)))
             };
         }
         if (r.fecha) {
@@ -3100,12 +3206,12 @@ function renderNotas(residente, filas, filasTodas) {
         let c3 = parseInt(r.criterio3 || r.score3 || 0);
         if (!isNaN(c1)) {
             let maxC1 = r._comp === "Clases Programadas" ? 10 : (r._comp === "Clases de Investigación" ? (_esTesis ? 25 : 35) : (r._comp === "Casos Clínicos y Artículos" ? 7 : 40));
-            if (r._comp === "Sesiones Diarias") maxC1 = 10;
+            if (r._comp === "Sesiones Diarias") maxC1 = 50;
             gruposDiarios[clave].c1Suma += (c1 / maxC1) * 100; gruposDiarios[clave].c1Count++;
         }
         if (!isNaN(c2)) {
             let maxC2 = r._comp === "Clases Programadas" ? 10 : (r._comp === "Clases de Investigación" ? (_esTesis ? 25 : 35) : (r._comp === "Casos Clínicos y Artículos" ? 6 : 30));
-            if (r._comp === "Sesiones Diarias") maxC2 = 10;
+            if (r._comp === "Sesiones Diarias") maxC2 = 50;
             gruposDiarios[clave].c2Suma += (c2 / maxC2) * 100; gruposDiarios[clave].c2Count++;
         }
         if (!isNaN(c3) && r._comp !== "Sesiones Diarias") {
