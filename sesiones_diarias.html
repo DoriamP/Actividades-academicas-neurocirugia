@@ -97,28 +97,83 @@
 
             <hr class="border-slate-200">
 
-            <!-- ASPECTO 1 — máx. 10 pts -->
-            <div class="bg-blue-50 rounded-2xl p-4 border-2 border-blue-200 space-y-3">
-                <div class="flex gap-2 items-start">
-                    <span class="flex-shrink-0 bg-blue-600 text-white text-xs font-black rounded-lg px-2 py-1 mt-0.5">1</span>
-                    <div>
-                        <p class="text-sm font-bold text-slate-900">Profundidad y Calidad del Conocimiento Neuroquirúrgico</p>
-                        <p class="text-xs text-blue-700 font-medium mt-1">0 = Ausente &nbsp;|&nbsp; 10 = Dominio y aplicación experta (máx. 10 pts)</p>
+            <!-- ══════════════════════════════════════════════════════════
+                 DOS FORMAS DE EVALUAR, UNA POR SESIÓN
+                 En cada sesión se usa la oral O la escrita, no las dos: por eso
+                 van plegadas y al abrir una se cierra la otra. Lo que se
+                 registre vale sobre 100 puntos, que son el 35 % de la teoría.
+                 ══════════════════════════════════════════════════════════ -->
+            <input type="hidden" id="modalidad" value="">
+
+            <!-- 1) EVALUACIÓN ORAL -->
+            <div class="border-2 border-blue-200 rounded-2xl overflow-hidden">
+                <button type="button" id="btnOral" onclick="abrirModalidad('oral')"
+                    class="w-full flex items-center justify-between gap-3 px-4 py-3 bg-blue-50 text-left">
+                    <span class="flex items-center gap-2">
+                        <span class="bg-blue-600 text-white text-xs font-black rounded-lg px-2 py-1">1</span>
+                        <span class="text-sm font-bold text-slate-900">Evaluación oral</span>
+                        <span class="text-xs text-blue-700 font-medium">2 aspectos · 50 pts cada uno</span>
+                    </span>
+                    <span id="chevOral" class="text-blue-700 font-bold transition-transform">▾</span>
+                </button>
+                <div id="panelOral" class="hidden p-4 space-y-4 bg-white">
+                    <div class="bg-blue-50 rounded-2xl p-4 border-2 border-blue-200 space-y-3">
+                        <div class="flex gap-2 items-start">
+                            <span class="flex-shrink-0 bg-blue-600 text-white text-xs font-black rounded-lg px-2 py-1 mt-0.5">1</span>
+                            <div>
+                                <p class="text-sm font-bold text-slate-900">Profundidad y Calidad del Conocimiento Neuroquirúrgico</p>
+                                <p class="text-xs text-blue-700 font-medium mt-1">0 = Ausente &nbsp;|&nbsp; 10 = Dominio y aplicación experta (vale 50 pts)</p>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 justify-center" id="scale1"></div>
+                    </div>
+                    <div class="bg-indigo-50 rounded-2xl p-4 border-2 border-indigo-200 space-y-3">
+                        <div class="flex gap-2 items-start">
+                            <span class="flex-shrink-0 bg-indigo-600 text-white text-xs font-black rounded-lg px-2 py-1 mt-0.5">2</span>
+                            <div>
+                                <p class="text-sm font-bold text-slate-900">Análisis Crítico y Contribución a la Estrategia de Manejo</p>
+                                <p class="text-xs text-indigo-700 font-medium mt-1">0 = Ausente &nbsp;|&nbsp; 10 = Aporta ideas clave y soluciones innovadoras (vale 50 pts)</p>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 justify-center" id="scale2"></div>
                     </div>
                 </div>
-                <div class="flex flex-wrap gap-2 justify-center" id="scale1"></div>
             </div>
 
-            <!-- ASPECTO 2 — máx. 10 pts -->
-            <div class="bg-indigo-50 rounded-2xl p-4 border-2 border-indigo-200 space-y-3">
-                <div class="flex gap-2 items-start">
-                    <span class="flex-shrink-0 bg-indigo-600 text-white text-xs font-black rounded-lg px-2 py-1 mt-0.5">2</span>
+            <!-- 2) EVALUACIÓN ESCRITA -->
+            <div class="border-2 border-emerald-200 rounded-2xl overflow-hidden">
+                <button type="button" id="btnEscrita" onclick="abrirModalidad('escrita')"
+                    class="w-full flex items-center justify-between gap-3 px-4 py-3 bg-emerald-50 text-left">
+                    <span class="flex items-center gap-2">
+                        <span class="bg-emerald-600 text-white text-xs font-black rounded-lg px-2 py-1">2</span>
+                        <span class="text-sm font-bold text-slate-900">Evaluación escrita</span>
+                        <span class="text-xs text-emerald-700 font-medium">nota de 0 a 100 + fotos de la prueba</span>
+                    </span>
+                    <span id="chevEscrita" class="text-emerald-700 font-bold transition-transform">▾</span>
+                </button>
+                <div id="panelEscrita" class="hidden p-4 space-y-4 bg-white">
                     <div>
-                        <p class="text-sm font-bold text-slate-900">Análisis Crítico y Contribución a la Estrategia de Manejo</p>
-                        <p class="text-xs text-indigo-700 font-medium mt-1">0 = Ausente &nbsp;|&nbsp; 10 = Aporta ideas clave y soluciones innovadoras (máx. 10 pts)</p>
+                        <label for="notaEscrita" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                            Nota de la prueba escrita (0 – 100) *</label>
+                        <input id="notaEscrita" type="number" min="0" max="100" step="1" inputmode="numeric"
+                            placeholder="0 – 100"
+                            class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                    </div>
+                    <div>
+                        <p class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                            Fotos de la prueba escrita</p>
+                        <p class="text-xs text-slate-500 mb-2 leading-relaxed">
+                            Añada todas las páginas que haga falta: de la galería, de archivos o hechas ahora.
+                            <b>Solo las ven los docentes y la coordinación</b>; el residente ve su nota, no las hojas.</p>
+                        <input id="fotosEscrita" type="file" accept="image/*" multiple class="hidden"
+                            onchange="prepararFotosEscritas(this)">
+                        <button type="button" onclick="document.getElementById('fotosEscrita').click()"
+                            class="w-full px-4 py-2.5 bg-white border-2 border-emerald-300 text-emerald-800 text-sm font-bold rounded-xl">
+                            📷 Añadir fotos
+                        </button>
+                        <div id="listaFotos" class="mt-2 space-y-1"></div>
                     </div>
                 </div>
-                <div class="flex flex-wrap gap-2 justify-center" id="scale2"></div>
             </div>
 
             <!-- Observaciones -->
@@ -132,7 +187,7 @@
             <div class="bg-slate-900 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div class="text-center sm:text-left">
                     <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Puntuación</p>
-                    <p id="scoreText" class="text-3xl font-black text-white mt-0.5">0 <span class="text-base font-normal text-slate-400">/ 20 pts</span></p>
+                    <p id="scoreText" class="text-3xl font-black text-white mt-0.5">0 <span class="text-base font-normal text-slate-400">/ 100 pts</span></p>
                     <p id="porcentajeText" class="text-xs text-slate-400 mt-1">Cumplimiento: 0%</p>
                 </div>
                 <div class="relative w-20 h-20 flex-shrink-0">
@@ -225,7 +280,9 @@
                 for (let i = 0; i <= 10; i++) {
                     const label = document.createElement('label');
                     label.className = `flex items-center justify-center w-10 h-10 rounded-xl border-2 border-slate-300 bg-white text-sm font-bold text-slate-600 cursor-pointer transition ${color} has-[:checked]:text-white`;
-                    label.innerHTML = `<input type="radio" name="aspecto${n}" value="${i}" class="sr-only score-input" required> ${i}`;
+                    // Sin «required»: con la evaluación escrita no se pulsa ninguno, y el
+                    // navegador bloquearía el envío. La comprobación se hace al guardar.
+                    label.innerHTML = `<input type="radio" name="aspecto${n}" value="${i}" class="sr-only score-input"> ${i}`;
                     container.appendChild(label);
                 }
             });
@@ -245,28 +302,149 @@
         document.querySelectorAll('.score-input').forEach(i => i.addEventListener('change', actualizarPuntaje));
         document.getElementById('clinicalForm').addEventListener('change', actualizarPuntaje);
 
+        /**
+         * Lo que se registre vale sobre 100. La oral son dos aspectos de 50
+         * puntos cada uno —la escala sigue siendo de 0 a 10 porque cincuenta
+         * botones no se pueden pulsar en un teléfono, y cada punto vale 5—.
+         * La escrita es una nota directa de 0 a 100.
+         */
+        function puntosActuales() {
+            var modo = document.getElementById('modalidad').value;
+            if (modo === 'escrita') {
+                var v = parseInt(document.getElementById('notaEscrita').value, 10);
+                return isNaN(v) ? 0 : Math.max(0, Math.min(100, v));
+            }
+            var a1 = document.querySelector('input[name="aspecto1"]:checked');
+            var a2 = document.querySelector('input[name="aspecto2"]:checked');
+            return (a1 ? parseInt(a1.value, 10) * 5 : 0) + (a2 ? parseInt(a2.value, 10) * 5 : 0);
+        }
+
         function actualizarPuntaje() {
-            const a1 = document.querySelector('input[name="aspecto1"]:checked');
-            const a2 = document.querySelector('input[name="aspecto2"]:checked');
-            const total = (a1 ? parseInt(a1.value) : 0) + (a2 ? parseInt(a2.value) : 0);
-            const pct = Math.round((total / 20) * 100);
-
-            document.getElementById('scoreText').innerHTML = `${total} <span class="text-base font-normal text-slate-400">/ 20 pts</span>`;
+            const total = puntosActuales();
+            const pct = total;                 // sobre 100, el total ya es el porcentaje
+            document.getElementById('scoreText').innerHTML =
+                `${total} <span class="text-base font-normal text-slate-400">/ 100 pts</span>`;
             document.getElementById('porcentajeText').textContent = `Cumplimiento: ${pct}%`;
-            document.getElementById('graphCenterText').textContent = `${pct}%`;
-
-            const offset = MAX_CIRC - (pct / 100) * MAX_CIRC;
-            const circle = document.getElementById('progressCircle');
-            circle.style.strokeDashoffset = offset;
-
-            if (pct < 70) {
-                circle.setAttribute('stroke', '#ef4444');
-                document.getElementById('graphCenterText').className = 'text-sm font-black text-red-400 transition-colors';
-            } else {
-                circle.setAttribute('stroke', '#22c55e');
-                document.getElementById('graphCenterText').className = 'text-sm font-black text-green-400 transition-colors';
+            const circ = document.getElementById('progressCircle');
+            var centro = document.getElementById('graphCenterText');
+            if (centro) { centro.textContent = pct + '%';
+                centro.className = 'text-sm font-black transition-colors ' +
+                    (pct >= 70 ? 'text-emerald-400' : pct >= 50 ? 'text-amber-400' : 'text-red-400'); }
+            if (circ) {
+                circ.style.strokeDashoffset = MAX_CIRC - (pct / 100) * MAX_CIRC;
+                circ.setAttribute('stroke', pct >= 70 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444');
             }
         }
+
+        // ══════════════════════════════════════════════════════════════
+        //  FOTOS DE LA PRUEBA ESCRITA
+        //  ------------------------------------------------------------
+        //  Se comprimen en el navegador antes de subirlas: una foto de móvil
+        //  ronda los 4 MB y reducida a 1600 px baja a unos 300 KB sin perder
+        //  legibilidad. Se suben DESPUÉS de guardar la nota y de una en una,
+        //  así no hay límite de cantidad y una foto que falle no se lleva por
+        //  delante a las demás ni a la nota, que es lo que importa.
+        // ══════════════════════════════════════════════════════════════
+        var _fotosEscritas = [];
+
+        function _comprimirFoto(file) {
+            return new Promise(function (resolve, reject) {
+                var lector = new FileReader();
+                lector.onload = function (ev) {
+                    var img = new Image();
+                    img.onload = function () {
+                        var MAX = 1600, w = img.width, h = img.height;
+                        if (w > MAX || h > MAX) {
+                            var e = MAX / Math.max(w, h);
+                            w = Math.round(w * e); h = Math.round(h * e);
+                        }
+                        var c = document.createElement('canvas');
+                        c.width = w; c.height = h;
+                        var ctx = c.getContext('2d');
+                        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+                        ctx.drawImage(img, 0, 0, w, h);
+                        resolve(c.toDataURL('image/jpeg', 0.72));
+                    };
+                    img.onerror = function () { reject(new Error('No se pudo leer la imagen')); };
+                    img.src = ev.target.result;
+                };
+                lector.onerror = function () { reject(new Error('No se pudo leer el archivo')); };
+                lector.readAsDataURL(file);
+            });
+        }
+
+        function _pintarListaFotos() {
+            var cont = document.getElementById('listaFotos');
+            if (!cont) return;
+            cont.innerHTML = _fotosEscritas.map(function (ft, i) {
+                return '<div style="display:flex;align-items:center;gap:8px;font-size:12px;' +
+                       'background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:6px 9px;">' +
+                       '<span style="flex:1;color:#065f46;">📄 Página ' + (i + 1) + ' · ' + ft.kb + ' KB</span>' +
+                       '<button type="button" onclick="quitarFotoEscrita(' + i + ')" ' +
+                       'style="border:0;background:transparent;color:#b91c1c;font-weight:700;' +
+                       'cursor:pointer;">Quitar</button></div>';
+            }).join('');
+        }
+
+        function quitarFotoEscrita(i) {
+            _fotosEscritas.splice(i, 1);
+            _pintarListaFotos();
+        }
+
+        async function prepararFotosEscritas(input) {
+            var archivos = Array.prototype.slice.call(input.files || []);
+            input.value = '';                       // deja elegir las mismas otra vez
+            for (var k = 0; k < archivos.length; k++) {
+                var ar = archivos[k];
+                if (!/^image\//.test(ar.type)) continue;
+                try {
+                    var dataUrl = await _comprimirFoto(ar);
+                    _fotosEscritas.push({ dataUrl: dataUrl,
+                                          kb: Math.round(dataUrl.length * 0.75 / 1024) });
+                } catch (e) {
+                    alert('⚠️ No se pudo preparar una de las imágenes: ' + e.message);
+                }
+            }
+            _pintarListaFotos();
+        }
+
+        /** Sube las fotos ya guardada la nota. Devuelve cuántas quedaron. */
+        async function _subirFotosEscritas(datos, btn) {
+            if (!_fotosEscritas.length) return { subidas: 0, fallidas: 0 };
+            var subidas = 0, fallidas = 0;
+            for (var i = 0; i < _fotosEscritas.length; i++) {
+                if (btn) btn.textContent = 'Subiendo fotos… (' + (i + 1) + '/' + _fotosEscritas.length + ')';
+                try {
+                    var p = new URLSearchParams({
+                        action: 'saveSesionFoto',
+                        nombreResidente: datos.residente,
+                        anoResidencia:   datos.anio,
+                        fecha:           datos.fecha,
+                        orden:           i + 1,
+                        foto:            _fotosEscritas[i].dataUrl
+                    });
+                    var r = await fetch(URL_SCRIPT, {
+                        method: 'POST', mode: 'cors',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                        body: p.toString()
+                    }).then(function (x) { return x.json(); }).catch(function () { return null; });
+                    if (r && r.status === 'success') subidas++; else fallidas++;
+                } catch (e) { fallidas++; }
+            }
+            return { subidas: subidas, fallidas: fallidas };
+        }
+
+        /** Abre una de las dos y cierra la otra: en una sesión solo se usa una */
+        function abrirModalidad(modo) {
+            document.getElementById('modalidad').value = modo;
+            [['oral', 'Oral'], ['escrita', 'Escrita']].forEach(function (par) {
+                var abierto = par[0] === modo;
+                document.getElementById('panel' + par[1]).classList.toggle('hidden', !abierto);
+                document.getElementById('chev' + par[1]).textContent = abierto ? '▴' : '▾';
+            });
+            actualizarPuntaje();
+        }
+
 
 
     // ══════════════════════════════════════════════════════════════════
@@ -338,12 +516,30 @@
             btn.textContent = 'Enviando…';
             btn.className = 'w-full bg-slate-400 cursor-not-allowed text-white font-bold py-3.5 px-6 rounded-xl text-sm';
 
+            const modo = document.getElementById('modalidad').value;
+            if (!modo) { _avisoError('Elija si la evaluación es oral o escrita.', btn); return; }
+
             const a1 = document.querySelector('input[name="aspecto1"]:checked');
             const a2 = document.querySelector('input[name="aspecto2"]:checked');
-            const total = (a1 ? parseInt(a1.value) : 0) + (a2 ? parseInt(a2.value) : 0);
-            const pct = Math.round((total / 20) * 100);
+            if (modo === 'oral' && (!a1 || !a2)) {
+                _avisoError('Puntúe los dos aspectos de la evaluación oral.', btn); return;
+            }
+            const notaEsc = parseInt(document.getElementById('notaEscrita').value, 10);
+            if (modo === 'escrita' && (isNaN(notaEsc) || notaEsc < 0 || notaEsc > 100)) {
+                _avisoError('Escriba la nota de la prueba escrita, de 0 a 100.', btn); return;
+            }
+
+            const total = puntosActuales();      // sobre 100 en las dos modalidades
+            const pct = total;
             // Usar la fecha del display (DD/MM/YYYY)
             const fechaVal = document.getElementById('fechaDisplay').value;
+
+            // La modalidad va escrita en el tema. La hoja no tiene una columna
+            // libre y así queda a la vista de quien la consulta; además, una
+            // sesión oral y una escrita del mismo día cuentan como dos
+            // actividades distintas, que es lo correcto.
+            const temaSesion = 'Sesión del ' + fechaVal +
+                               (modo === 'escrita' ? ' — Evaluación escrita' : ' — Evaluación oral');
 
             const payload = new URLSearchParams({
                 tipo_evaluacion: "Sesiones Diarias",
@@ -351,8 +547,11 @@
                 anoResidencia:   document.getElementById('anioResidente').value,
                 nombreResidente: document.getElementById('nombreResidente').value,
                 especialista:    document.getElementById('especialista').value,
-                aspecto1:        a1 ? a1.value : 0,
-                aspecto2:        a2 ? a2.value : 0,
+                tema:            temaSesion,
+                // En la oral, cada aspecto vale 50 puntos (escala 0-10 × 5).
+                // En la escrita, la nota entera va en el primer campo.
+                aspecto1:        modo === 'escrita' ? notaEsc : (a1 ? parseInt(a1.value, 10) * 5 : 0),
+                aspecto2:        modo === 'escrita' ? '' : (a2 ? parseInt(a2.value, 10) * 5 : 0),
                 total:           total,
                 porcentaje:      pct + '%',
                 comentarios:     document.getElementById('observaciones').value || 'Ninguno'
@@ -361,17 +560,34 @@
             if (window.EDIT_MODE) { payload.set('action','updateEvaluation'); payload.set('fila', window.EDIT_ROW); if (window.EDIT_CLAVE) payload.set('clave', window.EDIT_CLAVE); }
 
             _enviarEvaluacion(payload, btn)
-            .then((res) => {
+            .then(async (res) => {
                 if (res && res.status === 'duplicate') { _avisoDuplicado(res.message, btn); return; }
                 if (res && res.status === 'error')     { _avisoError(res.message, btn); return; }
+
+                // La nota ya está guardada. Las fotos van después y aparte: si
+                // alguna falla, la nota no se pierde.
+                var fotos = { subidas: 0, fallidas: 0 };
+                if (modo === 'escrita' && _fotosEscritas.length) {
+                    fotos = await _subirFotosEscritas({
+                        residente: document.getElementById('nombreResidente').value,
+                        anio:      document.getElementById('anioResidente').value,
+                        fecha:     fechaVal
+                    }, btn);
+                }
+
                 window.__enviandoEval = false;
                 const aprobado = pct >= 70;
                 document.getElementById('resultSummary').innerHTML =
                     `<strong>Fecha:</strong> ${fechaVal}<br>
                      <strong>Evaluador:</strong> ${document.getElementById('especialista').value}<br>
-                     <strong>Residente:</strong> ${document.getElementById('nombreResidente').value}<br><br>
-                     <strong>Resultado:</strong> ${total}/20 pts (${pct}%) —
-                     <span class="${aprobado ? 'text-emerald-700' : 'text-red-600'} font-bold">${aprobado ? 'APROBADO' : 'REPROBADO'}</span>`;
+                     <strong>Residente:</strong> ${document.getElementById('nombreResidente').value}<br>
+                     <strong>Modalidad:</strong> ${modo === 'escrita' ? 'Evaluación escrita' : 'Evaluación oral'}<br><br>
+                     <strong>Resultado:</strong> ${total}/100 pts (${pct}%) —
+                     <span class="${aprobado ? 'text-emerald-700' : 'text-red-600'} font-bold">${aprobado ? 'APROBADO' : 'REPROBADO'}</span>` +
+                    (modo === 'escrita' && _fotosEscritas.length
+                        ? `<br><br><strong>Fotos de la prueba:</strong> ${fotos.subidas} subida(s)` +
+                          (fotos.fallidas ? ` · <span class="text-red-600 font-bold">${fotos.fallidas} sin subir — vuelva a intentarlo desde la edición</span>` : '')
+                        : '');
                 document.getElementById('resultCard').classList.remove('hidden');
                 document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth' });
                 btn.textContent = '✓ Evaluación Registrada';
