@@ -3922,6 +3922,63 @@ function _invEsc(v) {
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/* ══════════════════════════════════════════════════════════════
+   DESCARGA_SEGURA · bajar un archivo que llega como «data:»
+   El Safari del iPhone, el Firefox y algunos Chrome con políticas
+   de empresa NO abren una dirección «data:» y tampoco respetan el
+   atributo «download» en ella: el botón parecía no hacer nada.
+   Además hay un tope de tamaño (los PDF de más de 1 MB se caían).
+   Pasamos el archivo a un Blob —que sí abren todos— y, si el
+   navegador ni siquiera admite «download», lo mostramos en una
+   pestaña para que el usuario lo guarde desde ahí.
+   Este bloque es idéntico en index.html, dashboard_residentes.html
+   y dashboard_residentes2.html.
+   ══════════════════════════════════════════════════════════════ */
+function _dataUrlABlob(dataUrl) {
+    var txt = String(dataUrl == null ? '' : dataUrl);
+    var coma = txt.indexOf(',');
+    if (txt.indexOf('data:') !== 0 || coma === -1) return null;
+    var cab = txt.substring(0, coma);
+    var tipo = (cab.match(/^data:([^;,]+)/) || [])[1] || 'application/octet-stream';
+    var cuerpo = txt.substring(coma + 1);
+    if (cab.indexOf(';base64') === -1) {
+        return new Blob([decodeURIComponent(cuerpo)], { type: tipo });
+    }
+    var bin = atob(cuerpo.replace(/\s+/g, ''));
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: tipo });
+}
+
+function descargarArchivo(dataUrl, nombre) {
+    var blob = null;
+    try { blob = _dataUrlABlob(dataUrl); } catch (e) { blob = null; }
+    if (!blob) {                       // no era «data:»; será un enlace normal
+        try { window.location.href = dataUrl; } catch (e2) {}
+        return false;
+    }
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    if (typeof a.download !== 'undefined') {
+        a.href = url;
+        a.download = nombre || 'documento';
+        a.rel = 'noopener';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () {
+            try { document.body.removeChild(a); } catch (e3) {}
+            try { URL.revokeObjectURL(url); } catch (e4) {}
+        }, 8000);
+    } else {                           // iOS antiguo: se abre y se guarda ahí
+        var w = null;
+        try { w = window.open(url, '_blank'); } catch (e5) {}
+        if (!w) { try { window.location.href = url; } catch (e6) {} }
+        setTimeout(function () { try { URL.revokeObjectURL(url); } catch (e7) {} }, 60000);
+    }
+    return false;
+}
+
 async function descargarDocumento(btn, id) {
     var txt = btn.textContent;
     btn.disabled = true; btn.textContent = 'Abriendo…'; btn.style.background = '#94a3b8';
@@ -3933,12 +3990,7 @@ async function descargarDocumento(btn, id) {
         } else {
             // Se descarga desde el propio navegador: el archivo llega en la
             // respuesta, no por un enlace público de Drive.
-            var a = document.createElement('a');
-            a.href = res.dataUrl;
-            a.download = res.nombre;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            descargarArchivo(res.dataUrl, res.nombre);
         }
     } catch (e) {
         alert('No se pudo descargar el documento.');
